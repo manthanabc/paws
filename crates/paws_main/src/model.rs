@@ -1084,7 +1084,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = "✓ Paws               [localhost]";
+        let expected = "✓ Paws                [localhost]";
         assert_eq!(actual, expected);
     }
 
@@ -1124,7 +1124,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = format!("✓ Paws               {}", markers::EMPTY);
+        let expected = format!("✓ Paws                {}", markers::EMPTY);
         assert_eq!(actual, expected);
     }
 

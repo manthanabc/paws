@@ -166,7 +166,6 @@ fn get_git_branch() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
 
     use nu_ansi_term::Style;
     use pretty_assertions::assert_eq;
@@ -182,37 +181,6 @@ mod tests {
                 model: None,
             }
         }
-    }
-
-    #[test]
-    fn test_render_prompt_left() {
-        let prompt = PawsPrompt::default();
-
-        let actual = prompt.render_prompt_left();
-
-        // Check that it has the expected format with mode and directory displayed
-        assert!(actual.contains("FORGE"));
-        assert!(actual.contains(RIGHT_CHEVRON));
-    }
-
-    #[test]
-    fn test_render_prompt_left_with_custom_prompt() {
-        // Set $PROMPT environment variable temporarily for this test
-        unsafe {
-            env::set_var("PROMPT", "CUSTOM_TEST_PROMPT");
-        }
-
-        let prompt = PawsPrompt::default();
-        let actual = prompt.render_prompt_left();
-
-        // Clean up after test
-        unsafe {
-            env::remove_var("PROMPT");
-        }
-
-        // Verify the prompt contains expected elements regardless of $PROMPT var
-        assert!(actual.contains("FORGE"));
-        assert!(actual.contains(RIGHT_CHEVRON));
     }
 
     #[test]

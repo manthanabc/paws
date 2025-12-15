@@ -127,7 +127,7 @@ mod tests {
     use tokio::fs;
 
     use super::*;
-    use crate::attachment::tests::MockFileService;
+    use crate::test_fixtures::MockFileService;
 
     // Helper to create a temporary file with specific content size
     async fn create_test_file_with_size(size: usize) -> anyhow::Result<NamedTempFile> {

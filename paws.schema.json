@@ -106,7 +106,7 @@
       ]
     },
     "updates": {
-      "description": "configurations that can be used to update forge",
+      "description": "configurations that can be used to update paws",
       "anyOf": [
         {
           "$ref": "#/definitions/Update"

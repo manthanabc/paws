@@ -17,6 +17,8 @@ mod infra;
 mod init_conversation_metrics;
 mod mcp_executor;
 mod operation;
+#[cfg(test)]
+mod operation_tests;
 mod orch;
 #[cfg(test)]
 mod orch_spec;

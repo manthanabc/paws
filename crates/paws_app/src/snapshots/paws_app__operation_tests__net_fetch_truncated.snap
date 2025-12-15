@@ -1,5 +1,5 @@
 ---
-source: crates/forge_app/src/operation.rs
+source: crates/paws_app/src/operation_tests.rs
 expression: to_value(actual)
 ---
 <http_response
@@ -11,5 +11,5 @@ expression: to_value(actual)
   content_type="text/markdown"
 >
 <body><![CDATA[AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]]></body>
-<truncated>Content is truncated to 55 chars, remaining content can be read from path: /tmp/forge_fetch_abc123.txt</truncated>
+<truncated>Content is truncated to 55 chars, remaining content can be read from path: /tmp/paws_fetch_abc123.txt</truncated>
 </http_response>

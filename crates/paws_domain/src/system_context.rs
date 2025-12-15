@@ -31,7 +31,8 @@ pub struct SystemContext {
     #[serde(default)]
     pub supports_parallel_tool_calls: bool,
 
-    /// List of available skills
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// List of available skills (always serialized even if empty to satisfy
+    /// handlebars strict mode)
+    #[serde(default)]
     pub skills: Vec<Skill>,
 }

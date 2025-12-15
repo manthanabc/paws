@@ -1,0 +1,12 @@
+---
+source: crates/paws_app/src/operation_tests.rs
+expression: to_value(actual)
+---
+<skill_details>
+<command
+  location="/home/user/.paws/skills/test-skill"
+><![CDATA[This is a test skill command with instructions]]>
+</command>
+<resource>/home/user/.paws/skills/test-skill/resource1.txt</resource>
+<resource>/home/user/.paws/skills/test-skill/resource2.md</resource>
+</skill_details>

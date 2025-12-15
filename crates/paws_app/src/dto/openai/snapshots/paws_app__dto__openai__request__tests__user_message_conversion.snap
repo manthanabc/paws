@@ -1,0 +1,8 @@
+---
+source: crates/paws_app/src/dto/openai/request.rs
+expression: router_message
+---
+{
+  "role": "user",
+  "content": "Hello"
+}

@@ -24,6 +24,11 @@ pub mod tracker;
 mod utils;
 mod workflow;
 
+#[cfg(test)]
+mod attachment_tests;
+#[cfg(test)]
+pub mod test_fixtures;
+
 pub use app_config::*;
 pub use clipper::*;
 pub use command::*;

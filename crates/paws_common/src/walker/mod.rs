@@ -1,3 +1,2 @@
-mod walker;
-
-pub use walker::{File, Walker};
+mod core;
+pub use core::{File, Walker};

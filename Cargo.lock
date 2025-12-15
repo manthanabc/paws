@@ -3090,6 +3090,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
+ "strip-ansi-escapes",
  "syntect",
  "sysinfo 0.36.1",
  "tempfile",

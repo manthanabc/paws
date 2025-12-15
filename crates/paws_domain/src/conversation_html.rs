@@ -383,7 +383,7 @@ fn create_conversation_context_section(conversation: &Conversation) -> Element {
 
 #[cfg(test)]
 mod tests {
-    use paws_common::test_kit::json_fixture;
+    use paws_common::json_fixture;
 
     use super::*;
 

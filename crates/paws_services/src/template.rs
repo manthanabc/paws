@@ -128,7 +128,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::attachment::tests::MockCompositeService;
+    use crate::test_fixtures::MockCompositeService;
 
     #[tokio::test]
     async fn test_render_simple_template() {

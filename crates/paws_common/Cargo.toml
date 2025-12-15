@@ -61,6 +61,7 @@ workspace = true
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+strip-ansi-escapes = "0.2"
 
 [features]
 json = []
