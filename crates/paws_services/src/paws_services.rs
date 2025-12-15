@@ -6,8 +6,8 @@ use paws_app::{
     McpServerInfra, Services, StrategyFactory, UserInfra, WalkerInfra,
 };
 use paws_domain::{
-    AppConfigRepository, ContextEngineRepository, ConversationRepository, ProviderRepository,
-    SkillRepository, SnapshotRepository, ValidationRepository, WorkspaceRepository,
+    AppConfigRepository, ConversationRepository, ProviderRepository,
+    SkillRepository, SnapshotRepository, ValidationRepository,
 };
 
 use crate::PawsProviderAuthService;
@@ -51,8 +51,6 @@ pub struct PawsServices<
         + AppConfigRepository
         + KVStore
         + ProviderRepository
-        + paws_domain::WorkspaceRepository
-        + ContextEngineRepository
         + AgentRepository
         + SkillRepository
         + ValidationRepository,
@@ -84,7 +82,6 @@ pub struct PawsServices<
     command_loader_service: Arc<PawsCommandLoaderService<F>>,
     policy_service: PawsPolicyService<F>,
     provider_auth_service: PawsProviderAuthService<F>,
-    codebase_service: Arc<crate::context_engine::PawsContextEngineService<F>>,
     skill_service: Arc<PawsSkillFetch<F>>,
 }
 
@@ -104,8 +101,6 @@ impl<
         + AppConfigRepository
         + ProviderRepository
         + KVStore
-        + paws_domain::WorkspaceRepository
-        + ContextEngineRepository
         + AgentRepository
         + SkillRepository
         + ValidationRepository,
@@ -140,9 +135,6 @@ impl<
         let command_loader_service = Arc::new(PawsCommandLoaderService::new(infra.clone()));
         let policy_service = PawsPolicyService::new(infra.clone());
         let provider_auth_service = PawsProviderAuthService::new(infra.clone());
-        let codebase_service = Arc::new(crate::context_engine::PawsContextEngineService::new(
-            infra.clone(),
-        ));
         let skill_service = Arc::new(PawsSkillFetch::new(infra.clone()));
 
         Self {
@@ -173,7 +165,6 @@ impl<
             command_loader_service,
             policy_service,
             provider_auth_service,
-            codebase_service,
             skill_service,
         }
     }
@@ -201,8 +192,6 @@ impl<
         + AgentRepository
         + SkillRepository
         + StrategyFactory
-        + WorkspaceRepository
-        + ContextEngineRepository
         + ValidationRepository
         + Clone
         + 'static,
@@ -239,7 +228,6 @@ impl<
     type AgentRegistry = PawsAgentRegistryService<F>;
     type CommandLoaderService = PawsCommandLoaderService<F>;
     type PolicyService = PawsPolicyService<F>;
-    type CodebaseService = crate::context_engine::PawsContextEngineService<F>;
     type SkillFetchService = PawsSkillFetch<F>;
 
     fn provider_service(&self) -> &Self::ProviderService {
@@ -341,13 +329,6 @@ impl<
         &self.policy_service
     }
 
-    fn context_engine_service(&self) -> &Self::CodebaseService {
-        &self.codebase_service
-    }
-
-    fn image_read_service(&self) -> &Self::ImageReadService {
-        &self.image_read_service
-    }
     fn skill_fetch_service(&self) -> &Self::SkillFetchService {
         &self.skill_service
     }

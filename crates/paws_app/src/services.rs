@@ -7,9 +7,8 @@ use merge::Merge;
 use paws_domain::{
     AgentId, AnyProvider, Attachment, AuthContextRequest, AuthContextResponse, AuthMethod,
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
-    Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, Node, PatchOperation,
-    Provider, ProviderId, ResultStream, Scope, SearchParams, SyncProgress, Template, ToolCallFull,
-    ToolOutput, Workflow, WorkspaceAuth, WorkspaceId, WorkspaceInfo,
+    Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation,
+    Provider, ProviderId, ResultStream, Scope, Template, ToolCallFull,      ToolOutput, Workflow,
 };
 use reqwest::Response;
 use reqwest::header::HeaderMap;
@@ -144,8 +143,9 @@ pub trait ProviderService: Send + Sync {
     /// Migrates environment variable-based credentials to file-based
     /// credentials. Returns Some(MigrationResult) if credentials were migrated,
     /// None if file already exists or no credentials to migrate.
-    async fn migrate_env_credentials(&self)
-    -> anyhow::Result<Option<paws_domain::MigrationResult>>;
+    async fn migrate_env_credentials(
+        &self,
+    ) -> anyhow::Result<Option<paws_domain::MigrationResult>>;
 }
 
 /// Manages user preferences for default providers and models.
@@ -247,42 +247,6 @@ pub trait EnvironmentService: Send + Sync {
 #[async_trait::async_trait]
 pub trait CustomInstructionsService: Send + Sync {
     async fn get_custom_instructions(&self) -> Vec<String>;
-}
-
-/// Service for indexing codebases for semantic search
-#[async_trait::async_trait]
-pub trait ContextEngineService: Send + Sync {
-    /// Index the codebase at the given path
-    async fn sync_codebase(
-        &self,
-        path: PathBuf,
-        batch_size: usize,
-    ) -> anyhow::Result<paws_common::stream::MpscStream<anyhow::Result<SyncProgress>>>;
-
-    /// Query the indexed codebase with semantic search
-    async fn query_codebase(
-        &self,
-        path: PathBuf,
-        params: SearchParams<'_>,
-    ) -> anyhow::Result<Vec<Node>>;
-
-    /// List all workspaces indexed by the user
-    async fn list_codebase(&self) -> anyhow::Result<Vec<WorkspaceInfo>>;
-
-    /// Get workspace information for a specific path
-    async fn get_workspace_info(&self, path: PathBuf) -> anyhow::Result<Option<WorkspaceInfo>>;
-
-    /// Delete a workspace and all its indexed data
-    async fn delete_codebase(&self, workspace_id: &WorkspaceId) -> anyhow::Result<()>;
-
-    /// Checks if workspace is indexed.
-    async fn is_indexed(&self, path: &Path) -> anyhow::Result<bool>;
-
-    /// Check if authentication credentials exist
-    async fn is_authenticated(&self) -> anyhow::Result<bool>;
-
-    /// Create new authentication credentials
-    async fn create_auth_credentials(&self) -> anyhow::Result<WorkspaceAuth>;
 }
 
 #[async_trait::async_trait]
@@ -543,7 +507,6 @@ pub trait Services: Send + Sync + 'static + Clone {
     type CommandLoaderService: CommandLoaderService;
     type PolicyService: PolicyService;
     type ProviderAuthService: ProviderAuthService;
-    type CodebaseService: ContextEngineService;
     type SkillFetchService: SkillFetchService;
 
     fn provider_service(&self) -> &Self::ProviderService;
@@ -573,7 +536,6 @@ pub trait Services: Send + Sync + 'static + Clone {
     fn command_loader_service(&self) -> &Self::CommandLoaderService;
     fn policy_service(&self) -> &Self::PolicyService;
     fn provider_auth_service(&self) -> &Self::ProviderAuthService;
-    fn context_engine_service(&self) -> &Self::CodebaseService;
     fn skill_fetch_service(&self) -> &Self::SkillFetchService;
 }
 
@@ -1024,57 +986,6 @@ impl<I: Services> ProviderAuthService for I {
     ) -> anyhow::Result<Provider<Url>> {
         self.provider_auth_service()
             .refresh_provider_credential(provider)
-            .await
-    }
-}
-
-#[async_trait::async_trait]
-impl<I: Services> ContextEngineService for I {
-    async fn sync_codebase(
-        &self,
-        path: PathBuf,
-        batch_size: usize,
-    ) -> anyhow::Result<paws_common::stream::MpscStream<anyhow::Result<SyncProgress>>> {
-        self.context_engine_service()
-            .sync_codebase(path, batch_size)
-            .await
-    }
-
-    async fn query_codebase(
-        &self,
-        path: PathBuf,
-        params: SearchParams<'_>,
-    ) -> anyhow::Result<Vec<Node>> {
-        self.context_engine_service()
-            .query_codebase(path, params)
-            .await
-    }
-
-    async fn list_codebase(&self) -> anyhow::Result<Vec<WorkspaceInfo>> {
-        self.context_engine_service().list_codebase().await
-    }
-
-    async fn get_workspace_info(&self, path: PathBuf) -> anyhow::Result<Option<WorkspaceInfo>> {
-        self.context_engine_service().get_workspace_info(path).await
-    }
-
-    async fn delete_codebase(&self, workspace_id: &WorkspaceId) -> anyhow::Result<()> {
-        self.context_engine_service()
-            .delete_codebase(workspace_id)
-            .await
-    }
-
-    async fn is_indexed(&self, path: &Path) -> anyhow::Result<bool> {
-        self.context_engine_service().is_indexed(path).await
-    }
-
-    async fn is_authenticated(&self) -> anyhow::Result<bool> {
-        self.context_engine_service().is_authenticated().await
-    }
-
-    async fn create_auth_credentials(&self) -> anyhow::Result<WorkspaceAuth> {
-        self.context_engine_service()
-            .create_auth_credentials()
             .await
     }
 }
