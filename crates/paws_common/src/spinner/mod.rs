@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::style::{Attribute, Stylize, style};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use rand::seq::SliceRandom;
 use tokio::sync::broadcast;
@@ -13,10 +14,16 @@ use tokio::task::JoinHandle;
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
     // Clear current line, then render spinner + message + timer + hint
     eprint!("\r\x1b[2K");
-    eprint!(
-        "\r\x1b[32m{}\x1b[0m  \x1b[1;32m{}\x1b[0m {}s · \x1b[2;37mCtrl+C to interrupt\x1b[0m",
-        frame, status, seconds
+    let line = format!(
+        "\r{}  {} {}s · Ctrl+C to interrupt",
+        frame,
+        style(status)
+            .attribute(Attribute::Dim)
+            .attribute(Attribute::Bold),
+        seconds
     );
+
+    print!("{line}");
     let _ = io::stdout().flush();
 }
 
