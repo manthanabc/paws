@@ -48,6 +48,12 @@ pub struct MockFileService {
     pub binary_exts: HashSet<String>,
 }
 
+impl Default for MockFileService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockFileService {
     pub fn new() -> Self {
         let mut files = HashMap::new();
@@ -471,6 +477,12 @@ impl UserInfra for Mock {
 pub struct MockCompositeService {
     pub file_service: Arc<MockFileService>,
     pub env_service: Arc<MockEnvironmentInfra>,
+}
+
+impl Default for MockCompositeService {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockCompositeService {
