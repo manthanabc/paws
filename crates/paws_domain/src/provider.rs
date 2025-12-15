@@ -62,7 +62,6 @@ impl ProviderId {
     pub const GITHUB_COPILOT: ProviderId = ProviderId(Cow::Borrowed("github_copilot"));
     pub const OPENAI_COMPATIBLE: ProviderId = ProviderId(Cow::Borrowed("openai_compatible"));
     pub const ANTHROPIC_COMPATIBLE: ProviderId = ProviderId(Cow::Borrowed("anthropic_compatible"));
-    pub const FORGE_SERVICES: ProviderId = ProviderId(Cow::Borrowed("paws_services"));
     pub const IO_INTELLIGENCE: ProviderId = ProviderId(Cow::Borrowed("io_intelligence"));
 
     /// Returns all built-in provider IDs
@@ -86,7 +85,6 @@ impl ProviderId {
             ProviderId::GITHUB_COPILOT,
             ProviderId::OPENAI_COMPATIBLE,
             ProviderId::ANTHROPIC_COMPATIBLE,
-            ProviderId::FORGE_SERVICES,
             ProviderId::IO_INTELLIGENCE,
         ]
     }
@@ -144,7 +142,7 @@ impl std::str::FromStr for ProviderId {
             "github_copilot" => ProviderId::GITHUB_COPILOT,
             "openai_compatible" => ProviderId::OPENAI_COMPATIBLE,
             "anthropic_compatible" => ProviderId::ANTHROPIC_COMPATIBLE,
-            "paws_services" => ProviderId::FORGE_SERVICES,
+
             "io_intelligence" => ProviderId::IO_INTELLIGENCE,
             // For custom providers, use Cow::Owned to avoid memory leaks
             custom => ProviderId(Cow::Owned(custom.to_string())),

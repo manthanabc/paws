@@ -5,7 +5,7 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Context, ContextMessage, Role, SearchQuery, TextMessage, ToolCallFull, ToolCallId, ToolCatalog,
+    Context, ContextMessage, Role, TextMessage, ToolCallFull, ToolCallId, ToolCatalog,
     ToolResult,
 };
 
@@ -116,16 +116,6 @@ impl SummaryToolCall {
         }
     }
 
-    /// Creates a CodebaseSearch tool call with default values (id: None,
-    /// is_success: true)
-    pub fn codebase_search(queries: Vec<SearchQuery>, file_extension: Option<String>) -> Self {
-        Self {
-            id: None,
-            tool: SummaryTool::SemSearch { queries, file_extension },
-            is_success: true,
-        }
-    }
-
     /// Creates an Undo tool call with default values (id: None, is_success:
     /// true)
     pub fn undo(path: impl Into<String>) -> Self {
@@ -184,10 +174,6 @@ pub enum SummaryTool {
     },
     Search {
         pattern: String,
-    },
-    SemSearch {
-        queries: Vec<SearchQuery>,
-        file_extension: Option<String>,
     },
     Undo {
         path: String,
@@ -308,10 +294,6 @@ fn extract_tool_info(call: &ToolCallFull) -> Option<SummaryTool> {
             .file_pattern
             .or(input.regex)
             .map(|pattern| SummaryTool::Search { pattern }),
-        ToolCatalog::SemSearch(input) => Some(SummaryTool::SemSearch {
-            queries: input.queries,
-            file_extension: input.file_extension,
-        }),
         ToolCatalog::Undo(input) => Some(SummaryTool::Undo { path: input.path }),
         ToolCatalog::Fetch(input) => Some(SummaryTool::Fetch { url: input.url }),
         ToolCatalog::Followup(input) => Some(SummaryTool::Followup { question: input.question }),

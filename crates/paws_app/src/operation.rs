@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use console::strip_ansi_codes;
@@ -7,7 +6,7 @@ use derive_setters::Setters;
 use paws_common::display::DiffFormat;
 use paws_common::template::Element;
 use paws_domain::{
-    CodebaseSearchResults, Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite,
+    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite,
     FileOperation, LineNumbers, Metrics, NetFetch, PlanCreate, ToolKind,
 };
 
@@ -48,9 +47,6 @@ pub enum ToolOperation {
     FsSearch {
         input: FSSearch,
         output: Option<SearchResult>,
-    },
-    CodebaseSearch {
-        output: CodebaseSearchResults,
     },
     FsPatch {
         input: FSPatch,
@@ -250,10 +246,6 @@ impl ToolOperation {
                     .attr("path", input.path)
                     .attr("total_lines", input.content.lines().count());
 
-                if let Some(warning) = output.warning {
-                    elm = elm.append(Element::new("warning").text(warning));
-                }
-
                 paws_domain::ToolOutput::text(elm)
             }
             ToolOperation::FsRemove { input, output } => {
@@ -336,70 +328,14 @@ impl ToolOperation {
                     paws_domain::ToolOutput::text(elm)
                 }
             },
-            ToolOperation::CodebaseSearch { output } => {
-                let total_results: usize = output.queries.iter().map(|q| q.results.len()).sum();
-                let mut root = Element::new("sem_search_results");
-
-                if output.queries.is_empty() || total_results == 0 {
-                    root = root.text("No results found for query. Try refining your search with more specific terms or different keywords.")
-                } else {
-                    for query_result in &output.queries {
-                        let query_elm = Element::new("query_result")
-                            .attr("query", &query_result.query)
-                            .attr("use_case", &query_result.use_case)
-                            .attr("results", query_result.results.len());
-
-                        let mut grouped_by_path: HashMap<&str, Vec<_>> = HashMap::new();
-
-                        // Extract all file chunks and group by path
-                        for data in &query_result.results {
-                            if let paws_domain::NodeData::FileChunk(file_chunk) = &data.node {
-                                let key = file_chunk.file_path.as_str();
-                                grouped_by_path.entry(key).or_default().push(file_chunk);
-                            }
-                        }
-
-                        // Sort by file path for stable ordering
-                        let mut grouped_chunks: Vec<_> = grouped_by_path.into_iter().collect();
-                        grouped_chunks.sort_by(|a, b| a.0.cmp(b.0));
-
-                        let mut result_elm = Vec::new();
-
-                        // Process each file path
-                        for (path, mut chunks) in grouped_chunks {
-                            // Sort chunks by start line
-                            chunks.sort_by(|a, b| a.start_line.cmp(&b.start_line));
-
-                            let mut content_parts = Vec::new();
-                            for chunk in chunks {
-                                let numbered =
-                                    chunk.content.to_numbered_from(chunk.start_line as usize);
-                                content_parts.push(numbered);
-                            }
-
-                            let data = content_parts.join("\n...\n");
-                            let element = Element::new("file").attr("path", path).cdata(data);
-                            result_elm.push(element);
-                        }
-
-                        root = root.append(query_elm.append(result_elm));
-                    }
-                }
-
-                paws_domain::ToolOutput::text(root)
-            }
             ToolOperation::FsPatch { input, output } => {
                 let diff_result = DiffFormat::format(&output.before, &output.after);
                 let diff = console::strip_ansi_codes(diff_result.diff()).to_string();
 
-                let mut elm = Element::new("file_diff")
+                let elm = Element::new("file_diff")
                     .attr("path", &input.path)
                     .attr("total_lines", output.after.lines().count())
                     .cdata(diff);
-
-                if let Some(warning) = &output.warning {
-                    elm = elm.append(Element::new("warning").text(warning));
-                }
 
                 *metrics = metrics.clone().insert(
                     input.path.clone(),

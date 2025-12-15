@@ -16,7 +16,7 @@ use crate::dto::ToolsOverview;
 use crate::error::Error;
 use crate::mcp_executor::McpExecutor;
 use crate::tool_executor::ToolExecutor;
-use crate::{ContextEngineService, EnvironmentService, McpService, Services, ToolResolver};
+use crate::{EnvironmentService, McpService, Services, ToolResolver};
 
 pub struct ToolRegistry<S> {
     tool_executor: ToolExecutor<S>,
@@ -128,34 +128,18 @@ impl<S: Services> ToolRegistry<S> {
     pub async fn tools_overview(&self) -> anyhow::Result<ToolsOverview> {
         let mcp_tools = self.services.get_mcp_servers().await?;
         let agent_tools = self.agent_executor.agent_definitions().await?;
-
-        // Check if current working directory is indexed
-        let cwd = self.services.get_environment().cwd.clone();
-        let is_indexed = self.services.is_indexed(&cwd).await.unwrap_or(false);
-        let is_authenticated = self.services.is_authenticated().await.unwrap_or(false);
+        let system_tools = ToolCatalog::iter()
+            .map(|tool| tool.definition())
+            .collect::<Vec<_>>();
 
         Ok(ToolsOverview::new()
-            .system(Self::get_system_tools(is_indexed && is_authenticated))
+            .system(system_tools)
             .agents(agent_tools)
             .mcp(mcp_tools))
     }
 }
 
 impl<S> ToolRegistry<S> {
-    fn get_system_tools(sem_search_supported: bool) -> Vec<ToolDefinition> {
-        ToolCatalog::iter()
-            .filter(|tool| {
-                // Filter out sem_search if cwd is not indexed
-                if matches!(tool, ToolCatalog::SemSearch(_)) {
-                    sem_search_supported
-                } else {
-                    true
-                }
-            })
-            .map(|tool| tool.definition())
-            .collect::<Vec<_>>()
-    }
-
     /// Validates if a tool is supported by both the agent and the system.
     ///
     /// # Validation Process

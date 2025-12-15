@@ -8,6 +8,8 @@ use paws_app::{
     FileInfoInfra, FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra,
     KVStore, McpServerInfra, StrategyFactory, UserInfra, WalkedFile, Walker, WalkerInfra,
 };
+
+
 use paws_domain::{
     AnyProvider, AppConfig, AppConfigRepository, AuthCredential, CommandOutput, Conversation,
     ConversationId, ConversationRepository, Environment, FileInfo, McpServerConfig,
@@ -21,12 +23,13 @@ use reqwest::Response;
 use reqwest_eventsource::EventSource;
 use url::Url;
 
+use crate::agent::PawsAgentRepository;
+use crate::app_config::AppConfigRepositoryImpl;
+use crate::conversation::ConversationRepositoryImpl;
+use crate::database::{DatabasePool, PoolConfig};
 use crate::fs_snap::PawsFileSnapshotService;
 use crate::provider::PawsProviderRepository;
-use crate::{
-    AppConfigRepositoryImpl, ConversationRepositoryImpl, DatabasePool, PawsAgentRepository,
-    PawsSkillRepository, PoolConfig,
-};
+use crate::skill::PawsSkillRepository;
 
 /// Repository layer that implements all domain repository traits
 ///
@@ -42,7 +45,6 @@ pub struct PawsRepo<F> {
     provider_repository: Arc<PawsProviderRepository<F>>,
     agent_repository: Arc<PawsAgentRepository<F>>,
     skill_repository: Arc<PawsSkillRepository<F>>,
-    validation_repository: Arc<crate::PawsValidationRepository<F>>,
 }
 
 impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> PawsRepo<F> {
@@ -67,7 +69,6 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> PawsRepo<F> {
 
         let agent_repository = Arc::new(PawsAgentRepository::new(infra.clone()));
         let skill_repository = Arc::new(PawsSkillRepository::new(infra.clone()));
-        let validation_repository = Arc::new(crate::PawsValidationRepository::new(infra.clone()));
         Self {
             infra,
             file_snapshot_service,
@@ -77,7 +78,6 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> PawsRepo<F> {
             provider_repository,
             agent_repository,
             skill_repository,
-            validation_repository,
         }
     }
 }
@@ -448,18 +448,5 @@ impl<F: StrategyFactory> StrategyFactory for PawsRepo<F> {
     ) -> anyhow::Result<Self::Strategy> {
         self.infra
             .create_auth_strategy(provider_id, auth_method, required_params)
-    }
-}
-
-#[async_trait::async_trait]
-impl<F: HttpInfra + Send + Sync> paws_domain::ValidationRepository for PawsRepo<F> {
-    async fn validate_file(
-        &self,
-        path: impl AsRef<std::path::Path> + Send,
-        content: &str,
-    ) -> anyhow::Result<Option<String>> {
-        self.validation_repository
-            .validate_file(path, content)
-            .await
     }
 }

@@ -7,7 +7,7 @@ use paws_app::{
     FileDirectoryInfra, FileInfoInfra, FileReaderInfra, FileWriterInfra, FsCreateOutput,
     FsCreateService, compute_hash,
 };
-use paws_domain::{SnapshotRepository, ValidationRepository};
+use paws_domain::SnapshotRepository;
 
 use crate::utils::assert_absolute_path;
 
@@ -32,7 +32,7 @@ impl<
         + FileReaderInfra
         + FileWriterInfra
         + SnapshotRepository
-        + ValidationRepository
+
         + Send
         + Sync,
 > FsCreateService for PawsFsCreate<F>
@@ -46,13 +46,7 @@ impl<
         let path = Path::new(&path);
         assert_absolute_path(path)?;
 
-        // Validate file syntax using remote validation API (graceful failure)
-        let syntax_warning = self
-            .infra
-            .validate_file(path, &content)
-            .await
-            .ok()
-            .flatten();
+
 
         if let Some(parent) = Path::new(&path).parent() {
             self.infra
@@ -93,7 +87,6 @@ impl<
         Ok(FsCreateOutput {
             path: path.display().to_string(),
             before: old_content,
-            warning: syntax_warning,
             content_hash,
         })
     }

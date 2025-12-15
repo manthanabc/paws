@@ -7,7 +7,7 @@ use paws_app::{
 };
 use paws_domain::{
     AppConfigRepository, ConversationRepository, ProviderRepository,
-    SkillRepository, SnapshotRepository, ValidationRepository,
+    SkillRepository, SnapshotRepository,
 };
 
 use crate::PawsProviderAuthService;
@@ -53,7 +53,7 @@ pub struct PawsServices<
         + ProviderRepository
         + AgentRepository
         + SkillRepository
-        + ValidationRepository,
+
 > {
     chat_service: Arc<PawsProviderService<F>>,
     config_service: Arc<PawsAppConfigService<F>>,
@@ -102,8 +102,7 @@ impl<
         + ProviderRepository
         + KVStore
         + AgentRepository
-        + SkillRepository
-        + ValidationRepository,
+        + SkillRepository,
 > PawsServices<F>
 {
     pub fn new(infra: Arc<F>) -> Self {
@@ -192,7 +191,6 @@ impl<
         + AgentRepository
         + SkillRepository
         + StrategyFactory
-        + ValidationRepository
         + Clone
         + 'static,
 > Services for PawsServices<F>
@@ -283,6 +281,10 @@ impl<
 
     fn fs_read_service(&self) -> &Self::FsReadService {
         &self.file_read_service
+    }
+
+    fn image_read_service(&self) -> &Self::ImageReadService {
+        &self.image_read_service
     }
 
     fn fs_remove_service(&self) -> &Self::FsRemoveService {

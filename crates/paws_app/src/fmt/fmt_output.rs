@@ -22,7 +22,6 @@ impl FormatContent for ToolOperation {
             }
             ToolOperation::FsRemove { input: _, output: _ } => None,
             ToolOperation::FsSearch { input: _, output: _ } => None,
-            ToolOperation::CodebaseSearch { output: _ } => None,
             ToolOperation::FsPatch { input: _, output } => Some(ChatResponseContent::PlainText(
                 DiffFormat::format(&output.before, &output.after)
                     .diff()
