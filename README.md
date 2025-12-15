@@ -1,26 +1,25 @@
 <h1 align="center">Paws</h1>
-<p align="center">Simplified version of [forge](https://github.com/antimonyhq/forge) with a lot of cool features</p>
+<p align="center">Simplified version of forge with hopefully lot of cool features</p>
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/antinomyhq/paws/ci.yml?style=for-the-badge)](https://github.com/antinomyhq/paws/actions)
-[![GitHub Release](https://img.shields.io/github/v/release/antinomyhq/paws?style=for-the-badge)](https://github.com/antinomyhq/paws/releases)
-[![Discord](https://img.shields.io/discord/1044859667798568962?style=for-the-badge&cacheSeconds=120&logo=discord)](https://discord.gg/kRZBPpkgwq)
-[![CLA assistant](https://cla-assistant.io/readme/badge/antinomyhq/paws?style=for-the-badge)](https://cla-assistant.io/antinomyhq/paws)
+Do check ![forge](https://github.com/antimonyhq/forge)
 
-![Code-Paws Demo](https://assets.antinomy.ai/images/paws_demo_2x.gif)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
+
+// Insert demo here
 
 ---
-<details>
 <summary>About fork</summary>
+
 Features -
- [X] Streaming tokens
- [X] Persistent spinner
+ - [X] Streaming tokens
+ - [X] Persistent spinner
 
 Planned - 
- [o] Undo/ Redo controll
- [o] Background tasks
- [o] WebUI
- [e] Hybrid agent flows
-</details>
+ - [o] Undo/ Redo controll
+ - [o] Background tasks
+ - [o] WebUI
+ - [e] Hybrid agent flows
 
 <details>
 <summary><strong>Table&nbsp;of&nbsp;Contents</strong></summary>
@@ -706,15 +705,7 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 
 ## Documentation
 
-For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/antinomyhq/paws/tree/main/docs).
-
----
-
-## Community
-
-Join our vibrant Discord community to connect with other Paws users and contributors, get help with your projects, share ideas, and provide feedback!
-
-[![Discord](https://img.shields.io/discord/1044859667798568962?style=for-the-badge&cacheSeconds=120&logo=discord)](https://discord.gg/kRZBPpkgwq)
+For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/manthanabc/paws/tree/main/docs).
 
 ---
 
