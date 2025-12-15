@@ -1,14 +1,14 @@
-<h1 align="center">⚒️ Forge: AI-Enhanced Terminal Development Environment</h1>
+<h1 align="center">⚒️ Paws: AI-Enhanced Terminal Development Environment</h1>
 <p align="center">A comprehensive coding agent that integrates AI capabilities with your development environment</p>
 
-<p align="center"><code>npx forgecode@latest</code></p>
+<p align="center"><code>npx pawscode@latest</code></p>
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/antinomyhq/forge/ci.yml?style=for-the-badge)](https://github.com/antinomyhq/forge/actions)
-[![GitHub Release](https://img.shields.io/github/v/release/antinomyhq/forge?style=for-the-badge)](https://github.com/antinomyhq/forge/releases)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/antinomyhq/paws/ci.yml?style=for-the-badge)](https://github.com/antinomyhq/paws/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/antinomyhq/paws?style=for-the-badge)](https://github.com/antinomyhq/paws/releases)
 [![Discord](https://img.shields.io/discord/1044859667798568962?style=for-the-badge&cacheSeconds=120&logo=discord)](https://discord.gg/kRZBPpkgwq)
-[![CLA assistant](https://cla-assistant.io/readme/badge/antinomyhq/forge?style=for-the-badge)](https://cla-assistant.io/antinomyhq/forge)
+[![CLA assistant](https://cla-assistant.io/readme/badge/antinomyhq/paws?style=for-the-badge)](https://cla-assistant.io/antinomyhq/paws)
 
-![Code-Forge Demo](https://assets.antinomy.ai/images/forge_demo_2x.gif)
+![Code-Paws Demo](https://assets.antinomy.ai/images/paws_demo_2x.gif)
 
 ---
 
@@ -17,13 +17,13 @@
 
 - [Quickstart](#quickstart)
 - [Usage Examples](#usage-examples)
-- [Why Forge?](#why-forge)
+- [Why Paws?](#why-paws)
 - [Command-Line Options](#command-line-options)
 - [Advanced Configuration](#advanced-configuration)
   - [Provider Configuration](#provider-configuration)
     - [Managing Provider Credentials](#managing-provider-credentials)
     - [Deprecated: Environment Variables](#deprecated-environment-variables)
-  - [forge.yaml Configuration Options](#forgeyaml-configuration-options)
+  - [paws.yaml Configuration Options](#pawsyaml-configuration-options)
   - [Environment Variables](#environment-variables)
   - [MCP Configuration](#mcp-configuration)
   - [Example Use Cases](#example-use-cases)
@@ -38,27 +38,27 @@
 
 ## Quickstart
 
-To get started with Forge, run the command below:
+To get started with Paws, run the command below:
 
 ```bash
-npx forgecode@latest
+npx pawscode@latest
 ```
 
-On first run, Forge will guide you through setting up your AI provider credentials using the interactive login flow. Alternatively, you can configure providers beforehand:
+On first run, Paws will guide you through setting up your AI provider credentials using the interactive login flow. Alternatively, you can configure providers beforehand:
 
 ```bash
 # Configure your provider credentials interactively
-forge provider login
+paws provider login
 
-# Then start Forge
-forge
+# Then start Paws
+paws
 ```
 
-That's it! Forge is now ready to assist you with your development tasks.
+That's it! Paws is now ready to assist you with your development tasks.
 
 ## Usage Examples
 
-Forge can be used in different ways depending on your needs. Here are some common usage patterns:
+Paws can be used in different ways depending on your needs. Here are some common usage patterns:
 
 <details>
 <summary><strong>Code Understanding</strong></summary>
@@ -67,7 +67,7 @@ Forge can be used in different ways depending on your needs. Here are some commo
 > Can you explain how the authentication system works in this codebase?
 ```
 
-Forge will analyze your project's structure, identify authentication-related files, and provide a detailed explanation of the authentication flow, including the relationships between different components.
+Paws will analyze your project's structure, identify authentication-related files, and provide a detailed explanation of the authentication flow, including the relationships between different components.
 
 </details>
 
@@ -78,7 +78,7 @@ Forge will analyze your project's structure, identify authentication-related fil
 > I need to add a dark mode toggle to our React application. How should I approach this?
 ```
 
-Forge will suggest the best approach based on your current codebase, explain the steps needed, and even scaffold the necessary components and styles for you.
+Paws will suggest the best approach based on your current codebase, explain the steps needed, and even scaffold the necessary components and styles for you.
 
 </details>
 
@@ -89,7 +89,7 @@ Forge will suggest the best approach based on your current codebase, explain the
 > I'm getting this error: "TypeError: Cannot read property 'map' of undefined". What might be causing it?
 ```
 
-Forge will analyze the error, suggest potential causes based on your code, and propose different solutions to fix the issue.
+Paws will analyze the error, suggest potential causes based on your code, and propose different solutions to fix the issue.
 
 </details>
 
@@ -100,7 +100,7 @@ Forge will analyze the error, suggest potential causes based on your code, and p
 > Please review the code in src/components/UserProfile.js and suggest improvements
 ```
 
-Forge will analyze the code, identify potential issues, and suggest improvements for readability, performance, security, and maintainability.
+Paws will analyze the code, identify potential issues, and suggest improvements for readability, performance, security, and maintainability.
 
 </details>
 
@@ -111,7 +111,7 @@ Forge will analyze the code, identify potential issues, and suggest improvements
 > I want to integrate GraphQL into this Express application. Can you explain how to get started?
 ```
 
-Forge will provide a tailored tutorial on integrating GraphQL with Express, using your specific project structure as context.
+Paws will provide a tailored tutorial on integrating GraphQL with Express, using your specific project structure as context.
 
 </details>
 
@@ -122,7 +122,7 @@ Forge will provide a tailored tutorial on integrating GraphQL with Express, usin
 > I need to design a database schema for a blog with users, posts, comments, and categories
 ```
 
-Forge will suggest an appropriate schema design, including tables/collections, relationships, indexes, and constraints based on your project's existing database technology.
+Paws will suggest an appropriate schema design, including tables/collections, relationships, indexes, and constraints based on your project's existing database technology.
 
 </details>
 
@@ -133,7 +133,7 @@ Forge will suggest an appropriate schema design, including tables/collections, r
 > Help me refactor this class-based component to use React Hooks
 ```
 
-Forge can help modernize your codebase by walking you through refactoring steps and implementing them with your approval.
+Paws can help modernize your codebase by walking you through refactoring steps and implementing them with your approval.
 
 </details>
 
@@ -144,13 +144,13 @@ Forge can help modernize your codebase by walking you through refactoring steps 
 > I need to merge branch 'feature/user-profile' into main but there are conflicts
 ```
 
-Forge can guide you through resolving git conflicts, explaining the differences and suggesting the best way to reconcile them.
+Paws can guide you through resolving git conflicts, explaining the differences and suggesting the best way to reconcile them.
 
 </details>
 
-## Why Forge?
+## Why Paws?
 
-Forge is designed for developers who want to enhance their workflow with AI assistance while maintaining full control over their development environment.
+Paws is designed for developers who want to enhance their workflow with AI assistance while maintaining full control over their development environment.
 
 - **Zero configuration** - Just add your API key and you're ready to go
 - **Seamless integration** - Works right in your terminal, where you already work
@@ -158,11 +158,11 @@ Forge is designed for developers who want to enhance their workflow with AI assi
 - **Secure by design** - Your code stays on your machine
 - **Open-source** - Transparent, extensible, and community-driven
 
-Forge helps you code faster, solve complex problems, and learn new technologies without leaving your terminal.
+Paws helps you code faster, solve complex problems, and learn new technologies without leaving your terminal.
 
 ## Command-Line Options
 
-Here's a quick reference of Forge's command-line options:
+Here's a quick reference of Paws's command-line options:
 
 | Option                          | Description                                                |
 | ------------------------------- | ---------------------------------------------------------- |
@@ -180,10 +180,10 @@ Here's a quick reference of Forge's command-line options:
 
 ### Provider Configuration
 
-Forge supports multiple AI providers. The recommended way to configure providers is using the interactive login command:
+Paws supports multiple AI providers. The recommended way to configure providers is using the interactive login command:
 
 ```bash
-forge provider login
+paws provider login
 ```
 
 This will:
@@ -195,20 +195,20 @@ This will:
 
 ```bash
 # Login to a provider (add or update credentials)
-forge provider login
+paws provider login
 
 # Remove provider credentials
-forge provider logout
+paws provider logout
 
 # List supported providers
-forge provider list
+paws provider list
 ```
 
 #### Deprecated: Environment Variables
 
-> **⚠️ DEPRECATED**: Using `.env` files for provider configuration is deprecated and will be removed in a future version. Please use `forge provider login` instead.
+> **⚠️ DEPRECATED**: Using `.env` files for provider configuration is deprecated and will be removed in a future version. Please use `paws provider login` instead.
 
-For backward compatibility, Forge still supports environment variables. On first run, any credentials found in environment variables will be automatically migrated to file-based storage.
+For backward compatibility, Paws still supports environment variables. On first run, any credentials found in environment variables will be automatically migrated to file-based storage.
 
 <details>
 <summary><strong>Legacy Environment Variable Setup (Deprecated)</strong></summary>
@@ -275,7 +275,7 @@ IO_INTELLIGENCE_API_KEY=<your_io_intelligence_api_key>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: meta-llama/Llama-3.3-70B-Instruct
 ```
 
@@ -290,7 +290,7 @@ OPENAI_API_KEY=<your_openai_api_key>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: o3-mini-high
 ```
 
@@ -305,7 +305,7 @@ ANTHROPIC_API_KEY=<your_anthropic_api_key>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: claude-3.7-sonnet
 ```
 
@@ -329,10 +329,10 @@ model: claude-3.7-sonnet
    gcloud auth print-access-token
    ```
 
-3. **Use the token when logging in via Forge**:
+3. **Use the token when logging in via Paws**:
 
    ```bash
-   forge provider login
+   paws provider login
    # Select Google Vertex AI and enter your credentials
    ```
 
@@ -346,7 +346,7 @@ VERTEX_AI_AUTH_TOKEN=<your_auth_token>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: google/gemini-2.5-pro
 ```
 
@@ -354,7 +354,7 @@ model: google/gemini-2.5-pro
 - Claude models: `claude-sonnet-4@20250514`
 - Gemini models: `gemini-2.5-pro`, `gemini-2.0-flash`
 
-Use the `/model` command in Forge CLI to see all available models.
+Use the `/model` command in Paws CLI to see all available models.
 
 </details>
 
@@ -368,7 +368,7 @@ OPENAI_URL=<your_provider_url>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: <provider-specific-model>
 ```
 
@@ -384,7 +384,7 @@ OPENAI_URL=https://api.groq.com/openai/v1
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: deepseek-r1-distill-llama-70b
 ```
 
@@ -393,7 +393,7 @@ model: deepseek-r1-distill-llama-70b
 <details>
 <summary><strong>Amazon Bedrock</strong></summary>
 
-To use Amazon Bedrock models with Forge, you'll need to first set up the [Bedrock Access Gateway](https://github.com/aws-samples/bedrock-access-gateway):
+To use Amazon Bedrock models with Paws, you'll need to first set up the [Bedrock Access Gateway](https://github.com/aws-samples/bedrock-access-gateway):
 
 1. **Set up Bedrock Access Gateway**:
 
@@ -402,10 +402,10 @@ To use Amazon Bedrock models with Forge, you'll need to first set up the [Bedroc
    - Deploy the CloudFormation stack
    - Note your API Base URL from the CloudFormation outputs
 
-2. **Configure in Forge**:
+2. **Configure in Paws**:
 
    ```bash
-   forge provider login
+   paws provider login
    # Select OpenAI-compatible provider and enter your Bedrock Gateway details
    ```
 
@@ -418,7 +418,7 @@ OPENAI_URL=<your_bedrock_gateway_base_url>
 ```
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: anthropic.claude-3-opus
 ```
 
@@ -428,16 +428,16 @@ model: anthropic.claude-3-opus
 
 ---
 
-### forge.yaml Configuration Options
+### paws.yaml Configuration Options
 
 ### Environment Variables
 
-Forge supports several environment variables for advanced configuration and fine-tuning. These can be set in your `.env` file or system environment.
+Paws supports several environment variables for advanced configuration and fine-tuning. These can be set in your `.env` file or system environment.
 
 <details>
 <summary><strong>Retry Configuration</strong></summary>
 
-Control how Forge handles retry logic for failed requests:
+Control how Paws handles retry logic for failed requests:
 
 ```bash
 # .env
@@ -485,7 +485,7 @@ Override default API endpoints:
 
 ```bash
 # .env
-FORGE_API_URL=https://api.forgecode.dev  # Custom Forge API URL (default: https://api.forgecode.dev)
+FORGE_API_URL=https://api.pawscode.dev  # Custom Paws API URL (default: https://api.pawscode.dev)
 ```
 
 </details>
@@ -512,10 +512,10 @@ Configure the ZSH plugin behavior:
 
 ```bash
 # .env
-FORGE_BIN=forge                    # Command to use for forge operations (default: "forge")
+FORGE_BIN=paws                    # Command to use for paws operations (default: "paws")
 ```
 
-The `FORGE_BIN` environment variable allows you to customize the command used by the ZSH plugin when transforming `#` prefixed commands. If not set, it defaults to `"forge"`.
+The `FORGE_BIN` environment variable allows you to customize the command used by the ZSH plugin when transforming `#` prefixed commands. If not set, it defaults to `"paws"`.
 
 </details>
 
@@ -527,8 +527,8 @@ System-level environment variables (usually set automatically):
 ```bash
 # .env
 FORGE_MAX_SEARCH_RESULT_BYTES=101024   # Maximum bytes for search results (default: 101024 - 10 KB)
-FORGE_HISTORY_FILE=/path/to/history    # Custom path for Forge history file (default: uses system default location)
-FORGE_BANNER="Your custom banner text" # Custom banner text to display on startup (default: Forge ASCII art)
+FORGE_HISTORY_FILE=/path/to/history    # Custom path for Paws history file (default: uses system default location)
+FORGE_BANNER="Your custom banner text" # Custom banner text to display on startup (default: Paws ASCII art)
 FORGE_SHOW_TASK_STATS=true             # Show task stats such as file changes, token usage etc. after completion (default: true)
 FORGE_MAX_CONVERSATIONS=100            # Maximum number of conversations to show in list (default: 100)
 SHELL=/bin/zsh                         # Shell to use for command execution (Unix/Linux/macOS)
@@ -537,7 +537,7 @@ COMSPEC=cmd.exe                        # Command processor to use (Windows)
 
 </details>
 
-The `forge.yaml` file supports several advanced configuration options that let you customize Forge's behavior.
+The `paws.yaml` file supports several advanced configuration options that let you customize Paws's behavior.
 
 <details>
 <summary><strong>Custom Rules</strong></summary>
@@ -545,7 +545,7 @@ The `forge.yaml` file supports several advanced configuration options that let y
 Add your own guidelines that all agents should follow when generating responses.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 custom_rules: |
   1. Always add comprehensive error handling to any code you write.
   2. Include unit tests for all new functions.
@@ -560,7 +560,7 @@ custom_rules: |
 Define custom commands as shortcuts for repetitive prompts:
 
 ```yaml
-# forge.yaml
+# paws.yaml
 commands:
   - name: "refactor"
     description: "Refactor selected code"
@@ -575,7 +575,7 @@ commands:
 Specify the default AI model to use for all agents in the workflow.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 model: "claude-3.7-sonnet"
 ```
 
@@ -584,10 +584,10 @@ model: "claude-3.7-sonnet"
 <details>
 <summary><strong>Max Walker Depth</strong></summary>
 
-Control how deeply Forge traverses your project directory structure when gathering context.
+Control how deeply Paws traverses your project directory structure when gathering context.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 max_walker_depth: 3 # Limit directory traversal to 3 levels deep
 ```
 
@@ -599,7 +599,7 @@ max_walker_depth: 3 # Limit directory traversal to 3 levels deep
 Adjust the creativity and randomness in AI responses. Lower values (0.0-0.3) produce more focused, deterministic outputs, while higher values (0.7-2.0) generate more diverse and creative results.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 temperature: 0.7 # Balanced creativity and focus
 ```
 
@@ -607,10 +607,10 @@ temperature: 0.7 # Balanced creativity and focus
 <details>
 <summary><strong>Tool Max Failure Limit</strong></summary>
 
-Control how many times a tool can fail before Forge forces completion to prevent infinite retry loops. This helps avoid situations where an agent gets stuck repeatedly trying the same failing operation.
+Control how many times a tool can fail before Paws forces completion to prevent infinite retry loops. This helps avoid situations where an agent gets stuck repeatedly trying the same failing operation.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 max_tool_failure_per_turn: 3 # Allow up to 3 failures per tool before forcing completion
 ```
 
@@ -624,11 +624,11 @@ Set to a higher value if you want more retry attempts, or lower if you want fast
 Limit the maximum number of requests an agent can make in a single conversation turn. This prevents runaway conversations and helps control API usage and costs.
 
 ```yaml
-# forge.yaml
+# paws.yaml
 max_requests_per_turn: 50 # Allow up to 50 requests per turn
 ```
 
-When this limit is reached, Forge will:
+When this limit is reached, Paws will:
 
 - Ask you if you wish to continue
 - If you respond with 'Yes', it will continue the conversation
@@ -649,19 +649,19 @@ Configure MCP servers using the CLI:
 
 ```bash
 # List all MCP servers
-forge mcp list
+paws mcp list
 
 # Add a new server
-forge mcp add
+paws mcp add
 
 # Add a server using JSON format
-forge mcp add-json
+paws mcp add-json
 
 # Get server details
-forge mcp get
+paws mcp get
 
 # Remove a server
-forge mcp remove
+paws mcp remove
 ```
 
 Or manually create a `.mcp.json` file with the following structure:
@@ -705,13 +705,13 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 
 ## Documentation
 
-For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/antinomyhq/forge/tree/main/docs).
+For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/antinomyhq/paws/tree/main/docs).
 
 ---
 
 ## Community
 
-Join our vibrant Discord community to connect with other Forge users and contributors, get help with your projects, share ideas, and provide feedback!
+Join our vibrant Discord community to connect with other Paws users and contributors, get help with your projects, share ideas, and provide feedback!
 
 [![Discord](https://img.shields.io/discord/1044859667798568962?style=for-the-badge&cacheSeconds=120&logo=discord)](https://discord.gg/kRZBPpkgwq)
 
@@ -719,7 +719,7 @@ Join our vibrant Discord community to connect with other Forge users and contrib
 
 ## Support Us
 
-Your support drives Forge's continued evolution! By starring our GitHub repository, you:
+Your support drives Paws's continued evolution! By starring our GitHub repository, you:
 
 - Help others discover this powerful tool 🔍
 - Motivate our development team 💪

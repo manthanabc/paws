@@ -1,0 +1,62 @@
+[package]
+name = "paws_services"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+chrono.workspace = true
+tokio.workspace = true
+
+tracing.workspace = true
+async-trait.workspace = true
+async-recursion.workspace = true
+
+paws_snaps.workspace = true
+paws_stream.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+derive_setters.workspace = true
+tokio-stream.workspace = true
+handlebars.workspace = true
+paws_fs.workspace = true
+dashmap.workspace = true
+
+anyhow.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+regex.workspace = true
+humantime.workspace = true
+thiserror.workspace = true
+html2md.workspace = true
+glob.workspace = true
+grep-searcher.workspace = true
+grep-regex.workspace = true
+rust-embed.workspace = true
+base64.workspace = true
+strum_macros.workspace = true
+strum.workspace = true
+bytes.workspace = true
+serde_yml.workspace = true
+gray_matter.workspace = true
+merge.workspace = true
+strip-ansi-escapes.workspace = true
+paws_app.workspace = true
+url.workspace = true
+reqwest-eventsource.workspace = true
+lazy_static = "1.5.0"
+paws_domain.workspace = true
+oauth2 = { version = "5.0", features = ["reqwest"] }
+serde_urlencoded = "0.7.1"
+http.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
+insta.workspace = true
+mockito.workspace = true
+pretty_assertions.workspace = true
+tempfile.workspace = true
+fake = { version = "4.4.0", features = ["derive"] }
+paws_test_kit.workspace = true
+
+

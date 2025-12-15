@@ -1,0 +1,3143 @@
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+use colored::Colorize;
+use convert_case::{Case, Casing};
+use paws_api::{
+    API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
+    ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
+    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
+};
+use paws_app::utils::{format_display_path, truncate_key};
+use paws_app::{CommitResult, ToolResolver};
+use paws_display::MarkdownWriter;
+use paws_domain::{
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
+};
+use paws_fs::PawsFS;
+use paws_select::PawsSelect;
+use paws_spinner::SpinnerManager;
+use paws_tracker::ToolCallPayload;
+use merge::Merge;
+use tokio_stream::StreamExt;
+use tracing::debug;
+use url::Url;
+
+use crate::cli::{
+    Cli, CommitCommandGroup, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
+    TopLevelCommand,
+};
+use crate::conversation_selector::ConversationSelector;
+use crate::display_constants::{CommandType, headers, markers, status};
+use crate::env::should_show_completion_prompt;
+use crate::info::Info;
+use crate::input::Console;
+use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
+use crate::porcelain::Porcelain;
+use crate::prompt::PawsPrompt;
+use crate::state::UIState;
+use crate::sync_display::SyncProgressDisplay;
+use crate::title_display::TitleDisplayExt;
+use crate::tools_display::format_tools;
+use crate::update::on_update;
+use crate::utils::humanize_time;
+use crate::{TRACKER, banner, tracker};
+
+// File-specific constants
+const MISSING_AGENT_TITLE: &str = "<missing agent.title>";
+
+/// Formats an MCP server config for display, redacting sensitive information.
+/// Returns the command/URL string only.
+fn format_mcp_server(server: &paws_domain::McpServerConfig) -> String {
+    match server {
+        paws_domain::McpServerConfig::Stdio(stdio) => {
+            let mut output = format!("{} ", stdio.command);
+            for arg in &stdio.args {
+                output.push_str(&format!("{arg} "));
+            }
+            for key in stdio.env.keys() {
+                output.push_str(&format!("{key}=*** "));
+            }
+            output.trim().to_string()
+        }
+        paws_domain::McpServerConfig::Http(http) => http.url.clone(),
+    }
+}
+
+/// Formats HTTP headers for display, redacting values.
+/// Returns None if there are no headers.
+fn format_mcp_headers(server: &paws_domain::McpServerConfig) -> Option<String> {
+    match server {
+        paws_domain::McpServerConfig::Stdio(_) => None,
+        paws_domain::McpServerConfig::Http(http) => {
+            if http.headers.is_empty() {
+                None
+            } else {
+                Some(
+                    http.headers
+                        .keys()
+                        .map(|k| format!("{k}=***"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+            }
+        }
+    }
+}
+
+pub struct UI<A, F: Fn() -> A> {
+    markdown: MarkdownWriter,
+    state: UIState,
+    api: Arc<F::Output>,
+    new_api: Arc<F>,
+    console: Console,
+    command: Arc<PawsCommandManager>,
+    cli: Cli,
+    spinner: SpinnerManager,
+    ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
+    #[allow(dead_code)] // The guard is kept alive by being held in the struct
+    _guard: paws_tracker::Guard,
+}
+
+impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
+    /// Writes a line to the console output
+    /// Takes anything that implements ToString trait
+    fn writeln<T: ToString>(&mut self, content: T) -> anyhow::Result<()> {
+        self.spinner.write_ln(content)
+    }
+
+    /// Writes a TitleFormat to the console output with proper formatting
+    fn writeln_title(&mut self, title: TitleFormat) -> anyhow::Result<()> {
+        self.spinner.write_ln(title.display())
+    }
+
+    fn writeln_to_stderr(&mut self, title: String) -> anyhow::Result<()> {
+        self.spinner.ewrite_ln(title)
+    }
+
+    /// Retrieve available models
+    async fn get_models(&mut self) -> Result<Vec<Model>> {
+        self.spinner.start(Some("Loading"))?;
+        let models = self.api.get_models().await?;
+        self.spinner.stop(None)?;
+        Ok(models)
+    }
+
+    /// Helper to get provider for an optional agent, defaulting to the current
+    /// active agent's provider
+    async fn get_provider(&self, agent_id: Option<AgentId>) -> Result<Provider<Url>> {
+        match agent_id {
+            Some(agent_id) => self.api.get_agent_provider(agent_id).await,
+            None => self.api.get_default_provider().await,
+        }
+    }
+
+    /// Helper to get model for an optional agent, defaulting to the current
+    /// active agent's model
+    async fn get_agent_model(&self, agent_id: Option<AgentId>) -> Option<ModelId> {
+        match agent_id {
+            Some(agent_id) => self.api.get_agent_model(agent_id).await,
+            None => self.api.get_default_model().await,
+        }
+    }
+
+    /// Filters providers to return only configured ones
+    fn get_configured_providers(&self, providers: Vec<AnyProvider>) -> Vec<CliProvider> {
+        use crate::model::CliProvider;
+        providers
+            .into_iter()
+            .filter(|p| p.is_configured())
+            .map(CliProvider)
+            .collect()
+    }
+
+    /// Displays banner only if user is in interactive mode.
+    fn display_banner(&self) -> Result<()> {
+        if self.cli.is_interactive() {
+            banner::display(false)?;
+        }
+        Ok(())
+    }
+
+    // Handle creating a new conversation
+    async fn on_new(&mut self) -> Result<()> {
+        self.api = Arc::new((self.new_api)());
+        self.init_state(false).await?;
+
+        // Set agent if provided via CLI
+        if let Some(agent_id) = self.cli.agent.clone() {
+            self.api.set_active_agent(agent_id).await?;
+        }
+
+        // Reset previously set CLI parameters by the user
+        self.cli.conversation = None;
+        self.cli.conversation_id = None;
+
+        self.display_banner()?;
+        self.trace_user();
+        self.hydrate_caches();
+        Ok(())
+    }
+
+    // Set the current mode and update conversation variable
+    async fn on_agent_change(&mut self, agent_id: AgentId) -> Result<()> {
+        // Convert string to AgentId for validation
+        let agent = self
+            .api
+            .get_agents()
+            .await?
+            .iter()
+            .find(|agent| agent.id == agent_id)
+            .cloned()
+            .ok_or(anyhow::anyhow!("Undefined agent: {agent_id}"))?;
+
+        // Update the app config with the new operating agent.
+        self.api.set_active_agent(agent.id.clone()).await?;
+        let name = agent.id.as_str().to_case(Case::UpperSnake).bold();
+
+        let title = format!(
+            "∙ {}",
+            agent.title.as_deref().unwrap_or(MISSING_AGENT_TITLE)
+        )
+        .dimmed();
+        self.writeln_title(TitleFormat::action(format!("{name} {title}")))?;
+
+        Ok(())
+    }
+
+    pub fn init(cli: Cli, f: F) -> Result<Self> {
+        // Parse CLI arguments first to get flags
+        let api = Arc::new(f());
+        let env = api.environment();
+        let command = Arc::new(PawsCommandManager::default());
+        let mut spinner = SpinnerManager::new();
+        let ctrl_c_rx = spinner.init()?;
+        Ok(Self {
+            state: Default::default(),
+            api,
+            new_api: Arc::new(f),
+            console: Console::new(env.clone(), command.clone()),
+            cli,
+            command,
+            spinner,
+            ctrl_c_rx,
+            markdown: MarkdownWriter::new(),
+            _guard: paws_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
+        })
+    }
+
+    async fn prompt(&self) -> Result<SlashCommand> {
+        // Get usage from current conversation if available
+        let usage = if let Some(conversation_id) = &self.state.conversation_id {
+            self.api
+                .conversation(conversation_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|conv| conv.accumulated_usage())
+        } else {
+            None
+        };
+
+        // Prompt the user for input
+        let agent_id = self.api.get_active_agent().await.unwrap_or_default();
+        let model = self
+            .get_agent_model(self.api.get_active_agent().await)
+            .await;
+        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), usage, model, agent_id };
+        self.console.prompt(paws_prompt).await
+    }
+
+    pub async fn run(&mut self) {
+        match self.run_inner().await {
+            Ok(_) => {}
+            Err(error) => {
+                tracing::error!(error = ?error);
+
+                // Display the full error chain for better debugging
+                let mut error_message = error.to_string();
+                let mut source = error.source();
+                while let Some(err) = source {
+                    error_message.push_str(&format!("\n    Caused by: {}", err));
+                    source = err.source();
+                }
+
+                let _ =
+                    self.writeln_to_stderr(TitleFormat::error(error_message).display().to_string());
+            }
+        }
+    }
+
+    async fn run_inner(&mut self) -> Result<()> {
+        if let Some(cmd) = self.cli.subcommands.clone() {
+            return self.handle_subcommands(cmd).await;
+        }
+
+        // Display the banner in dimmed colors since we're in interactive mode
+        self.display_banner()?;
+        self.init_state(true).await?;
+
+        self.trace_user();
+        self.hydrate_caches();
+        self.init_conversation().await?;
+
+        // Check for dispatch flag first
+        if let Some(dispatch_json) = self.cli.event.clone() {
+            return self.handle_dispatch(dispatch_json).await;
+        }
+
+        // Handle direct prompt if provided (raw text messages)
+        let prompt = self.cli.prompt.clone();
+        if let Some(prompt) = prompt {
+            self.spinner.start(None)?;
+            self.on_message(Some(prompt)).await?;
+            return Ok(());
+        }
+
+        // Handle piped input if provided (treat it like --prompt)
+        let piped_input = self.cli.piped_input.clone();
+        if let Some(piped) = piped_input {
+            self.spinner.start(None)?;
+            self.on_message(Some(piped)).await?;
+            return Ok(());
+        }
+
+        // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
+        let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
+
+        // Get initial input from prompt
+        let mut command = self.prompt().await;
+
+        loop {
+            match command {
+                Ok(command) => {
+                    tokio::select! {
+                        _ = tokio::signal::ctrl_c() => {
+                            tracing::info!("User interrupted operation with Ctrl+C");
+                        }
+                        _ = ctrl_c_rx.recv() => {
+                            tracing::info!("User interrupted operation with Ctrl+C (spinner)");
+                        }
+                        result = self.on_command(command) => {
+                            match result {
+                                Ok(exit) => {
+                                        if exit {return Ok(())}
+                                },
+                                Err(error) => {
+                                    if let Some(conversation_id) = self.state.conversation_id.as_ref()
+                                        && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
+                                            TRACKER.set_conversation(conversation).await;
+                                        }
+                                    tracker::error(&error);
+                                    tracing::error!(error = ?error);
+                                    self.spinner.stop(None)?;
+                                    self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
+                                },
+                            }
+                        }
+                    }
+                }
+                Err(error) => {
+                    tracker::error(&error);
+                    tracing::error!(error = ?error);
+                    self.spinner.stop(None)?;
+                    self.writeln_to_stderr(
+                        TitleFormat::error(error.to_string()).display().to_string(),
+                    )?;
+                }
+            }
+            self.spinner.stop(None)?;
+            // Centralized prompt call at the end of the loop
+            command = self.prompt().await;
+        }
+    }
+
+    // Improve startup time by hydrating caches
+    fn hydrate_caches(&self) {
+        let api = self.api.clone();
+        tokio::spawn(async move { api.get_models().await });
+        let api = self.api.clone();
+        tokio::spawn(async move { api.get_tools().await });
+        let api = self.api.clone();
+        tokio::spawn(async move { api.get_agents().await });
+        let api = self.api.clone();
+        tokio::spawn(async move {
+            let _ = api.hydrate_channel();
+        });
+    }
+
+    async fn handle_generate_conversation_id(&mut self) -> Result<()> {
+        let conversation_id = paws_domain::ConversationId::generate();
+        println!("{}", conversation_id.into_string());
+        Ok(())
+    }
+
+    async fn handle_subcommands(&mut self, subcommand: TopLevelCommand) -> anyhow::Result<()> {
+        match subcommand {
+            TopLevelCommand::Agent(agent_group) => {
+                match agent_group.command {
+                    crate::cli::AgentCommand::List => {
+                        self.on_show_agents(agent_group.porcelain).await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::List(list_group) => {
+                let porcelain = list_group.porcelain;
+                match list_group.command {
+                    ListCommand::Agent => {
+                        self.on_show_agents(porcelain).await?;
+                    }
+                    ListCommand::Provider { types } => {
+                        self.on_show_providers(porcelain, types).await?;
+                    }
+                    ListCommand::Model => {
+                        self.on_show_models(porcelain).await?;
+                    }
+                    ListCommand::Command => {
+                        self.on_show_commands(porcelain).await?;
+                    }
+                    ListCommand::Config => {
+                        self.on_show_config(porcelain).await?;
+                    }
+                    ListCommand::Tool { agent } => {
+                        self.on_show_tools(agent, porcelain).await?;
+                    }
+                    ListCommand::Mcp => {
+                        self.on_show_mcp_servers(porcelain).await?;
+                    }
+                    ListCommand::Conversation => {
+                        self.on_show_conversations(porcelain).await?;
+                    }
+                    ListCommand::Cmd => {
+                        self.on_show_custom_commands(porcelain).await?;
+                    }
+                    ListCommand::Skill => {
+                        self.on_show_skills(porcelain).await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Extension(extension_group) => {
+                match extension_group.command {
+                    ExtensionCommand::Zsh => {
+                        self.on_zsh_prompt().await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Mcp(mcp_command) => match mcp_command.command {
+                McpCommand::Import(import_args) => {
+                    let scope: paws_domain::Scope = import_args.scope.into();
+
+                    // Parse the incoming MCP configuration
+                    let incoming_config: paws_domain::McpConfig = serde_json::from_str(&import_args.json)
+                        .context("Failed to parse MCP configuration JSON. Expected format: {\"mcpServers\": {...}}")?;
+
+                    // Read only the scope-specific config (not merged)
+                    let mut scope_config = self.api.read_mcp_config(Some(&scope)).await?;
+
+                    // Merge the incoming servers with scope-specific config only
+                    let mut added_servers = Vec::new();
+                    for (server_name, server_config) in incoming_config.mcp_servers {
+                        scope_config
+                            .mcp_servers
+                            .insert(server_name.clone(), server_config);
+                        added_servers.push(server_name);
+                    }
+
+                    // Write back to the specific scope only
+                    self.api.write_mcp_config(&scope, &scope_config).await?;
+
+                    // Log each added server after successful write
+                    for server_name in added_servers {
+                        self.writeln_title(TitleFormat::info(format!(
+                            "Added MCP server '{server_name}'"
+                        )))?;
+                    }
+                }
+                McpCommand::List => {
+                    self.on_show_mcp_servers(mcp_command.porcelain).await?;
+                }
+                McpCommand::Remove(rm) => {
+                    let name = paws_api::ServerName::from(rm.name);
+                    let scope: paws_domain::Scope = rm.scope.into();
+
+                    // Read only the scope-specific config (not merged)
+                    let mut scope_config = self.api.read_mcp_config(Some(&scope)).await?;
+
+                    // Remove the server from scope-specific config only
+                    scope_config.mcp_servers.remove(&name);
+
+                    // Write back to the specific scope only
+                    self.api.write_mcp_config(&scope, &scope_config).await?;
+
+                    self.writeln_title(TitleFormat::info(format!("Removed server: {name}")))?;
+                }
+                McpCommand::Show(val) => {
+                    let name = paws_api::ServerName::from(val.name);
+                    let config = self.api.read_mcp_config(None).await?;
+                    let server = config
+                        .mcp_servers
+                        .get(&name)
+                        .ok_or(anyhow::anyhow!("Server not found"))?;
+
+                    // Get MCP servers to check for failures
+                    let tools = self.api.get_tools().await?;
+
+                    // Display server configuration
+                    self.writeln_title(TitleFormat::info(format!(
+                        "{name}: {}",
+                        format_mcp_server(server)
+                    )))?;
+
+                    // Display error if the server failed to initialize
+                    if let Some(error) = tools.mcp.get_failures().get(&name) {
+                        self.writeln_title(TitleFormat::error(error))?;
+                    }
+                }
+                McpCommand::Reload => {
+                    self.spinner.start(Some("Reloading MCPs"))?;
+                    self.api.reload_mcp().await?;
+                    self.writeln_title(TitleFormat::info("MCP reloaded"))?;
+                }
+            },
+            TopLevelCommand::Info { porcelain, conversation_id } => {
+                // Make sure to init model
+                self.on_new().await?;
+
+                self.on_info(porcelain, conversation_id).await?;
+                return Ok(());
+            }
+            TopLevelCommand::Env => {
+                self.on_env().await?;
+                return Ok(());
+            }
+            TopLevelCommand::Banner => {
+                banner::display(true)?;
+                return Ok(());
+            }
+            TopLevelCommand::Config(config_group) => {
+                self.handle_config_command(config_group.command.clone(), config_group.porcelain)
+                    .await?;
+                return Ok(());
+            }
+            TopLevelCommand::Provider(provider_group) => {
+                self.handle_provider_command(provider_group).await?;
+                return Ok(());
+            }
+            TopLevelCommand::Conversation(conversation_group) => {
+                self.handle_conversation_command(conversation_group).await?;
+                return Ok(());
+            }
+            TopLevelCommand::Suggest { prompt } => {
+                self.on_cmd(UserPrompt::from(prompt)).await?;
+                return Ok(());
+            }
+            TopLevelCommand::Cmd(run_group) => {
+                let porcelain = run_group.porcelain;
+                match run_group.command {
+                    crate::cli::CmdCommand::List => {
+                        // List all custom commands
+                        self.on_show_custom_commands(porcelain).await?;
+                    }
+                    crate::cli::CmdCommand::Execute(args) => {
+                        // Execute the custom command
+                        self.init_state(false).await?;
+
+                        // If conversation_id is provided, set it in CLI before initializing
+                        if let Some(ref cid) = run_group.conversation_id {
+                            self.cli.conversation_id = Some(*cid);
+                        }
+
+                        self.init_conversation().await?;
+                        self.spinner.start(None)?;
+
+                        // Join all args into a single command string
+                        let command_str = args.join(" ");
+
+                        // Add slash prefix if not present
+                        let command_with_slash = if command_str.starts_with('/') {
+                            command_str
+                        } else {
+                            format!("/{command_str}")
+                        };
+                        let command = self.command.parse(&command_with_slash)?;
+                        self.on_command(command).await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Workspace(index_group) => {
+                match index_group.command {
+                    crate::cli::WorkspaceCommand::Sync { path, batch_size } => {
+                        self.on_index(path, batch_size).await?;
+                    }
+                    crate::cli::WorkspaceCommand::List { porcelain } => {
+                        self.on_list_workspaces(porcelain).await?;
+                    }
+                    crate::cli::WorkspaceCommand::Query {
+                        query,
+                        path,
+                        limit,
+                        top_k,
+                        use_case,
+                        starts_with,
+                        ends_with,
+                    } => {
+                        let mut params =
+                            paws_domain::SearchParams::new(&query, &use_case).limit(limit);
+                        if let Some(k) = top_k {
+                            params = params.top_k(k);
+                        }
+                        if let Some(prefix) = starts_with {
+                            params = params.starts_with(prefix);
+                        }
+                        if let Some(suffix) = ends_with {
+                            params = params.ends_with(suffix);
+                        }
+                        self.on_query(path, params).await?;
+                    }
+
+                    crate::cli::WorkspaceCommand::Info { path } => {
+                        self.on_workspace_info(path).await?;
+                    }
+                    crate::cli::WorkspaceCommand::Delete { workspace_id } => {
+                        self.on_delete_workspace(workspace_id).await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Commit(commit_group) => {
+                let preview = commit_group.preview;
+                let result = self.handle_commit_command(commit_group).await?;
+                if preview {
+                    self.writeln(&result.message)?;
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Data(data_command_group) => {
+                let mut stream = self.api.generate_data(data_command_group.into()).await?;
+                while let Some(data) = stream.next().await {
+                    self.writeln(data?)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn handle_conversation_command(
+        &mut self,
+        conversation_group: crate::cli::ConversationCommandGroup,
+    ) -> anyhow::Result<()> {
+        match conversation_group.command {
+            ConversationCommand::List { porcelain } => {
+                self.on_show_conversations(porcelain).await?;
+            }
+            ConversationCommand::New => {
+                self.handle_generate_conversation_id().await?;
+            }
+            ConversationCommand::Dump { id, html } => {
+                self.validate_conversation_exists(&id).await?;
+
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(id);
+
+                self.spinner.start(Some("Dumping"))?;
+                self.on_dump(html).await?;
+
+                self.state.conversation_id = original_id;
+            }
+            ConversationCommand::Compact { id } => {
+                self.validate_conversation_exists(&id).await?;
+
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(id);
+
+                self.spinner.start(Some("Compacting"))?;
+                self.on_compaction().await?;
+
+                self.state.conversation_id = original_id;
+            }
+            ConversationCommand::Delete { id } => {
+                let conversation_id =
+                    ConversationId::parse(&id).context(format!("Invalid conversation ID: {id}"))?;
+
+                self.validate_conversation_exists(&conversation_id).await?;
+
+                self.on_conversation_delete(conversation_id).await?;
+            }
+            ConversationCommand::Retry { id } => {
+                self.validate_conversation_exists(&id).await?;
+
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(id);
+
+                self.spinner.start(None)?;
+                self.on_message(None).await?;
+
+                self.state.conversation_id = original_id;
+            }
+            ConversationCommand::Resume { id } => {
+                self.validate_conversation_exists(&id).await?;
+
+                self.state.conversation_id = Some(id);
+                self.writeln_title(TitleFormat::info(format!("Resumed conversation: {id}")))?;
+                // Interactive mode will be handled by the main loop
+            }
+            ConversationCommand::Show { id } => {
+                let conversation = self.validate_conversation_exists(&id).await?;
+
+                self.on_show_last_message(conversation).await?;
+            }
+            ConversationCommand::Info { id } => {
+                let conversation = self.validate_conversation_exists(&id).await?;
+
+                self.on_show_conv_info(conversation).await?;
+            }
+            ConversationCommand::Stats { id, porcelain } => {
+                let conversation = self.validate_conversation_exists(&id).await?;
+
+                self.on_show_conv_stats(conversation, porcelain).await?;
+            }
+            ConversationCommand::Clone { id, porcelain } => {
+                let conversation = self.validate_conversation_exists(&id).await?;
+
+                self.spinner.start(Some("Cloning"))?;
+                self.on_clone_conversation(conversation, porcelain).await?;
+                self.spinner.stop(None)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn validate_conversation_exists(
+        &self,
+        conversation_id: &ConversationId,
+    ) -> anyhow::Result<Conversation> {
+        let conversation = self.api.conversation(conversation_id).await?;
+
+        conversation.ok_or_else(|| anyhow::anyhow!("Conversation '{conversation_id}' not found"))
+    }
+
+    async fn on_conversation_delete(
+        &mut self,
+        conversation_id: ConversationId,
+    ) -> anyhow::Result<()> {
+        self.spinner.start(Some("Deleting conversation"))?;
+        self.api.delete_conversation(&conversation_id).await?;
+        self.spinner.stop(None)?;
+        self.writeln_title(TitleFormat::debug(format!(
+            "Successfully deleted conversation '{}'",
+            conversation_id
+        )))?;
+        Ok(())
+    }
+
+    async fn handle_provider_command(
+        &mut self,
+        provider_group: crate::cli::ProviderCommandGroup,
+    ) -> anyhow::Result<()> {
+        use crate::cli::ProviderCommand;
+
+        match provider_group.command {
+            ProviderCommand::Login { provider } => {
+                self.handle_provider_login(provider.as_ref()).await?;
+            }
+            ProviderCommand::Logout { provider } => {
+                self.handle_provider_logout(provider.as_ref()).await?;
+            }
+            ProviderCommand::List { types } => {
+                self.on_show_providers(provider_group.porcelain, types)
+                    .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_provider_login(
+        &mut self,
+        provider_id: Option<&ProviderId>,
+    ) -> anyhow::Result<()> {
+        use crate::model::CliProvider;
+
+        // Get the provider to login to
+        let any_provider = if let Some(id) = provider_id {
+            // Specific provider requested
+            self.api.get_provider(id).await?
+        } else {
+            // Fetch all providers for selection
+            let providers = self
+                .api
+                .get_providers()
+                .await?
+                .into_iter()
+                .map(CliProvider)
+                .collect::<Vec<_>>();
+
+            // Sort the providers by their display names
+            let mut sorted_providers = providers;
+            sorted_providers.sort_by_key(|a| a.to_string());
+
+            // Use the centralized select module
+            match PawsSelect::select("Select a provider to login:", sorted_providers)
+                .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
+                .prompt()?
+            {
+                Some(provider) => provider.0,
+                None => {
+                    self.writeln_title(TitleFormat::info("Cancelled"))?;
+                    return Ok(());
+                }
+            }
+        };
+
+        // For login, always configure (even if already configured) to allow
+        // re-authentication
+        let provider = match self
+            .configure_provider(any_provider.id(), any_provider.auth_methods().to_vec())
+            .await?
+        {
+            Some(provider) => provider,
+            None => return Ok(()),
+        };
+
+        // Set as default and handle model selection
+        self.finalize_provider_activation(provider).await
+    }
+
+    async fn handle_provider_logout(
+        &mut self,
+        provider_id: Option<&ProviderId>,
+    ) -> anyhow::Result<bool> {
+        // If provider_id is specified, logout from that specific provider
+        if let Some(id) = provider_id {
+            let provider = self.api.get_provider(id).await?;
+
+            if !provider.is_configured() {
+                return Err(anyhow::anyhow!("Provider '{id}' is not configured"));
+            }
+            self.api.remove_provider(id).await?;
+            self.writeln_title(TitleFormat::debug(format!(
+                "Successfully logged out from {id}"
+            )))?;
+            return Ok(true);
+        }
+
+        // Fetch and filter configured providers
+        let configured_providers = self.get_configured_providers(self.api.get_providers().await?);
+
+        if configured_providers.is_empty() {
+            self.writeln_title(TitleFormat::info("No configured providers found"))?;
+            return Ok(false);
+        }
+
+        // Sort the providers by their display names
+        let mut sorted_providers = configured_providers;
+        sorted_providers.sort_by_key(|a| a.to_string());
+
+        // Use the centralized select module
+        match PawsSelect::select("Select a provider to logout:", sorted_providers)
+            .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
+            .prompt()?
+        {
+            Some(provider) => {
+                let provider_id = provider.0.id();
+                self.api.remove_provider(&provider_id).await?;
+                self.writeln_title(TitleFormat::debug(format!(
+                    "Successfully logged out from {provider_id}"
+                )))?;
+                return Ok(true);
+            }
+            None => {
+                self.writeln_title(TitleFormat::info("Cancelled"))?;
+            }
+        }
+
+        Ok(false)
+    }
+
+    async fn handle_commit_command(
+        &mut self,
+        commit_group: CommitCommandGroup,
+    ) -> anyhow::Result<CommitResult> {
+        self.spinner.start(Some("Creating commit"))?;
+
+        // Convert Vec<String> to Option<String> by joining with spaces
+        let additional_context = if commit_group.text.is_empty() {
+            None
+        } else {
+            Some(commit_group.text.join(" "))
+        };
+
+        // Handle the commit command
+        let result = self
+            .api
+            .commit(
+                commit_group.preview,
+                commit_group.max_diff_size,
+                commit_group.diff,
+                additional_context,
+            )
+            .await;
+
+        match result {
+            Ok(result) => {
+                self.spinner.stop(None)?;
+                Ok(result)
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Builds an Info structure for agents with their details
+    async fn build_agents_info(&self) -> anyhow::Result<Info> {
+        let mut agents = self.api.get_agents().await?;
+        // Sort agents alphabetically by ID
+        agents.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+        let mut info = Info::new();
+
+        for agent in agents.iter() {
+            let id = agent.id.as_str().to_string();
+            let title = agent
+                .title
+                .as_deref()
+                .map(|title| title.lines().collect::<Vec<_>>().join(" "));
+
+            // Get provider and model for this agent
+            let provider_name = match self.get_provider(Some(agent.id.clone())).await {
+                Ok(p) => p.id.to_string(),
+                Err(e) => format!("Error: [{}]", e),
+            };
+
+            let model_name = agent.model.as_str().to_string();
+
+            let reasoning = if agent
+                .reasoning
+                .as_ref()
+                .and_then(|a| a.enabled)
+                .unwrap_or_default()
+            {
+                status::YES
+            } else {
+                status::NO
+            };
+
+            let location = agent
+                .path
+                .as_ref()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| markers::BUILT_IN.to_string());
+
+            info = info
+                .add_title(id.to_case(Case::UpperSnake))
+                .add_key_value("Id", id)
+                .add_key_value("Title", title)
+                .add_key_value("Location", location)
+                .add_key_value("Provider", provider_name)
+                .add_key_value("Model", model_name)
+                .add_key_value("Reasoning Enabled", reasoning);
+        }
+
+        Ok(info)
+    }
+
+    async fn on_show_agents(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let agents = self.api.get_agents().await?;
+
+        if agents.is_empty() {
+            return Ok(());
+        }
+
+        let info = self.build_agents_info().await?;
+
+        if porcelain {
+            let porcelain = Porcelain::from(&info)
+                .drop_col(0)
+                .truncate(3, 60)
+                .uppercase_headers();
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists all the providers
+    async fn on_show_providers(
+        &mut self,
+        porcelain: bool,
+        types: Vec<paws_domain::ProviderType>,
+    ) -> anyhow::Result<()> {
+        let mut providers = self.api.get_providers().await?;
+
+        // Filter by type if specified
+        if !types.is_empty() {
+            providers.retain(|p| types.contains(p.provider_type()));
+        }
+
+        if providers.is_empty() {
+            return Ok(());
+        }
+
+        let mut info = Info::new();
+
+        for provider in providers.iter() {
+            let id: &str = &provider.id();
+            let display_name = provider.id().to_string();
+            let domain = if let Some(url) = provider.url() {
+                url.domain().map(|d| d.to_string()).unwrap_or_default()
+            } else {
+                markers::EMPTY.to_string()
+            };
+            let provider_type = provider.provider_type().to_string();
+            let configured = provider.is_configured();
+            info = info
+                .add_title(id.to_case(Case::UpperSnake))
+                .add_key_value("name", display_name)
+                .add_key_value("id", id)
+                .add_key_value("host", domain)
+                .add_key_value("type", provider_type);
+            if configured {
+                info = info.add_key_value("logged in", status::YES);
+            };
+        }
+
+        if porcelain {
+            let porcelain = Porcelain::from(&info).drop_col(0).uppercase_headers();
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists all the models
+    async fn on_show_models(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let models = self.get_models().await?;
+
+        if models.is_empty() {
+            return Ok(());
+        }
+
+        let mut info = Info::new();
+
+        for model in models.iter() {
+            let id = model.id.to_string();
+
+            info = info
+                .add_title(model.name.as_ref().unwrap_or(&id))
+                .add_key_value("Id", id);
+
+            // Add context length if available, otherwise use "unknown"
+            if let Some(limit) = model.context_length {
+                let context = if limit >= 1_000_000 {
+                    format!("{}M", limit / 1_000_000)
+                } else if limit >= 1000 {
+                    format!("{}k", limit / 1000)
+                } else {
+                    format!("{limit}")
+                };
+                info = info.add_key_value("Context Window", context);
+            } else {
+                info = info.add_key_value("Context Window", markers::EMPTY)
+            }
+
+            // Add tools support indicator if explicitly supported
+            if let Some(supported) = model.tools_supported {
+                info = info.add_key_value(
+                    "Tool Supported",
+                    if supported { status::YES } else { status::NO },
+                )
+            } else {
+                info = info.add_key_value("Tools", markers::EMPTY)
+            }
+        }
+
+        if porcelain {
+            self.writeln(Porcelain::from(&info).swap_cols(0, 1).uppercase_headers())?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists all the commands
+    async fn on_show_commands(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let mut info = Info::new();
+
+        // Load built-in commands from JSON
+        // NOTE: When adding a new command, update built_in_commands.json AND
+        //       shell-plugin/paws.plugin.zsh (case statement around line 745)
+        const COMMANDS_JSON: &str = include_str!("built_in_commands.json");
+
+        #[derive(serde::Deserialize)]
+        struct Command<'a> {
+            command: &'a str,
+            description: &'a str,
+        }
+
+        let built_in_commands: Vec<Command> =
+            serde_json::from_str(COMMANDS_JSON).expect("Failed to parse built_in_commands.json");
+
+        for cmd in &built_in_commands {
+            info = info
+                .add_title(cmd.command)
+                .add_key_value("type", CommandType::Command)
+                .add_key_value("description", cmd.description);
+        }
+
+        // Add agent aliases
+        info = info
+            .add_title("ask")
+            .add_key_value("type", CommandType::Agent)
+            .add_key_value(
+                "description",
+                "Research and investigation agent [alias for: sage]",
+            )
+            .add_title("plan")
+            .add_key_value("type", CommandType::Agent)
+            .add_key_value(
+                "description",
+                "Planning and strategy agent [alias for: muse]",
+            );
+
+        // Fetch agents and add them to the commands list
+        let agents = self.api.get_agents().await?;
+        for agent in agents {
+            let title = agent
+                .title
+                .map(|title| title.lines().collect::<Vec<_>>().join(" "));
+            info = info
+                .add_title(agent.id.to_string())
+                .add_key_value("type", CommandType::Agent)
+                .add_key_value("description", title);
+        }
+
+        let custom_commands = self.api.get_commands().await?;
+        for command in custom_commands {
+            info = info
+                .add_title(command.name.clone())
+                .add_key_value("type", CommandType::Custom)
+                .add_key_value("description", command.description.clone());
+        }
+
+        if porcelain {
+            // Original order from Info: [$ID, type, description]
+            // So the original order is fine! But $ID should become COMMAND
+            let porcelain = Porcelain::from(&info)
+                .uppercase_headers()
+                .to_case(&[1], Case::UpperSnake)
+                .map_col(0, |col| {
+                    if col.as_deref() == Some(headers::ID) {
+                        Some("COMMAND".to_string())
+                    } else {
+                        col
+                    }
+                });
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists only custom commands (used by `paws run`)
+    async fn on_show_custom_commands(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let custom_commands = self.api.get_commands().await?;
+        let mut info = Info::new();
+
+        for command in custom_commands {
+            info = info
+                .add_title(command.name.clone())
+                .add_key_value("description", command.description.clone());
+        }
+
+        if porcelain {
+            let porcelain = Porcelain::from(&info).uppercase_headers();
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists available skills
+    async fn on_show_skills(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let skills = self.api.get_skills().await?;
+        let mut info = Info::new();
+        let env = self.api.environment();
+
+        for skill in skills {
+            info = info
+                .add_title(skill.name.clone().to_case(Case::Sentence).to_uppercase())
+                .add_key_value("name", skill.name);
+
+            if let Some(path) = skill.path {
+                info = info.add_key_value("path", format_display_path(&path, &env.cwd));
+            }
+
+            info = info.add_key_value("description", skill.description);
+        }
+
+        if porcelain {
+            let porcelain = Porcelain::from(&info).truncate(3, 60).uppercase_headers();
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Lists current configuration values
+    async fn on_show_config(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let model = self
+            .get_agent_model(None)
+            .await
+            .map(|m| m.as_str().to_string());
+        let model = model.unwrap_or_else(|| markers::EMPTY.to_string());
+        let provider = self
+            .get_provider(None)
+            .await
+            .ok()
+            .map(|p| p.id.to_string())
+            .unwrap_or_else(|| markers::EMPTY.to_string());
+
+        let info = Info::new()
+            .add_title("CONFIGURATION")
+            .add_key_value("Default Model", model)
+            .add_key_value("Default Provider", provider);
+
+        if porcelain {
+            self.writeln(
+                Porcelain::from(&info)
+                    .into_long()
+                    .drop_col(0)
+                    .uppercase_headers(),
+            )?;
+        } else {
+            self.writeln(info)?;
+        }
+        Ok(())
+    }
+
+    /// Displays available tools for the current agent
+    async fn on_show_tools(&mut self, agent_id: AgentId, porcelain: bool) -> anyhow::Result<()> {
+        self.spinner.start(Some("Loading"))?;
+        let all_tools = self.api.get_tools().await?;
+        let agents = self.api.get_agents().await?;
+        let agent = agents.into_iter().find(|agent| agent.id == agent_id);
+        let agent_tools = if let Some(agent) = agent {
+            let resolver = ToolResolver::new(all_tools.clone().into());
+            resolver
+                .resolve(&agent)
+                .into_iter()
+                .map(|def| def.name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let info = format_tools(&agent_tools, &all_tools);
+        if porcelain {
+            self.writeln(
+                Porcelain::from(&info)
+                    .into_long()
+                    .drop_col(1)
+                    .uppercase_headers(),
+            )?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Displays all MCP servers with their available tools
+    async fn on_show_mcp_servers(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        self.spinner.start(Some("Loading MCP servers"))?;
+        let mcp_servers = self.api.read_mcp_config(None).await?;
+        let all_tools = self.api.get_tools().await?;
+
+        let mut info = Info::new();
+
+        for (name, server) in mcp_servers.mcp_servers {
+            let label = match server {
+                paws_domain::McpServerConfig::Stdio(_) => "Command",
+                paws_domain::McpServerConfig::Http(_) => "URL",
+            };
+
+            info = info
+                .add_title(name.to_uppercase())
+                .add_key_value("Type", server.server_type())
+                .add_key_value(label, format_mcp_server(&server));
+
+            // Add headers for HTTP servers if present
+            if let Some(headers) = format_mcp_headers(&server) {
+                info = info.add_key_value("Headers", headers);
+            }
+
+            if server.is_disabled() {
+                info = info.add_key_value("Status", status::NO);
+            }
+
+            // Add tools for this MCP server
+            if let Some(tools) = all_tools.mcp.get_servers().get(&name)
+                && !tools.is_empty()
+            {
+                info = info.add_key_value("Tools", tools.len().to_string());
+                for tool in tools {
+                    info = info.add_value(tool.name.to_string());
+                }
+            }
+        }
+
+        // Show failed MCP servers
+        if !all_tools.mcp.get_failures().is_empty() {
+            info = info.add_title("FAILED");
+            for (server_name, error) in all_tools.mcp.get_failures().iter() {
+                // Truncate error message for readability
+                let truncated_error = if error.len() > 80 {
+                    format!("{}...", &error[..77])
+                } else {
+                    error.clone()
+                };
+                info = info.add_value(format!("[✗] {server_name} - {truncated_error}"));
+            }
+        }
+
+        if porcelain {
+            self.writeln(Porcelain::from(&info).uppercase_headers().truncate(3, 60))?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_info(
+        &mut self,
+        porcelain: bool,
+        conversation_id: Option<ConversationId>,
+    ) -> anyhow::Result<()> {
+        let mut info = Info::new();
+
+        // Fetch conversation
+        let conversation = match conversation_id {
+            Some(conversation_id) => self.api.conversation(&conversation_id).await.ok().flatten(),
+            None => None,
+        };
+
+        let key_info = self.api.get_login_info().await;
+        // Fetch agent
+        let agent = self.api.get_active_agent().await;
+
+        // Fetch model (resolved with default model if unset)
+        let model = self.get_agent_model(agent.clone()).await;
+
+        // Fetch agent-specific provider or default provider if unset
+        let agent_provider = self.get_provider(agent.clone()).await.ok();
+
+        // Fetch default provider (could be different from the set provider)
+        let default_provider = self.api.get_default_provider().await.ok();
+
+        // Add agent information
+        info = info.add_title("AGENT");
+        if let Some(agent) = agent {
+            info = info.add_key_value("ID", agent.as_str().to_uppercase());
+        }
+
+        // Add model information if available
+        if let Some(model) = model {
+            info = info.add_key_value("Model", model.as_str());
+        }
+
+        // Add provider information
+        match (default_provider, agent_provider) {
+            (Some(default), Some(agent_specific)) if default.id != agent_specific.id => {
+                // Show both providers if they're different
+                info = info.add_key_value("Agent Provider (URL)", agent_specific.url.as_str());
+                if let Some(api_key) = agent_specific.api_key() {
+                    info = info.add_key_value("Agent API Key", truncate_key(api_key.as_str()));
+                }
+
+                info = info.add_key_value("Default Provider (URL)", default.url.as_str());
+                if let Some(api_key) = default.api_key() {
+                    info = info.add_key_value("Default API Key", truncate_key(api_key.as_str()));
+                }
+            }
+            (Some(provider), _) | (_, Some(provider)) => {
+                // Show single provider (either default or agent-specific)
+                info = info.add_key_value("Provider (URL)", provider.url.as_str());
+                if let Some(api_key) = provider.api_key() {
+                    info = info.add_key_value("API Key", truncate_key(api_key.as_str()));
+                }
+            }
+            _ => {
+                // No provider available
+            }
+        }
+
+        // Add user information if available
+        if let Some(login_info) = key_info? {
+            info = info.extend(Info::from(&login_info));
+        }
+
+        // Add conversation information if available
+        if let Some(conversation) = conversation {
+            info = info.extend(Info::from(&conversation));
+        } else {
+            info = info.extend(Info::new().add_title("CONVERSATION").add_key("ID"));
+        }
+
+        if porcelain {
+            self.writeln(Porcelain::from(&info).into_long().skip(1))?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_env(&mut self) -> anyhow::Result<()> {
+        let env = self.api.environment();
+        let info = Info::from(&env);
+        self.writeln(info)?;
+        Ok(())
+    }
+
+    async fn on_zsh_prompt(&self) -> anyhow::Result<()> {
+        let plugin = crate::zsh_plugin::generate_zsh_plugin()?;
+        println!("{plugin}");
+        Ok(())
+    }
+
+    /// Handle the cmd command - generates shell command from natural language
+    async fn on_cmd(&mut self, prompt: UserPrompt) -> anyhow::Result<()> {
+        self.spinner.start(Some("Generating"))?;
+
+        match self.api.generate_command(prompt).await {
+            Ok(command) => {
+                self.spinner.stop(None)?;
+                self.writeln(command)?;
+                Ok(())
+            }
+            Err(err) => {
+                self.spinner.stop(None)?;
+                Err(err)
+            }
+        }
+    }
+
+    async fn list_conversations(&mut self) -> anyhow::Result<()> {
+        self.spinner.start(Some("Loading Conversations"))?;
+        let max_conversations = self.api.environment().max_conversations;
+        let conversations = self.api.get_conversations(Some(max_conversations)).await?;
+        self.spinner.stop(None)?;
+
+        if conversations.is_empty() {
+            self.writeln_title(TitleFormat::error(
+                "No conversations found in this workspace.",
+            ))?;
+            return Ok(());
+        }
+
+        if let Some(conversation) =
+            ConversationSelector::select_conversation(&conversations).await?
+        {
+            let conversation_id = conversation.id;
+            self.state.conversation_id = Some(conversation_id);
+
+            // Show conversation content
+            self.on_show_last_message(conversation).await?;
+
+            // Print log about conversation switching
+            self.writeln_title(TitleFormat::info(format!(
+                "Switched to conversation {}",
+                conversation_id.into_string().bold()
+            )))?;
+
+            // Show conversation info
+            self.on_info(false, Some(conversation_id)).await?;
+        }
+        Ok(())
+    }
+
+    async fn on_show_conversations(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        let max_conversations = self.api.environment().max_conversations;
+        let conversations = self.api.get_conversations(Some(max_conversations)).await?;
+
+        if conversations.is_empty() {
+            return Ok(());
+        }
+
+        let mut info = Info::new();
+
+        for conv in conversations.into_iter() {
+            if conv.context.is_none() {
+                continue;
+            }
+
+            let title = conv
+                .title
+                .as_deref()
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| markers::EMPTY.to_string());
+
+            // Format time using humantime library (same as conversation_selector.rs)
+            let duration = chrono::Utc::now().signed_duration_since(
+                conv.metadata.updated_at.unwrap_or(conv.metadata.created_at),
+            );
+            let duration =
+                std::time::Duration::from_secs((duration.num_minutes() * 60).max(0) as u64);
+            let time_ago = if duration.is_zero() {
+                "now".to_string()
+            } else {
+                format!("{} ago", humantime::format_duration(duration))
+            };
+
+            // Add conversation: Title=<title>, Updated=<time_ago>, with ID as section title
+            info = info
+                .add_title(conv.id)
+                .add_key_value("Title", title)
+                .add_key_value("Updated", time_ago);
+        }
+
+        // In porcelain mode, skip the top-level "SESSIONS" title
+        if porcelain {
+            let porcelain = Porcelain::from(&info)
+                .drop_col(3)
+                .truncate(1, 60)
+                .uppercase_headers();
+            self.writeln(porcelain)?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_command(&mut self, command: SlashCommand) -> anyhow::Result<bool> {
+        match command {
+            SlashCommand::Conversations => {
+                self.list_conversations().await?;
+            }
+            SlashCommand::Compact => {
+                self.spinner.start(Some("Compacting"))?;
+                self.on_compaction().await?;
+            }
+            SlashCommand::Delete => {
+                self.handle_delete_conversation().await?;
+            }
+            SlashCommand::Dump { html } => {
+                self.spinner.start(Some("Dumping"))?;
+                self.on_dump(html).await?;
+            }
+            SlashCommand::New => {
+                self.on_new().await?;
+            }
+            SlashCommand::Info => {
+                self.on_info(false, self.state.conversation_id).await?;
+            }
+            SlashCommand::Env => {
+                self.on_env().await?;
+            }
+            SlashCommand::Usage => {
+                self.on_usage().await?;
+            }
+            SlashCommand::Message(ref content) => {
+                self.spinner.start(None)?;
+                self.on_message(Some(content.clone())).await?;
+            }
+            SlashCommand::Paws => {
+                self.on_agent_change(AgentId::FORGE).await?;
+            }
+            SlashCommand::Muse => {
+                self.on_agent_change(AgentId::MUSE).await?;
+            }
+            SlashCommand::Sage => {
+                self.on_agent_change(AgentId::SAGE).await?;
+            }
+            SlashCommand::Help => {
+                let info = Info::from(self.command.as_ref());
+                self.writeln(info)?;
+            }
+            SlashCommand::Tools => {
+                let agent_id = self.api.get_active_agent().await.unwrap_or_default();
+                self.on_show_tools(agent_id, false).await?;
+            }
+            SlashCommand::Update => {
+                on_update(self.api.clone(), None).await;
+            }
+            SlashCommand::Exit => {
+                return Ok(true);
+            }
+
+            SlashCommand::Custom(event) => {
+                self.spinner.start(None)?;
+                self.on_custom_event(event.into()).await?;
+            }
+            SlashCommand::Model => {
+                self.on_model_selection().await?;
+            }
+            SlashCommand::Provider => {
+                self.on_provider_selection().await?;
+            }
+            SlashCommand::Shell(ref command) => {
+                self.api.execute_shell_command_raw(command).await?;
+            }
+            SlashCommand::Commit { max_diff_size } => {
+                let args = CommitCommandGroup {
+                    preview: true,
+                    max_diff_size: max_diff_size.or(Some(100_000)),
+                    diff: None,
+                    text: Vec::new(),
+                };
+                let result = self.handle_commit_command(args).await?;
+                let flags = if result.has_staged_files { "" } else { " -a" };
+                let commit_command = format!("!git commit{flags} -m '{}'", result.message);
+                self.console.set_buffer(commit_command);
+            }
+            SlashCommand::Agent => {
+                #[derive(Clone)]
+                struct Agent {
+                    id: AgentId,
+                    label: String,
+                }
+
+                impl Display for Agent {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "{}", self.label)
+                    }
+                }
+
+                let agents = self.api.get_agents().await?;
+
+                if agents.is_empty() {
+                    return Ok(false);
+                }
+
+                // Reuse the same Info building logic as list agents
+                let info = self.build_agents_info().await?;
+
+                // Convert to porcelain format (same as list agents --porcelain)
+                let porcelain_output = Porcelain::from(&info)
+                    .drop_col(0)
+                    .truncate(3, 30)
+                    .uppercase_headers();
+
+                // Split the porcelain output into lines and create agents
+                let porcelain_lines: Vec<String> = porcelain_output
+                    .to_string()
+                    .lines()
+                    .skip(1) // Skip header row
+                    .map(|s| s.to_string())
+                    .collect();
+
+                let mut display_agents = Vec::new();
+                for line in porcelain_lines {
+                    // Extract agent id from the beginning of the line
+                    if let Some(id_str) = line.split_whitespace().next() {
+                        display_agents.push(Agent {
+                            label: line.clone(),
+                            id: AgentId::new(id_str.to_string()),
+                        });
+                    }
+                }
+
+                if let Some(selected_agent) =
+                    PawsSelect::select("Select an agent", display_agents.clone()).prompt()?
+                {
+                    self.on_agent_change(selected_agent.id).await?;
+                }
+            }
+            SlashCommand::Login => {
+                self.handle_provider_login(None).await?;
+            }
+            SlashCommand::Logout => {
+                return self.handle_provider_logout(None).await;
+            }
+            SlashCommand::Retry => {
+                self.spinner.start(None)?;
+                self.on_message(None).await?;
+            }
+            SlashCommand::Index => {
+                let working_dir = self.state.cwd.clone();
+                // Use default batch size of 10 for slash command
+                self.on_index(working_dir, 10).await?;
+            }
+            SlashCommand::AgentSwitch(agent_id) => {
+                // Validate that the agent exists by checking against loaded agents
+                let agents = self.api.get_agents().await?;
+                let agent_exists = agents.iter().any(|agent| agent.id.as_str() == agent_id);
+
+                if agent_exists {
+                    self.on_agent_change(AgentId::new(agent_id)).await?;
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Agent '{agent_id}' not found or unavailable"
+                    ));
+                }
+            }
+        }
+
+        Ok(false)
+    }
+    async fn on_compaction(&mut self) -> Result<(), anyhow::Error> {
+        let conversation_id = self.init_conversation().await?;
+        let compaction_result = self.api.compact_conversation(&conversation_id).await?;
+        let token_reduction = compaction_result.token_reduction_percentage();
+        let message_reduction = compaction_result.message_reduction_percentage();
+        let content = TitleFormat::action(format!(
+            "Context size reduced by {token_reduction:.1}% (tokens), {message_reduction:.1}% (messages)"
+        ));
+        self.writeln_title(content)?;
+        Ok(())
+    }
+
+    async fn handle_delete_conversation(&mut self) -> anyhow::Result<()> {
+        let conversation_id = self.init_conversation().await?;
+        self.on_conversation_delete(conversation_id).await?;
+        Ok(())
+    }
+
+    /// Select a model from the available models
+    /// Returns Some(ModelId) if a model was selected, or None if selection was
+    /// canceled
+    #[async_recursion::async_recursion]
+    async fn select_model(&mut self) -> Result<Option<ModelId>> {
+        // Check if provider is set otherwise first ask to select a provider
+        if self.api.get_default_provider().await.is_err() {
+            self.on_provider_selection().await?;
+
+            // Check if a model was already selected during provider activation
+            // Return None to signal the model selection is complete and message was already
+            // printed
+            if self.api.get_default_model().await.is_some() {
+                return Ok(None);
+            }
+        }
+
+        // Fetch available models
+        let mut models = self
+            .get_models()
+            .await?
+            .into_iter()
+            .map(CliModel)
+            .collect::<Vec<_>>();
+
+        // Sort the models by their names in ascending order
+        models.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+
+        // Find the index of the current model
+        let current_model = self
+            .get_agent_model(self.api.get_active_agent().await)
+            .await;
+        let starting_cursor = current_model
+            .as_ref()
+            .and_then(|current| models.iter().position(|m| &m.0.id == current))
+            .unwrap_or(0);
+
+        // Use the centralized select module
+        match PawsSelect::select("Select a model:", models)
+            .with_starting_cursor(starting_cursor)
+            .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
+            .prompt()?
+        {
+            Some(model) => Ok(Some(model.0.id)),
+            None => Ok(None),
+        }
+    }
+    async fn handle_api_key_input(
+        &mut self,
+        provider_id: ProviderId,
+        request: &ApiKeyRequest,
+    ) -> anyhow::Result<()> {
+        use anyhow::Context;
+        self.spinner.stop(None)?;
+
+        // Extract existing API key and URL params for prefilling
+        let existing_url_params = request.existing_params.as_ref();
+
+        // Collect URL parameters if required
+        let url_params = request
+            .required_params
+            .iter()
+            .map(|param| {
+                let mut input = PawsSelect::input(format!("Enter {param}:"));
+
+                // Add default value if it exists in the credential
+                if let Some(params) = existing_url_params
+                    && let Some(default_value) = params.get(param)
+                {
+                    input = input.with_default(default_value.as_str());
+                }
+
+                let param_value = input.prompt()?.context("Parameter input cancelled")?;
+
+                anyhow::ensure!(!param_value.trim().is_empty(), "{param} cannot be empty");
+
+                Ok((param.to_string(), param_value))
+            })
+            .collect::<anyhow::Result<HashMap<_, _>>>()?;
+
+        let api_key = PawsSelect::input(format!("Enter your {provider_id} API key:"))
+            .prompt()?
+            .context("API key input cancelled")?;
+
+        let api_key_str = api_key.trim();
+        anyhow::ensure!(!api_key_str.is_empty(), "API key cannot be empty");
+
+        // Update the context with collected data
+        let response = AuthContextResponse::api_key(request.clone(), api_key_str, url_params);
+
+        self.api
+            .complete_provider_auth(
+                provider_id,
+                response,
+                Duration::from_secs(0), // No timeout needed since we have the data
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    fn display_oauth_device_info_new(
+        &mut self,
+        user_code: &str,
+        verification_uri: &str,
+        verification_uri_complete: Option<&str>,
+    ) -> anyhow::Result<()> {
+        use colored::Colorize;
+
+        let display_uri = verification_uri_complete.unwrap_or(verification_uri);
+
+        self.writeln("")?;
+        self.writeln(format!(
+            "{} Please visit: {}",
+            "→".blue(),
+            display_uri.blue().underline()
+        ))?;
+        // Try to copy code to clipboard automatically (not available on Android)
+        #[cfg(not(target_os = "android"))]
+        let clipboard_copied = arboard::Clipboard::new()
+            .and_then(|mut clipboard| clipboard.set_text(user_code))
+            .is_ok();
+
+        #[cfg(target_os = "android")]
+        let clipboard_copied = false;
+
+        if clipboard_copied {
+            self.writeln(format!(
+                "{} Code copied to clipboard: {}",
+                "✓".green().bold(),
+                user_code.bold().yellow()
+            ))?;
+        } else {
+            self.writeln(format!(
+                "{} Enter code: {}",
+                "→".blue(),
+                user_code.bold().yellow()
+            ))?;
+        }
+        self.writeln("")?;
+
+        // Try to open browser automatically
+        if let Err(e) = open::that(display_uri) {
+            self.writeln_title(TitleFormat::error(format!(
+                "Failed to open browser automatically: {e}"
+            )))?;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_device_flow(
+        &mut self,
+        provider_id: ProviderId,
+        request: &DeviceCodeRequest,
+    ) -> Result<()> {
+        use std::time::Duration;
+
+        let user_code = request.user_code.clone();
+        let verification_uri = request.verification_uri.clone();
+        let verification_uri_complete = request.verification_uri_complete.clone();
+
+        self.spinner.stop(None)?;
+        // Display OAuth device information
+        self.display_oauth_device_info_new(
+            user_code.as_ref(),
+            verification_uri.as_ref(),
+            verification_uri_complete.as_ref().map(|v| v.as_ref()),
+        )?;
+
+        // Step 2: Complete authentication (polls if needed for OAuth flows)
+        self.spinner.start(Some("Completing authentication..."))?;
+
+        let response = AuthContextResponse::device_code(request.clone());
+
+        self.api
+            .complete_provider_auth(provider_id, response, Duration::from_secs(600))
+            .await?;
+
+        self.spinner.stop(None)?;
+
+        Ok(())
+    }
+
+    async fn display_credential_success(
+        &mut self,
+        provider_id: ProviderId,
+    ) -> anyhow::Result<bool> {
+        self.writeln_title(TitleFormat::info(format!(
+            "{provider_id} configured successfully!"
+        )))?;
+
+        // Prompt user to set as active provider
+        let should_set_active = PawsSelect::confirm(format!(
+            "Would you like to set {provider_id} as the active provider?"
+        ))
+        .with_default(true)
+        .prompt()?;
+
+        Ok(should_set_active.unwrap_or(false))
+    }
+
+    async fn handle_code_flow(
+        &mut self,
+        provider_id: ProviderId,
+        request: &CodeRequest,
+    ) -> anyhow::Result<()> {
+        use colored::Colorize;
+
+        self.spinner.stop(None)?;
+
+        self.writeln(format!(
+            "{}",
+            format!("Authenticate using your {provider_id} account").dimmed()
+        ))?;
+
+        // Display authorization URL
+        self.writeln(format!(
+            "{} Please visit: {}",
+            "→".blue(),
+            request.authorization_url.as_str().blue().underline()
+        ))?;
+
+        // Try to open browser automatically
+        if let Err(e) = open::that(request.authorization_url.as_str()) {
+            self.writeln_title(TitleFormat::error(format!(
+                "Failed to open browser automatically: {e}"
+            )))?;
+        }
+
+        // Prompt user to paste authorization code
+        let code = PawsSelect::input("Paste the authorization code:")
+            .prompt()?
+            .ok_or_else(|| anyhow::anyhow!("Authorization code input cancelled"))?;
+
+        if code.trim().is_empty() {
+            anyhow::bail!("Authorization code cannot be empty");
+        }
+
+        self.spinner
+            .start(Some("Exchanging authorization code..."))?;
+
+        let response = AuthContextResponse::code(request.clone(), &code);
+
+        self.api
+            .complete_provider_auth(
+                provider_id,
+                response,
+                Duration::from_secs(0), // No timeout needed since we have the data
+            )
+            .await?;
+
+        self.spinner.stop(None)?;
+
+        Ok(())
+    }
+
+    /// Helper method to select an authentication method when multiple are
+    /// available
+    async fn select_auth_method(
+        &mut self,
+        provider_id: ProviderId,
+        auth_methods: &[AuthMethod],
+    ) -> Result<Option<AuthMethod>> {
+        use colored::Colorize;
+
+        if auth_methods.is_empty() {
+            anyhow::bail!("No authentication methods available for provider {provider_id}");
+        }
+
+        // If only one auth method, use it directly
+        if auth_methods.len() == 1 {
+            return Ok(Some(auth_methods[0].clone()));
+        }
+
+        // Multiple auth methods - ask user to choose
+        self.spinner.stop(None)?;
+
+        self.writeln_title(TitleFormat::action(format!("Configure {provider_id}")))?;
+        self.writeln("Multiple authentication methods available".dimmed())?;
+
+        let method_names: Vec<String> = auth_methods
+            .iter()
+            .map(|method| match method {
+                AuthMethod::ApiKey => "API Key".to_string(),
+                AuthMethod::OAuthDevice(_) => "OAuth Device Flow".to_string(),
+                AuthMethod::OAuthCode(_) => "OAuth Authorization Code".to_string(),
+            })
+            .collect();
+
+        match PawsSelect::select("Select authentication method:", method_names.clone())
+            .with_help_message("Use arrow keys to navigate and Enter to select")
+            .prompt()?
+        {
+            Some(selected_name) => {
+                // Find the corresponding auth method
+                let index = method_names
+                    .iter()
+                    .position(|name| name == &selected_name)
+                    .expect("Selected method should exist");
+                Ok(Some(auth_methods[index].clone()))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Handle authentication flow for an unavailable provider
+    async fn configure_provider(
+        &mut self,
+        provider_id: ProviderId,
+        auth_methods: Vec<AuthMethod>,
+    ) -> Result<Option<Provider<Url>>> {
+        if provider_id == ProviderId::FORGE_SERVICES {
+            let auth = self.api.create_auth_credentials().await?;
+            self.writeln_title(
+                TitleFormat::info("Paws API key created").sub_title(auth.token.as_str()),
+            )?;
+            return Ok(None);
+        }
+        // Select auth method (or use the only one available)
+        let auth_method = match self
+            .select_auth_method(provider_id.clone(), &auth_methods)
+            .await?
+        {
+            Some(method) => method,
+            None => return Ok(None), // User cancelled
+        };
+
+        self.spinner.start(Some("Initiating authentication..."))?;
+
+        // Initiate the authentication flow
+        let auth_request = self
+            .api
+            .init_provider_auth(provider_id.clone(), auth_method)
+            .await?;
+
+        // Handle the specific authentication flow based on the request type
+        match auth_request {
+            AuthContextRequest::ApiKey(request) => {
+                self.handle_api_key_input(provider_id.clone(), &request)
+                    .await?;
+            }
+            AuthContextRequest::DeviceCode(request) => {
+                self.handle_device_flow(provider_id.clone(), &request)
+                    .await?;
+            }
+            AuthContextRequest::Code(request) => {
+                self.handle_code_flow(provider_id.clone(), &request).await?;
+            }
+        }
+
+        let should_set_active = self.display_credential_success(provider_id.clone()).await?;
+
+        if !should_set_active {
+            return Ok(None);
+        }
+
+        // Fetch and return the configured provider
+        let provider = self.api.get_provider(&provider_id).await?;
+        Ok(provider.into_configured())
+    }
+
+    /// Selects a provider, optionally configuring it if not already configured.
+    async fn select_provider(&mut self) -> Result<Option<AnyProvider>> {
+        // Fetch and sort available providers
+        let mut providers = self
+            .api
+            .get_providers()
+            .await?
+            .into_iter()
+            .filter(|p| {
+                let filter = paws_domain::ProviderType::Llm;
+                match &p {
+                    AnyProvider::Url(provider) => provider.provider_type == filter,
+                    AnyProvider::Template(provider) => provider.provider_type == filter,
+                }
+            })
+            .map(CliProvider)
+            .collect::<Vec<_>>();
+
+        if providers.is_empty() {
+            return Err(anyhow::anyhow!("No AI provider API keys configured"));
+        }
+
+        providers.sort_by_key(|a| a.to_string());
+
+        // Find starting cursor position
+        let starting_cursor = self
+            .get_provider(self.api.get_active_agent().await)
+            .await
+            .ok()
+            .and_then(|current| providers.iter().position(|p| p.0.id() == current.id))
+            .unwrap_or(0);
+
+        // Prompt user to select a provider
+        let Some(provider) = PawsSelect::select("Select a provider:", providers)
+            .with_starting_cursor(starting_cursor)
+            .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
+            .prompt()?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(provider.0))
+    }
+
+    // Helper method to handle model selection and update the conversation
+    #[async_recursion::async_recursion]
+    async fn on_model_selection(&mut self) -> Result<Option<ModelId>> {
+        // Select a model
+        let model_option = self.select_model().await?;
+
+        // If no model was selected (user canceled), return early
+        let model = match model_option {
+            Some(model) => model,
+            None => return Ok(None),
+        };
+
+        // Update the operating model via API
+        self.api.set_default_model(model.clone()).await?;
+
+        // Update the UI state with the new model
+        self.update_model(Some(model.clone()));
+
+        self.writeln_title(TitleFormat::action(format!("Switched to model: {model}")))?;
+
+        Ok(Some(model))
+    }
+
+    async fn on_provider_selection(&mut self) -> Result<()> {
+        // Select a provider
+        // If no provider was selected (user canceled), return early
+        let any_provider = match self.select_provider().await? {
+            Some(provider) => provider,
+            None => return Ok(()),
+        };
+
+        self.activate_provider(any_provider).await
+    }
+
+    /// Activates a provider by configuring it if needed, setting it as default,
+    /// and ensuring a compatible model is selected.
+    async fn activate_provider(&mut self, any_provider: AnyProvider) -> Result<()> {
+        // Trigger authentication for the selected provider only if not configured
+        let provider = if !any_provider.is_configured() {
+            match self
+                .configure_provider(any_provider.id(), any_provider.auth_methods().to_vec())
+                .await?
+            {
+                Some(provider) => provider,
+                None => return Ok(()),
+            }
+        } else {
+            // Provider is already configured, convert it
+            match any_provider.into_configured() {
+                Some(provider) => provider,
+                None => return Ok(()),
+            }
+        };
+
+        // Set as default and handle model selection
+        self.finalize_provider_activation(provider).await
+    }
+
+    /// Finalizes provider activation by setting it as default and ensuring
+    /// a compatible model is selected.
+    async fn finalize_provider_activation(&mut self, provider: Provider<Url>) -> Result<()> {
+        // Set the provider via API
+        self.api.set_default_provider(provider.id.clone()).await?;
+
+        self.writeln_title(TitleFormat::action(format!(
+            "Switched to provider: {}",
+            CliProvider(AnyProvider::Url(provider.clone()))
+        )))?;
+
+        // Check if the current model is available for the new provider
+        let current_model = self.api.get_default_model().await;
+        if let Some(current_model) = current_model {
+            let models = self.get_models().await?;
+            let model_available = models.iter().any(|m| m.id == current_model);
+
+            if !model_available {
+                // Prompt user to select a new model
+                self.writeln_title(TitleFormat::info("Please select a new model"))?;
+                self.on_model_selection().await?;
+            }
+        } else {
+            // No model set, select one now
+            self.on_model_selection().await?;
+        }
+
+        Ok(())
+    }
+
+    // Handle dispatching events from the CLI
+    async fn handle_dispatch(&mut self, json: String) -> Result<()> {
+        // Initialize the conversation
+        let conversation_id = self.init_conversation().await?;
+
+        // Parse the JSON to determine the event name and value
+        let event: UserCommand = serde_json::from_str(&json)?;
+
+        // Create the chat request with the event
+        let chat = ChatRequest::new(event.into(), conversation_id);
+
+        self.on_chat(chat).await
+    }
+
+    /// Initializes and returns a conversation ID for the current session.
+    ///
+    /// Handles conversation setup for both interactive and headless modes:
+    /// - **Interactive**: Reuses existing conversation, loads from file, or
+    ///   creates new
+    /// - **Headless**: Uses environment variables or generates new conversation
+    ///
+    /// Displays initialization status and updates UI state with the
+    /// conversation ID.
+    async fn init_conversation(&mut self) -> Result<ConversationId> {
+        // Set agent if provided via CLI
+        if let Some(agent_id) = self.cli.agent.clone() {
+            self.api.set_active_agent(agent_id).await?;
+        }
+
+        let mut is_new = false;
+        let id = if let Some(id) = self.state.conversation_id {
+            id
+        } else if let Some(id) = self.cli.conversation_id {
+            // Use the provided conversation ID
+
+            // Check if conversation exists, if not create it
+            if self.api.conversation(&id).await?.is_none() {
+                let conversation = Conversation::new(id);
+                self.api.upsert_conversation(conversation).await?;
+                is_new = true;
+            }
+            id
+        } else if let Some(ref path) = self.cli.conversation {
+            let conversation: Conversation =
+                serde_json::from_str(PawsFS::read_utf8(path.as_os_str()).await?.as_str())
+                    .context("Failed to parse Conversation")?;
+            let id = conversation.id;
+            self.api.upsert_conversation(conversation).await?;
+            id
+        } else {
+            let conversation = Conversation::generate();
+            let id = conversation.id;
+            is_new = true;
+            self.api.upsert_conversation(conversation).await?;
+            id
+        };
+
+        // Print if the state is being reinitialized
+        if self.state.conversation_id.is_none() {
+            self.print_conversation_status(is_new, id)?;
+        }
+
+        // Always set the conversation id in state
+        self.state.conversation_id = Some(id);
+
+        Ok(id)
+    }
+
+    fn print_conversation_status(
+        &mut self,
+        new_conversation: bool,
+        id: ConversationId,
+    ) -> Result<(), anyhow::Error> {
+        let mut title = if new_conversation {
+            "Initialize".to_string()
+        } else {
+            "Continue".to_string()
+        };
+
+        title.push_str(format!(" {}", id.into_string()).as_str());
+
+        self.writeln_title(TitleFormat::debug(title))?;
+        Ok(())
+    }
+
+    /// Initialize the state of the UI
+    async fn init_state(&mut self, first: bool) -> Result<Workflow> {
+        // Run the independent initialization tasks in parallel for better performance
+        let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
+
+        let _ = self.handle_migrate_credentials().await;
+
+        // Ensure we have a model selected before proceeding with initialization
+        let active_agent = self.api.get_active_agent().await;
+
+        let mut operating_model = self.get_agent_model(active_agent.clone()).await;
+        if operating_model.is_none() {
+            // Use the model returned from selection instead of re-fetching
+            operating_model = self.on_model_selection().await?;
+        }
+
+        // Validate provider is configured before loading agents
+        // If provider is set in config but not configured (no credentials), prompt user
+        // to login
+        if self.api.get_default_provider().await.is_err() {
+            self.on_provider_selection().await?;
+        }
+
+        if first {
+            // Create base workflow and trigger updates if this is the first initialization
+            let mut base_workflow = Workflow::default();
+            base_workflow.merge(workflow.clone());
+            // For chat, we are trying to get active agent or setting it to default.
+            // So for default values, `/info` doesn't show active provider, model, etc.
+            // So my default, on new, we should set the active agent.
+            self.api
+                .set_active_agent(active_agent.clone().unwrap_or_default())
+                .await?;
+            // only call on_update if this is the first initialization
+            on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
+            if !workflow.commands.is_empty() {
+                self.writeln_title(TitleFormat::error("paws.yaml commands are deprecated. Use .md files in paws/ (home) or .paws/ (project) instead"))?;
+            }
+        }
+
+        // Execute independent operations in parallel to improve performance
+        let (agents_result, commands_result) =
+            tokio::join!(self.api.get_agents(), self.api.get_commands());
+
+        // Register agent commands with proper error handling and user feedback
+        match agents_result {
+            Ok(agents) => {
+                let registration_result = self.command.register_agent_commands(agents);
+
+                // Show warning for any skipped agents due to conflicts
+                for skipped_command in registration_result.skipped_conflicts {
+                    self.writeln_title(TitleFormat::error(format!(
+                        "Skipped agent command '{skipped_command}' due to name conflict with built-in command"
+                    )))?;
+                }
+            }
+            Err(e) => {
+                self.writeln_title(TitleFormat::error(format!(
+                    "Failed to load agents for command registration: {e}"
+                )))?;
+            }
+        }
+
+        // Register all the commands
+        self.command.register_all(commands_result?);
+
+        self.state = UIState::new(self.api.environment());
+        self.update_model(operating_model);
+
+        Ok(workflow)
+    }
+
+    async fn on_message(&mut self, content: Option<String>) -> Result<()> {
+        let conversation_id = self.init_conversation().await?;
+
+        self.install_vscode_extension();
+
+        // Track if content was provided to decide whether to use piped input as
+        // additional context
+        let has_content = content.is_some();
+
+        // Create a ChatRequest with the appropriate event type
+        let mut event = match content {
+            Some(text) => Event::new(text),
+            None => Event::empty(),
+        };
+
+        // Only use CLI piped_input as additional context if it wasn't already passed as
+        // content This handles cases where piped input is used alongside
+        // explicit prompts
+        let piped_input = self.cli.piped_input.clone();
+        if let Some(piped) = piped_input {
+            // Only add as additional context if content is provided separately (e.g., via
+            // --prompt)
+            if has_content {
+                event = event.additional_context(piped);
+            }
+        }
+
+        // Create the chat request with the event
+        let chat = ChatRequest::new(event, conversation_id);
+
+        self.on_chat(chat).await
+    }
+
+    async fn on_chat(&mut self, chat: ChatRequest) -> Result<()> {
+        let mut stream = self.api.chat(chat).await?;
+
+        while let Some(message) = stream.next().await {
+            match message {
+                Ok(message) => self.handle_chat_response(message).await?,
+                Err(err) => {
+                    self.spinner.stop(None)?;
+                    return Err(err);
+                }
+            }
+        }
+
+        self.markdown.reset();
+        self.spinner.stop(None)?;
+
+        Ok(())
+    }
+
+    /// Modified version of handle_dump that supports HTML format
+    async fn on_dump(&mut self, html: bool) -> Result<()> {
+        if let Some(conversation_id) = self.state.conversation_id {
+            let conversation = self.api.conversation(&conversation_id).await?;
+            if let Some(conversation) = conversation {
+                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+                if html {
+                    // Export as HTML
+                    let html_content = conversation.to_html();
+                    let path = format!("{timestamp}-dump.html");
+                    tokio::fs::write(path.as_str(), html_content).await?;
+
+                    self.writeln_title(
+                        TitleFormat::action("Conversation HTML dump created".to_string())
+                            .sub_title(path.to_string()),
+                    )?;
+
+                    if self.api.environment().auto_open_dump {
+                        open::that(path.as_str()).ok();
+                    }
+                } else {
+                    // Default: Export as JSON
+                    let path = format!("{timestamp}-dump.json");
+                    let content = serde_json::to_string_pretty(&conversation)?;
+                    tokio::fs::write(path.as_str(), content).await?;
+
+                    self.writeln_title(
+                        TitleFormat::action("Conversation JSON dump created".to_string())
+                            .sub_title(path.to_string()),
+                    )?;
+
+                    if self.api.environment().auto_open_dump {
+                        open::that(path.as_str()).ok();
+                    }
+                };
+            } else {
+                return Err(anyhow::anyhow!("Could not create dump"))
+                    .context(format!("Conversation: {conversation_id} was not found"));
+            }
+        } else {
+            return Err(anyhow::anyhow!("No conversation initiated yet"))
+                .context("Could not create dump");
+        }
+        Ok(())
+    }
+
+    async fn handle_chat_response(&mut self, message: ChatResponse) -> Result<()> {
+        debug!(chat_response = ?message, "Chat Response");
+        if message.is_empty() {
+            return Ok(());
+        }
+
+        match message {
+            ChatResponse::TaskMessage { content } => match content {
+                ChatResponseContent::Title(title) => self.writeln(title.display())?,
+                ChatResponseContent::PlainText(text) => self.writeln(text)?,
+                ChatResponseContent::Markdown(text) => {
+                    self.markdown.add_chunk(&text, &mut self.spinner);
+                }
+            },
+            ChatResponse::ToolCallStart(_) => {
+                // Hide spinner while tool call
+                let _ = self.spinner.hide();
+            }
+            ChatResponse::ToolCallEnd(toolcall_result) => {
+                // Only track toolcall name in case of success else track the error.
+                let payload = if toolcall_result.is_error() {
+                    let mut r = ToolCallPayload::new(toolcall_result.name.to_string());
+                    if let Some(cause) = toolcall_result.output.as_str() {
+                        r = r.with_cause(cause.to_string());
+                    }
+                    r
+                } else {
+                    ToolCallPayload::new(toolcall_result.name.to_string())
+                };
+                tracker::tool_call(payload);
+
+                // Resume the spinner as tool call is over
+                let _ = self.spinner.show();
+
+                if !self.cli.verbose {
+                    return Ok(());
+                }
+            }
+            ChatResponse::RetryAttempt { cause, duration: _ } => {
+                if !self.api.environment().retry_config.suppress_retry_errors {
+                    self.spinner.start(Some("Retrying"))?;
+                    self.writeln_title(TitleFormat::error(cause.as_str()))?;
+                }
+            }
+            ChatResponse::Interrupt { reason } => {
+                self.spinner.stop(None)?;
+
+                let title = match reason {
+                    InterruptionReason::MaxRequestPerTurnLimitReached { limit } => {
+                        format!("Maximum request ({limit}) per turn achieved")
+                    }
+                    InterruptionReason::MaxToolFailurePerTurnLimitReached { limit, .. } => {
+                        format!("Maximum tool failure limit ({limit}) reached for this turn")
+                    }
+                };
+
+                self.writeln_title(TitleFormat::action(title))?;
+                self.should_continue().await?;
+            }
+            ChatResponse::TaskReasoning { content } => {
+                if !content.trim().is_empty() {
+                    self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
+                }
+            }
+            ChatResponse::TaskComplete => {
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Ok(conversation) =
+                        self.validate_conversation_exists(&conversation_id).await
+                {
+                    self.on_show_conv_info(conversation).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn should_continue(&mut self) -> anyhow::Result<()> {
+        let should_continue = PawsSelect::confirm("Do you want to continue anyway?")
+            .with_default(true)
+            .prompt()?;
+
+        if should_continue.unwrap_or(false) {
+            self.spinner.start(None)?;
+            Box::pin(self.on_message(None)).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
+        if !should_show_completion_prompt() {
+            return Ok(());
+        }
+
+        self.spinner.start(Some("Loading Summary"))?;
+
+        let info = Info::default().extend(&conversation);
+
+        self.spinner.stop(None)?;
+        self.writeln(info)?;
+
+        // Only prompt for new conversation if in interactive mode and prompt is enabled
+        if self.cli.is_interactive() {
+            let prompt_text = "Start a new conversation?";
+            let should_start_new_chat = PawsSelect::confirm(prompt_text)
+                // Pressing ENTER should start new
+                .with_default(true)
+                .with_help_message("ESC = No, continue current conversation")
+                .prompt()
+                // Cancel or failure should continue with the session
+                .unwrap_or(Some(false))
+                .unwrap_or(false);
+
+            // if conversation is over
+            if should_start_new_chat {
+                self.on_new().await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_show_conv_stats(
+        &mut self,
+        conversation: Conversation,
+        porcelain: bool,
+    ) -> anyhow::Result<()> {
+        let mut info = Info::new().add_title("CONVERSATION");
+
+        // Add conversation ID
+        info = info.add_key_value("ID", conversation.id.to_string());
+
+        // Calculate duration
+        let created_at = conversation.metadata.created_at;
+        let updated_at = conversation.metadata.updated_at.unwrap_or(created_at);
+        let duration = updated_at.signed_duration_since(created_at);
+
+        // Format duration
+        let duration_str = if duration.num_hours() > 0 {
+            format!("{}h {}m", duration.num_hours(), duration.num_minutes() % 60)
+        } else if duration.num_minutes() > 0 {
+            format!(
+                "{}m {}s",
+                duration.num_minutes(),
+                duration.num_seconds() % 60
+            )
+        } else {
+            format!("{}s", duration.num_seconds())
+        };
+
+        info = info.add_key_value("Total Duration", duration_str);
+
+        // Add message statistics if context exists
+        if let Some(context) = &conversation.context {
+            info = info
+                .add_key_value("Total Messages", context.total_messages().to_string())
+                .add_key_value("User Messages", context.user_message_count().to_string())
+                .add_key_value(
+                    "Assistant Messages",
+                    context.assistant_message_count().to_string(),
+                )
+                .add_key_value("Tool Calls", context.tool_call_count().to_string());
+        }
+
+        // Add token usage if available
+        if let Some(usage) = conversation.usage().as_ref() {
+            info = info
+                .add_title("TOKEN")
+                .add_key_value("Prompt Tokens", usage.prompt_tokens.to_string())
+                .add_key_value("Completion Tokens", usage.completion_tokens.to_string())
+                .add_key_value("Total Tokens", usage.total_tokens.to_string());
+        }
+
+        if let Some(cost) = conversation.accumulated_cost() {
+            info = info.add_key_value("Cost", format!("${cost:.4}"));
+        }
+
+        if porcelain {
+            use convert_case::Case;
+            self.writeln(
+                Porcelain::from(&info)
+                    .into_long()
+                    .skip(1)
+                    .to_case(&[0, 1], Case::Snake)
+                    .sort_by(&[0, 1]),
+            )?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Clones a conversation with a new ID
+    ///
+    /// # Arguments
+    /// * `original` - The conversation to clone
+    /// * `porcelain` - If true, output only the new conversation ID
+    async fn on_clone_conversation(
+        &mut self,
+        original: Conversation,
+        porcelain: bool,
+    ) -> anyhow::Result<()> {
+        // Create a new conversation with a new ID but same content
+        let new_id = ConversationId::generate();
+        let mut cloned = original.clone();
+        cloned.id = new_id;
+
+        // Upsert the cloned conversation
+        self.api.upsert_conversation(cloned.clone()).await?;
+
+        // Output based on format
+        if porcelain {
+            println!("{new_id}");
+        } else {
+            self.writeln_title(
+                TitleFormat::info("Cloned").sub_title(format!("[{} → {}]", original.id, cloned.id)),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn update_model(&mut self, model: Option<ModelId>) {
+        if let Some(ref model) = model {
+            tracker::set_model(model.to_string());
+        }
+    }
+
+    async fn on_custom_event(&mut self, event: Event) -> Result<()> {
+        let conversation_id = self.init_conversation().await?;
+        let chat = ChatRequest::new(event, conversation_id);
+        self.on_chat(chat).await
+    }
+
+    async fn on_usage(&mut self) -> anyhow::Result<()> {
+        self.spinner.start(Some("Loading Usage"))?;
+
+        // Get usage from current conversation if available
+        let conversation_usage = if let Some(conversation_id) = &self.state.conversation_id {
+            self.api
+                .conversation(conversation_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|conv| conv.accumulated_usage())
+        } else {
+            None
+        };
+
+        let mut info = if let Some(usage) = conversation_usage {
+            Info::from(&usage)
+        } else {
+            Info::new()
+        };
+
+        if let Ok(Some(user_usage)) = self.api.user_usage().await {
+            info = info.extend(Info::from(&user_usage));
+        }
+
+        self.writeln(info)?;
+        self.spinner.stop(None)?;
+        Ok(())
+    }
+
+    fn trace_user(&self) {
+        let api = self.api.clone();
+        // NOTE: Spawning required so that we don't block the user while querying user
+        // info
+        tokio::spawn(async move {
+            if let Ok(Some(user_info)) = api.user_info().await {
+                tracker::login(user_info.auth_provider_id.into_string());
+            }
+        });
+    }
+
+    /// Handle config command
+    async fn handle_config_command(
+        &mut self,
+        command: crate::cli::ConfigCommand,
+        porcelain: bool,
+    ) -> Result<()> {
+        match command {
+            crate::cli::ConfigCommand::Set(args) => self.handle_config_set(args).await?,
+            crate::cli::ConfigCommand::Get(args) => self.handle_config_get(args).await?,
+            crate::cli::ConfigCommand::List => {
+                self.on_show_config(porcelain).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Handle config set command
+    async fn handle_config_set(&mut self, args: crate::cli::ConfigSetArgs) -> Result<()> {
+        use crate::cli::ConfigField;
+
+        // Set the specified field
+        match args.field {
+            ConfigField::Provider => {
+                // Parse provider ID (any string is valid for custom providers)
+                let provider_id =
+                    ProviderId::from_str(&args.value).expect("from_str is infallible");
+
+                // Get the provider
+                let provider = self.api.get_provider(&provider_id).await?;
+                // Activate the provider (will configure if needed and set as default)
+                self.activate_provider(provider).await?;
+            }
+            ConfigField::Model => {
+                let model_id = self.validate_model(&args.value).await?;
+                self.api.set_default_model(model_id.clone()).await?;
+                self.writeln_title(
+                    TitleFormat::action(model_id.as_str()).sub_title("is now the default model"),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle config get command
+    async fn handle_config_get(&mut self, args: crate::cli::ConfigGetArgs) -> Result<()> {
+        use crate::cli::ConfigField;
+
+        // Get specific field
+        match args.field {
+            ConfigField::Model => {
+                let model = self
+                    .api
+                    .get_default_model()
+                    .await
+                    .map(|m| m.as_str().to_string());
+                match model {
+                    Some(v) => self.writeln(v.to_string())?,
+                    None => self.writeln("Model: Not set")?,
+                }
+            }
+            ConfigField::Provider => {
+                let provider = self
+                    .api
+                    .get_default_provider()
+                    .await
+                    .ok()
+                    .map(|p| p.id.to_string());
+                match provider {
+                    Some(v) => self.writeln(v.to_string())?,
+                    None => self.writeln("Provider: Not set")?,
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate model exists
+    async fn validate_model(&self, model_str: &str) -> Result<ModelId> {
+        let models = self.api.get_models().await?;
+        let model_id = ModelId::new(model_str);
+
+        if models.iter().any(|m| m.id == model_id) {
+            Ok(model_id)
+        } else {
+            // Show first 10 models as suggestions
+            let available: Vec<_> = models.iter().take(10).map(|m| m.id.as_str()).collect();
+            let suggestion = if models.len() > 10 {
+                format!("{} (and {} more)", available.join(", "), models.len() - 10)
+            } else {
+                available.join(", ")
+            };
+
+            Err(anyhow::anyhow!(
+                "Model '{model_str}' not found. Available models: {suggestion}"
+            ))
+        }
+    }
+
+    /// Shows the last message from a conversation
+    ///
+    /// # Errors
+    /// - If the conversation doesn't exist
+    /// - If the conversation has no messages
+    async fn on_show_last_message(&mut self, conversation: Conversation) -> Result<()> {
+        let context = conversation
+            .context
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
+
+        // Find the last assistant message
+        let message = context.messages.iter().rev().find_map(|msg| match &**msg {
+            ContextMessage::Text(TextMessage { content, role: Role::Assistant, .. }) => {
+                Some(content)
+            }
+            _ => None,
+        });
+
+        // Format and display the message using the message_display module
+        if let Some(message) = message {
+            self.markdown.add_chunk(message, &mut self.spinner);
+        }
+
+        Ok(())
+    }
+
+    async fn on_index(
+        &mut self,
+        path: std::path::PathBuf,
+        batch_size: usize,
+    ) -> anyhow::Result<()> {
+        use paws_domain::SyncProgress;
+        use paws_spinner::ProgressBarManager;
+
+        // Check if auth already exists and create if needed
+        if !self.api.is_authenticated().await? {
+            let auth = self.api.create_auth_credentials().await?;
+            self.writeln_title(
+                TitleFormat::info("Paws API key created").sub_title(auth.token.as_str()),
+            )?;
+        }
+
+        let mut stream = self.api.sync_codebase(path.clone(), batch_size).await?;
+        let mut progress_bar = ProgressBarManager::default();
+
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(ref progress @ SyncProgress::Completed { .. }) => {
+                    progress_bar.set_position(100)?;
+                    progress_bar.stop(None).await?;
+                    if let Some(msg) = progress.message() {
+                        self.writeln_title(TitleFormat::debug(msg))?;
+                    }
+                }
+                Ok(ref progress @ SyncProgress::Syncing { .. }) => {
+                    if !progress_bar.is_active() {
+                        progress_bar.start(100, "Indexing codebase")?;
+                    }
+                    if let Some(msg) = progress.message() {
+                        progress_bar.set_message(&msg)?;
+                    }
+                    if let Some(weight) = progress.weight() {
+                        progress_bar.set_position(weight)?;
+                    }
+                }
+                Ok(ref progress) => {
+                    if let Some(msg) = progress.message() {
+                        self.writeln_title(TitleFormat::debug(msg))?;
+                    }
+                }
+                Err(e) => {
+                    progress_bar.stop(None).await?;
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_query(
+        &mut self,
+        path: PathBuf,
+        params: paws_domain::SearchParams<'_>,
+    ) -> anyhow::Result<()> {
+        self.spinner.start(Some("Searching codebase..."))?;
+
+        let results = match self.api.query_codebase(path.clone(), params).await {
+            Ok(results) => results,
+            Err(e) => {
+                self.spinner.stop(None)?;
+                return Err(e);
+            }
+        };
+
+        self.spinner.stop(None)?;
+
+        let mut info = Info::new().add_title(format!("FILES [{} RESULTS]", results.len()));
+
+        for result in results.iter() {
+            match &result.node {
+                paws_domain::NodeData::FileChunk(chunk) => {
+                    info = info.add_key_value(
+                        "File",
+                        format!(
+                            "{}:{}-{}",
+                            chunk.file_path, chunk.start_line, chunk.end_line
+                        ),
+                    );
+                }
+                paws_domain::NodeData::File(file) => {
+                    info = info.add_key_value("File", format!("{} (full file)", file.file_path));
+                }
+                paws_domain::NodeData::FileRef(file_ref) => {
+                    info =
+                        info.add_key_value("File", format!("{} (reference)", file_ref.file_path));
+                }
+                paws_domain::NodeData::Note(note) => {
+                    info = info.add_key_value("Note", &note.content);
+                }
+                paws_domain::NodeData::Task(task) => {
+                    info = info.add_key_value("Task", &task.task);
+                }
+            }
+        }
+
+        self.writeln(info)?;
+
+        Ok(())
+    }
+
+    /// Helper function to format workspace information consistently
+    fn format_workspace_info(workspace: &paws_domain::WorkspaceInfo, is_active: bool) -> Info {
+        let updated_time = workspace
+            .last_updated
+            .map_or("NEVER".to_string(), humanize_time);
+
+        let mut info = Info::new();
+
+        let title = if is_active {
+            "Workspace [Current]".to_string()
+        } else {
+            "Workspace".to_string()
+        };
+        info = info.add_title(title);
+
+        info.add_key_value("ID", workspace.workspace_id.to_string())
+            .add_key_value("Path", workspace.working_dir.to_string())
+            .add_key_value("File", workspace.node_count.to_string())
+            .add_key_value("Relations", workspace.relation_count.to_string())
+            .add_key_value("Created At", humanize_time(workspace.created_at))
+            .add_key_value("Updated At", updated_time)
+    }
+
+    async fn on_list_workspaces(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        if !porcelain {
+            self.spinner.start(Some("Fetching workspaces..."))?;
+        }
+
+        // Fetch workspaces and current workspace info in parallel
+        let env = self.api.environment();
+        let (workspaces_result, current_workspace_result) = tokio::join!(
+            self.api.list_codebases(),
+            self.api.get_workspace_info(env.cwd)
+        );
+
+        match workspaces_result {
+            Ok(workspaces) => {
+                if !porcelain {
+                    self.spinner.stop(None)?;
+                }
+
+                // Get active workspace ID if current workspace info is available
+                let current_workspace = current_workspace_result.ok().flatten();
+                let active_workspace_id = current_workspace.as_ref().map(|ws| &ws.workspace_id);
+
+                // Build Info object once
+                let mut info = Info::new();
+
+                for workspace in &workspaces {
+                    let is_active = active_workspace_id == Some(&workspace.workspace_id);
+                    info = info.extend(Self::format_workspace_info(workspace, is_active));
+                }
+
+                // Output based on mode
+                if porcelain {
+                    // Skip header row in porcelain mode (consistent with conversation list)
+                    self.writeln(Porcelain::from(info).skip(1).drop_cols(&[0, 4, 5]))?;
+                } else {
+                    self.writeln(info)?;
+                }
+
+                Ok(())
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Displays workspace information for a given path.
+    async fn on_workspace_info(&mut self, path: std::path::PathBuf) -> anyhow::Result<()> {
+        self.spinner.start(Some("Fetching workspace info..."))?;
+
+        match self.api.get_workspace_info(path).await {
+            Ok(Some(workspace)) => {
+                self.spinner.stop(None)?;
+
+                // When viewing a specific workspace's info, it's implicitly the active one
+                let info = Self::format_workspace_info(&workspace, true);
+
+                self.writeln(info)
+            }
+            Ok(None) => {
+                self.spinner.stop(None)?;
+                self.writeln_to_stderr(
+                    TitleFormat::error("No workspace found")
+                        .display()
+                        .to_string(),
+                )
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    async fn on_delete_workspace(&mut self, workspace_id: String) -> anyhow::Result<()> {
+        // Parse workspace ID
+        let workspace_id = paws_domain::WorkspaceId::from_string(&workspace_id)
+            .context("Invalid workspace ID format")?;
+
+        self.spinner.start(Some("Deleting workspace..."))?;
+
+        match self.api.delete_codebase(workspace_id.clone()).await {
+            Ok(()) => {
+                self.spinner.stop(None)?;
+                self.writeln_title(TitleFormat::debug(format!(
+                    "Successfully deleted workspace {}",
+                    workspace_id
+                )))?;
+                Ok(())
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Handle credential migration
+    async fn handle_migrate_credentials(&mut self) -> Result<()> {
+        // Perform the migration
+        self.spinner.start(Some("Migrating credentials"))?;
+        let result = self.api.migrate_env_credentials().await?;
+        self.spinner.stop(None)?;
+
+        // Display results based on whether migration occurred
+        if let Some(result) = result {
+            self.writeln_title(
+                TitleFormat::warning("Paws no longer reads API keys from environment variables.")
+                    .sub_title("Learn more: https://pawscode.dev/docs/custom-providers/"),
+            )?;
+
+            let count = result.migrated_providers.len();
+            let message = if count == 1 {
+                "Migrated 1 provider from environment variables".to_string()
+            } else {
+                format!("Migrated {count} providers from environment variables")
+            };
+            self.writeln_title(TitleFormat::info(message))?;
+        }
+        Ok(())
+    }
+
+    /// Silently install VS Code extension if in VS Code and extension not
+    /// installed.
+    /// NOTE: This is a non-cancellable and a slow task. We should only run this
+    /// if the user has provided a prompt because that is guaranteed to run for
+    /// at least a few seconds.
+    fn install_vscode_extension(&self) {
+        tokio::task::spawn_blocking(|| {
+            if crate::vscode::should_install_extension() {
+                let _ = crate::vscode::install_extension();
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Note: Tests for confirm_delete_conversation are disabled because
+    // PawsSelect::confirm is not easily mockable in the current
+    // architecture. The functionality is tested through integration tests
+    // instead.
+}

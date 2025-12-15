@@ -1,0 +1,215 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+
+use paws_domain::{
+    Attachment, ChatCompletionMessage, ChatResponse, Conversation, ConversationId, Event,
+    ProviderId, ToolCallFull, ToolErrorTracker, ToolResult,
+};
+use handlebars::{Handlebars, no_escape};
+use rust_embed::Embed;
+use tokio::sync::Mutex;
+
+pub use super::orch_setup::TestContext;
+use crate::apply_tunable_parameters::ApplyTunableParameters;
+use crate::init_conversation_metrics::InitConversationMetrics;
+use crate::orch::Orchestrator;
+use crate::set_conversation_id::SetConversationId;
+use crate::system_prompt::SystemPrompt;
+use crate::user_prompt::UserPromptGenerator;
+use crate::{AgentService, AttachmentService, SkillFetchService, TemplateService};
+
+#[derive(Embed)]
+#[folder = "../../templates/"]
+struct Templates;
+
+pub struct Runner {
+    hb: Handlebars<'static>,
+    // History of all the updates made to the conversation
+    conversation_history: Mutex<Vec<Conversation>>,
+
+    // Tool call requests and the mock responses
+    test_tool_calls: Mutex<VecDeque<(ToolCallFull, ToolResult)>>,
+
+    // Mock completions from the LLM (Each value is produced as an event in the stream)
+    test_completions: Mutex<VecDeque<ChatCompletionMessage>>,
+
+    attachments: Vec<Attachment>,
+}
+
+impl Runner {
+    fn new(setup: &TestContext) -> Self {
+        let mut hb = Handlebars::new();
+        hb.set_strict_mode(true);
+        hb.register_escape_fn(no_escape);
+
+        // Register all partial templates
+        hb.register_embed_templates::<Templates>().unwrap();
+        for (name, tpl) in &setup.templates {
+            hb.register_template_string(name, tpl).unwrap();
+        }
+
+        Self {
+            hb,
+            attachments: setup.attachments.clone(),
+            conversation_history: Mutex::new(Vec::new()),
+            test_tool_calls: Mutex::new(VecDeque::from(setup.mock_tool_call_responses.clone())),
+            test_completions: Mutex::new(VecDeque::from(setup.mock_assistant_responses.clone())),
+        }
+    }
+
+    // Returns the conversation history
+    async fn get_history(&self) -> Vec<Conversation> {
+        self.conversation_history.lock().await.clone()
+    }
+
+    pub async fn run(setup: &mut TestContext, event: Event) -> anyhow::Result<()> {
+        const LIMIT: usize = 1024;
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<anyhow::Result<ChatResponse>>(LIMIT);
+        let handle = tokio::spawn(async move {
+            let mut responses = Vec::new();
+
+            while let Some(item) = rx.recv().await {
+                responses.push(item);
+            }
+
+            responses
+        });
+
+        let services = Arc::new(Runner::new(setup));
+        // setup the conversation
+        let conversation = Conversation::new(ConversationId::generate()).title(setup.title.clone());
+
+        let agent = setup.agent.clone();
+        let system_tools = setup.tools.clone();
+        let agent = agent
+            .apply_workflow_config(&setup.workflow)
+            .model(setup.model.clone());
+
+        // Render system prompt into context.
+        let conversation = SystemPrompt::new(services.clone(), setup.env.clone(), agent.clone())
+            .files(setup.files.clone())
+            .tool_definitions(system_tools.clone())
+            .add_system_message(conversation)
+            .await?;
+
+        // Render user prompt into context.
+        let conversation = UserPromptGenerator::new(
+            services.clone(),
+            agent.clone(),
+            event.clone(),
+            setup.current_time,
+        )
+        .add_user_prompt(conversation)
+        .await?;
+
+        let conversation = InitConversationMetrics::new(setup.current_time).apply(conversation);
+        let conversation =
+            ApplyTunableParameters::new(agent.clone(), system_tools.clone()).apply(conversation);
+        let conversation = SetConversationId.apply(conversation);
+
+        let orch = Orchestrator::new(
+            services.clone(),
+            setup.env.clone(),
+            conversation,
+            agent,
+            event,
+        )
+        .error_tracker(ToolErrorTracker::new(3))
+        .tool_definitions(system_tools)
+        .sender(tx);
+
+        let (mut orch, runner) = (orch, services);
+
+        let result = orch.run().await;
+        drop(orch);
+
+        let chat_responses = handle.await?;
+
+        setup.output.chat_responses.extend(chat_responses);
+        setup
+            .output
+            .conversation_history
+            .extend(runner.get_history().await);
+
+        result
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentService for Runner {
+    async fn chat_agent(
+        &self,
+        _id: &paws_domain::ModelId,
+        context: paws_domain::Context,
+        _provider_id: Option<ProviderId>,
+    ) -> paws_domain::ResultStream<ChatCompletionMessage, anyhow::Error> {
+        let mut responses = self.test_completions.lock().await;
+
+        if let Some(message) = responses.pop_front() {
+            Ok(Box::pin(tokio_stream::iter(std::iter::once(Ok(message)))))
+        } else {
+            let total_messages = context.messages.len();
+            let last_message = context.messages.last();
+            panic!(
+                "No mock response found. Total Messages: {total_messages}. Last Message: {last_message:#?}"
+            )
+        }
+    }
+
+    async fn call(
+        &self,
+        _: &paws_domain::Agent,
+        _: &paws_domain::ToolCallContext,
+        test_call: paws_domain::ToolCallFull,
+    ) -> paws_domain::ToolResult {
+        let name = test_call.name.clone();
+        let mut guard = self.test_tool_calls.lock().await;
+        for (id, (call, result)) in guard.iter().enumerate() {
+            if call.call_id == test_call.call_id {
+                let result = result.clone();
+                guard.remove(id);
+                return result;
+            }
+        }
+
+        panic!("No mock tool call not found: {name}")
+    }
+
+    async fn update(&self, conversation: Conversation) -> anyhow::Result<()> {
+        self.conversation_history.lock().await.push(conversation);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TemplateService for Runner {
+    async fn register_template(&self, _path: std::path::PathBuf) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+
+    async fn render_template<V: serde::Serialize + Send + Sync>(
+        &self,
+        template: paws_domain::Template<V>,
+        object: &V,
+    ) -> anyhow::Result<String> {
+        Ok(self.hb.render_template(&template.template, object)?)
+    }
+}
+
+#[async_trait::async_trait]
+impl AttachmentService for Runner {
+    async fn attachments(&self, _url: &str) -> anyhow::Result<Vec<paws_domain::Attachment>> {
+        Ok(self.attachments.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl SkillFetchService for Runner {
+    async fn fetch_skill(&self, _skill_name: String) -> anyhow::Result<paws_domain::Skill> {
+        unimplemented!("SkillFetchService not implemented for test Runner")
+    }
+
+    async fn list_skills(&self) -> anyhow::Result<Vec<paws_domain::Skill>> {
+        Ok(vec![])
+    }
+}

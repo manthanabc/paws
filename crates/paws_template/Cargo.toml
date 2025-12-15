@@ -1,0 +1,11 @@
+[package]
+name = "paws_template"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+html-escape = "0.2.13"
+
+[dev-dependencies]
+pretty_assertions.workspace = true
