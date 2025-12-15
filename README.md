@@ -1,7 +1,5 @@
-<h1 align="center">⚒️ Paws: AI-Enhanced Terminal Development Environment</h1>
-<p align="center">A comprehensive coding agent that integrates AI capabilities with your development environment</p>
-
-<p align="center"><code>npx pawscode@latest</code></p>
+<h1 align="center">Paws</h1>
+<p align="center">Simplified version of [forge](https://github.com/antimonyhq/forge) with a lot of cool features</p>
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/antinomyhq/paws/ci.yml?style=for-the-badge)](https://github.com/antinomyhq/paws/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/antinomyhq/paws?style=for-the-badge)](https://github.com/antinomyhq/paws/releases)
@@ -11,6 +9,18 @@
 ![Code-Paws Demo](https://assets.antinomy.ai/images/paws_demo_2x.gif)
 
 ---
+<details>
+<summary>About fork</summary>
+Features -
+ [X] Streaming tokens
+ [X] Persistent spinner
+
+Planned - 
+ [o] Undo/ Redo controll
+ [o] Background tasks
+ [o] WebUI
+ [e] Hybrid agent flows
+</details>
 
 <details>
 <summary><strong>Table&nbsp;of&nbsp;Contents</strong></summary>
@@ -38,20 +48,11 @@
 
 ## Quickstart
 
-To get started with Paws, run the command below:
+To get started with Paws, build and run:
 
 ```bash
-npx pawscode@latest
-```
-
-On first run, Paws will guide you through setting up your AI provider credentials using the interactive login flow. Alternatively, you can configure providers beforehand:
-
-```bash
-# Configure your provider credentials interactively
-paws provider login
-
-# Then start Paws
-paws
+git clone https://github.com/manthanabc/paws
+cargo run
 ```
 
 That's it! Paws is now ready to assist you with your development tasks.
