@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use gray_matter::Matter;
+use gray_matter::engine::YAML;
 use paws_app::domain::Command;
 use paws_app::{
     DirectoryReaderInfra, EnvironmentInfra, FileInfoInfra, FileReaderInfra, FileWriterInfra,
 };
-use gray_matter::Matter;
-use gray_matter::engine::YAML;
 
 pub struct CommandLoaderService<F> {
     infra: Arc<F>,
@@ -142,7 +142,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_basic_command() {
-        let content = paws_test_kit::fixture!("src/fixtures/commands/basic.md").await;
+        let content = paws_common::fixture!("src/fixtures/commands/basic.md").await;
 
         let actual = parse_command_file(&content).unwrap();
 
@@ -156,7 +156,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_command_with_multiline_prompt() {
-        let content = paws_test_kit::fixture!("src/fixtures/commands/multiline.md").await;
+        let content = paws_common::fixture!("src/fixtures/commands/multiline.md").await;
 
         let actual = parse_command_file(&content).unwrap();
 
@@ -168,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_invalid_frontmatter() {
-        let content = paws_test_kit::fixture!("src/fixtures/commands/invalid.md").await;
+        let content = paws_common::fixture!("src/fixtures/commands/invalid.md").await;
 
         let result = parse_command_file(&content);
         assert!(result.is_err());
@@ -183,7 +183,7 @@ mod tests {
         ];
 
         for (name, path) in builtin_commands {
-            let content = paws_test_kit::fixture!(path).await;
+            let content = paws_common::fixture!(path).await;
             let command = parse_command_file(&content)
                 .with_context(|| format!("Failed to parse built-in command: {}", name))
                 .unwrap();

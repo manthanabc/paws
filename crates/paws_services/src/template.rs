@@ -2,10 +2,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Context;
-use paws_app::{EnvironmentInfra, FileReaderInfra, TemplateService};
-use paws_domain::Template;
 use futures::future;
 use handlebars::Handlebars;
+use paws_app::{EnvironmentInfra, FileReaderInfra, TemplateService};
+use paws_domain::Template;
 use tokio::sync::RwLock;
 
 #[derive(Clone)]

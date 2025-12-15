@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use futures::future::join_all;
+use gray_matter::engine::YAML;
+use gray_matter::Matter;
 use paws_app::domain::Skill;
 use paws_app::{
     EnvironmentInfra, FileInfoInfra, FileReaderInfra, TemplateEngine, Walker, WalkerInfra,
 };
 use paws_domain::SkillRepository;
-use futures::future::join_all;
-use gray_matter::engine::YAML;
-use gray_matter::Matter;
 use serde::Deserialize;
 
 /// Repository implementation for loading skills from multiple sources:
@@ -366,7 +366,7 @@ mod tests {
         // Fixture
         let path = "fixtures/skills/with_name_and_description.md";
         let content =
-            paws_test_kit::fixture!("/src/fixtures/skills/with_name_and_description.md").await;
+            paws_common::fixture!("/src/fixtures/skills/with_name_and_description.md").await;
 
         // Act
         let actual = extract_skill(path, &content);
@@ -386,7 +386,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract_skill_with_incomplete_metadata() {
         // Fixture
-        let content = paws_test_kit::fixture!("/src/fixtures/skills/with_name_only.md").await;
+        let content = paws_common::fixture!("/src/fixtures/skills/with_name_only.md").await;
 
         // Act
         let actual = extract_skill("test.md", &content);

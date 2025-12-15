@@ -2,11 +2,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
+use futures::StreamExt;
+use futures::stream::{self, BoxStream};
 use paws_domain::{
     Context, ContextMessage, DataGenerationParameters, ResultStreamExt, Template, ToolDefinition,
 };
-use futures::StreamExt;
-use futures::stream::{self, BoxStream};
 use schemars::schema::RootSchema;
 use tracing::{debug, info};
 

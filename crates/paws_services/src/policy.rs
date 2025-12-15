@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use bytes::Bytes;
+use lazy_static::lazy_static;
 use paws_app::domain::{
     ExecuteRule, Fetch, Permission, PermissionOperation, Policy, PolicyConfig, PolicyEngine,
     ReadRule, Rule, WriteRule,
@@ -11,7 +12,6 @@ use paws_app::{
     DirectoryReaderInfra, EnvironmentInfra, FileInfoInfra, FileReaderInfra, FileWriterInfra,
     PolicyDecision, PolicyService, UserInfra,
 };
-use lazy_static::lazy_static;
 use strum_macros::{Display, EnumIter};
 
 /// User response for permission confirmation requests

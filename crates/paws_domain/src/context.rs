@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use derive_more::derive::{Display, From};
 use derive_setters::Setters;
-use paws_template::Element;
+use paws_common::template::Element;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 

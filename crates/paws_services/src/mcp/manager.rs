@@ -3,12 +3,12 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use bytes::Bytes;
+use merge::Merge;
 use paws_app::domain::{McpConfig, Scope};
 use paws_app::{
     EnvironmentInfra, FileInfoInfra, FileReaderInfra, FileWriterInfra, KVStore, McpConfigManager,
     McpServerInfra,
 };
-use merge::Merge;
 
 pub struct PawsMcpManager<I> {
     infra: Arc<I>,

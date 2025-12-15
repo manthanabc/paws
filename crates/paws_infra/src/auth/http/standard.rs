@@ -1,8 +1,8 @@
-use paws_app::OAuthHttpProvider;
-use paws_domain::{AuthCodeParams, OAuthConfig, OAuthTokenResponse};
 use oauth2::{
     AuthorizationCode as OAuth2AuthCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, Scope,
 };
+use paws_app::OAuthHttpProvider;
+use paws_domain::{AuthCodeParams, OAuthConfig, OAuthTokenResponse};
 
 use crate::auth::util::*;
 

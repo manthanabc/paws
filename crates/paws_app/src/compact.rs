@@ -410,7 +410,7 @@ mod tests {
     #[tokio::test]
     async fn test_render_summary_frame_snapshot() {
         // Load the conversation fixture
-        let fixture_json = paws_test_kit::fixture!("/src/fixtures/conversation.json").await;
+        let fixture_json = paws_common::fixture!("/src/fixtures/conversation.json").await;
 
         let conversation: paws_domain::Conversation =
             serde_json::from_str(&fixture_json).expect("Failed to parse conversation fixture");

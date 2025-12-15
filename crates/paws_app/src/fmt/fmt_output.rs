@@ -1,4 +1,4 @@
-use paws_display::DiffFormat;
+use paws_common::display::DiffFormat;
 use paws_domain::{ChatResponseContent, Environment, TitleFormat};
 
 use crate::fmt::content::FormatContent;
@@ -49,9 +49,9 @@ mod tests {
     use std::path::PathBuf;
 
     use console::strip_ansi_codes;
-    use paws_display::DiffFormat;
-    use paws_domain::{ChatResponseContent, Environment, PatchOperation};
     use insta::assert_snapshot;
+    use paws_common::display::DiffFormat;
+    use paws_domain::{ChatResponseContent, Environment, PatchOperation};
     use pretty_assertions::assert_eq;
 
     use super::FormatContent;

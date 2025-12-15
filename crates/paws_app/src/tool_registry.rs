@@ -3,11 +3,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use console::style;
+use futures::future::join_all;
 use paws_domain::{
     Agent, AgentId, AgentInput, ChatResponse, ChatResponseContent, ToolCallContext, ToolCallFull,
     ToolCatalog, ToolDefinition, ToolName, ToolOutput, ToolResult,
 };
-use futures::future::join_all;
 use strum::IntoEnumIterator;
 use tokio::time::timeout;
 

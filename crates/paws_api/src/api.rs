@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use futures::stream::BoxStream;
 use paws_app::dto::ToolsOverview;
 use paws_app::{User, UserUsage};
+use paws_common::stream::MpscStream;
 use paws_domain::{AgentId, InitAuth, ModelId};
-use paws_stream::MpscStream;
-use futures::stream::BoxStream;
 use url::Url;
 
 use crate::*;
@@ -200,10 +200,8 @@ pub trait API: Sync + Send {
     async fn list_codebases(&self) -> Result<Vec<paws_domain::WorkspaceInfo>>;
 
     /// Get workspace information for a specific path
-    async fn get_workspace_info(
-        &self,
-        path: PathBuf,
-    ) -> Result<Option<paws_domain::WorkspaceInfo>>;
+    async fn get_workspace_info(&self, path: PathBuf)
+    -> Result<Option<paws_domain::WorkspaceInfo>>;
 
     /// Delete a workspace
     async fn delete_codebase(&self, workspace_id: paws_domain::WorkspaceId) -> Result<()>;

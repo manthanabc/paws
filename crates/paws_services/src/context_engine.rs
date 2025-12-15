@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use futures::future::join_all;
 use paws_app::{ContextEngineService, FileReaderInfra, Walker, WalkerInfra, compute_hash};
+use paws_common::stream::MpscStream;
 use paws_domain::{
     AuthCredential, ContextEngineRepository, FileHash, ProviderId, ProviderRepository,
     SyncProgress, UserId, WorkspaceId, WorkspaceRepository,
 };
-use paws_stream::MpscStream;
-use futures::future::join_all;
 use tracing::{info, warn};
 
 /// Boxed future type for async closures.
@@ -168,8 +168,7 @@ impl<F> PawsContextEngineService<F> {
         F: ContextEngineRepository,
     {
         info!("Fetching existing file hashes from server to detect changes...");
-        let workspace_files =
-            paws_domain::CodeBase::new(user_id.clone(), workspace_id.clone(), ());
+        let workspace_files = paws_domain::CodeBase::new(user_id.clone(), workspace_id.clone(), ());
         self.infra
             .list_workspace_files(&workspace_files, auth_token)
             .await
@@ -372,9 +371,7 @@ impl<F> PawsContextEngineService<F> {
                 let user_id_str = credential
                     .url_params
                     .get(&"user_id".to_string().into())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Missing user_id in PawsServices credential")
-                    })?;
+                    .ok_or_else(|| anyhow::anyhow!("Missing user_id in PawsServices credential"))?;
                 let user_id = UserId::from_string(user_id_str.as_str())?;
 
                 Ok((token.clone(), user_id))
@@ -714,12 +711,12 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
 
+    use futures::StreamExt;
     use paws_app::WalkedFile;
     use paws_domain::{
         ApiKey, CodeSearchQuery, FileDeletion, FileHash, FileInfo, FileUpload, FileUploadInfo,
         Node, UserId, Workspace, WorkspaceAuth, WorkspaceFiles, WorkspaceId, WorkspaceInfo,
     };
-    use futures::StreamExt;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -847,9 +844,7 @@ mod tests {
 
                 Ok(Some(AuthCredential {
                     id: ProviderId::FORGE_SERVICES,
-                    auth_details: paws_domain::AuthDetails::ApiKey(
-                        "test_token".to_string().into(),
-                    ),
+                    auth_details: paws_domain::AuthDetails::ApiKey("test_token".to_string().into()),
                     url_params,
                 }))
             } else {

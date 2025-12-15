@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use paws_domain::{Agent, ToolDefinition, ToolName};
 use glob::Pattern;
+use paws_domain::{Agent, ToolDefinition, ToolName};
 
 /// Service that resolves tool definitions for agents based on their configured
 /// tool list

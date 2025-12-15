@@ -4,49 +4,121 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-paws_snaps.workspace = true
-paws_fs.workspace = true
-anyhow.workspace = true
-async-trait.workspace = true
-dirs.workspace = true
-dotenvy.workspace = true
-paws_domain.workspace = true
-paws_services.workspace = true
-tokio.workspace = true
-serde_json.workspace = true
-reqwest.workspace = true
-
-bytes.workspace = true
-pretty_assertions.workspace = true
-paws_select.workspace = true
-tempfile.workspace = true
-rmcp.workspace = true
-tracing.workspace = true
-backon.workspace = true
-thiserror.workspace = true
-schemars.workspace = true
-paws_app.workspace = true
-paws_walker.workspace = true
-
-
-reqwest-eventsource.workspace = true
-glob.workspace = true
-futures.workspace = true
-diesel = { version= "2.2.12", features = ["sqlite", "r2d2", "chrono"] }
-libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
 diesel_migrations = "2.2.0"
-chrono = { version = "0.4", features = ["serde"] }
-cacache = { version = "13.1.0", features = ["tokio-runtime"], default-features = false }
-serde.workspace = true
-oauth2 = { version = "5.0", features = ["reqwest"] }
 serde_urlencoded = "0.7.1"
-http.workspace = true
-url.workspace = true
-tonic.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
 serial_test = "3.2"
-fake = { version = "4.4.0", features = ["derive"] }
-pretty_assertions.workspace = true
-paws_domain = { path = "../paws_domain" }
+
+[dependencies.anyhow]
+workspace = true
+
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.dirs]
+workspace = true
+
+[dependencies.dotenvy]
+workspace = true
+
+[dependencies.paws_domain]
+workspace = true
+
+[dependencies.paws_services]
+workspace = true
+
+[dependencies.tokio]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.reqwest]
+workspace = true
+
+[dependencies.bytes]
+workspace = true
+
+[dependencies.pretty_assertions]
+workspace = true
+
+[dependencies.tempfile]
+workspace = true
+
+[dependencies.rmcp]
+workspace = true
+
+[dependencies.tracing]
+workspace = true
+
+[dependencies.backon]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.schemars]
+workspace = true
+
+[dependencies.paws_app]
+workspace = true
+
+[dependencies.reqwest-eventsource]
+workspace = true
+
+[dependencies.glob]
+workspace = true
+
+[dependencies.futures]
+workspace = true
+
+[dependencies.diesel]
+version = "2.2.12"
+features = [ "sqlite", "r2d2", "chrono",]
+
+[dependencies.libsqlite3-sys]
+version = "0.35.0"
+features = [ "bundled",]
+
+[dependencies.chrono]
+version = "0.4"
+features = [ "serde",]
+
+[dependencies.cacache]
+version = "13.1.0"
+features = [ "tokio-runtime",]
+default-features = false
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.oauth2]
+version = "5.0"
+features = [ "reqwest",]
+
+[dependencies.http]
+workspace = true
+
+[dependencies.url]
+workspace = true
+
+[dependencies.tonic]
+workspace = true
+
+[dependencies.paws_common]
+workspace = true
+
+[dev-dependencies.tokio]
+workspace = true
+features = [ "macros", "rt", "time", "test-util",]
+
+[dev-dependencies.fake]
+version = "4.4.0"
+features = [ "derive",]
+
+[dev-dependencies.pretty_assertions]
+workspace = true
+
+[dev-dependencies.paws_domain]
+path = "../paws_domain"

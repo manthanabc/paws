@@ -1,4 +1,4 @@
-use paws_tracker::{EventKind, ToolCallPayload};
+use paws_services::tracker::{EventKind, ToolCallPayload};
 
 use crate::TRACKER;
 

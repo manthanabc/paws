@@ -4,7 +4,7 @@ use anyhow::Result;
 use chrono::Utc;
 use colored::Colorize;
 use paws_api::Conversation;
-use paws_select::PawsSelect;
+use paws_common::select::PawsSelect;
 
 use crate::display_constants::markers;
 

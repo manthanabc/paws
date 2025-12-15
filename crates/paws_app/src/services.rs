@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use derive_setters::Setters;
+use merge::Merge;
 use paws_domain::{
     AgentId, AnyProvider, Attachment, AuthContextRequest, AuthContextResponse, AuthMethod,
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
@@ -10,7 +11,6 @@ use paws_domain::{
     Provider, ProviderId, ResultStream, Scope, SearchParams, SyncProgress, Template, ToolCallFull,
     ToolOutput, Workflow, WorkspaceAuth, WorkspaceId, WorkspaceInfo,
 };
-use merge::Merge;
 use reqwest::Response;
 use reqwest::header::HeaderMap;
 use reqwest_eventsource::EventSource;
@@ -144,9 +144,8 @@ pub trait ProviderService: Send + Sync {
     /// Migrates environment variable-based credentials to file-based
     /// credentials. Returns Some(MigrationResult) if credentials were migrated,
     /// None if file already exists or no credentials to migrate.
-    async fn migrate_env_credentials(
-        &self,
-    ) -> anyhow::Result<Option<paws_domain::MigrationResult>>;
+    async fn migrate_env_credentials(&self)
+    -> anyhow::Result<Option<paws_domain::MigrationResult>>;
 }
 
 /// Manages user preferences for default providers and models.
@@ -258,7 +257,7 @@ pub trait ContextEngineService: Send + Sync {
         &self,
         path: PathBuf,
         batch_size: usize,
-    ) -> anyhow::Result<paws_stream::MpscStream<anyhow::Result<SyncProgress>>>;
+    ) -> anyhow::Result<paws_common::stream::MpscStream<anyhow::Result<SyncProgress>>>;
 
     /// Query the indexed codebase with semantic search
     async fn query_codebase(
@@ -1035,7 +1034,7 @@ impl<I: Services> ContextEngineService for I {
         &self,
         path: PathBuf,
         batch_size: usize,
-    ) -> anyhow::Result<paws_stream::MpscStream<anyhow::Result<SyncProgress>>> {
+    ) -> anyhow::Result<paws_common::stream::MpscStream<anyhow::Result<SyncProgress>>> {
         self.context_engine_service()
             .sync_codebase(path, batch_size)
             .await

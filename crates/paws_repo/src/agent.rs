@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use paws_app::domain::{AgentDefinition, Template};
-use paws_app::{AgentRepository, DirectoryReaderInfra, EnvironmentInfra, FileInfoInfra};
 use gray_matter::engine::YAML;
 use gray_matter::Matter;
+use paws_app::domain::{AgentDefinition, Template};
+use paws_app::{AgentRepository, DirectoryReaderInfra, EnvironmentInfra, FileInfoInfra};
 
 /// Infrastructure implementation for loading agent definitions from multiple
 /// sources:
@@ -167,7 +167,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_basic_agent() {
-        let content = paws_test_kit::fixture!("/src/fixtures/agents/basic.md").await;
+        let content = paws_common::fixture!("/src/fixtures/agents/basic.md").await;
 
         let actual = parse_agent_file(&content).unwrap();
 
@@ -185,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_advanced_agent() {
-        let content = paws_test_kit::fixture!("/src/fixtures/agents/advanced.md").await;
+        let content = paws_common::fixture!("/src/fixtures/agents/advanced.md").await;
 
         let actual = parse_agent_file(&content).unwrap();
 

@@ -1,4 +1,4 @@
-use paws_template::Element;
+use paws_common::template::Element;
 use serde_json::to_string_pretty;
 
 use crate::context::ContextMessage;
@@ -383,7 +383,7 @@ fn create_conversation_context_section(conversation: &Conversation) -> Element {
 
 #[cfg(test)]
 mod tests {
-    use paws_test_kit::json_fixture;
+    use paws_common::test_kit::json_fixture;
 
     use super::*;
 

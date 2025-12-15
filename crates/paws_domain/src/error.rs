@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use derive_more::From;
-use paws_json_repair::JsonRepairError;
+use paws_common::json_repair::JsonRepairError;
 use thiserror::Error;
 
 use crate::{AgentId, ConversationId, ProviderId};
@@ -150,7 +150,7 @@ impl Error {
 
 #[cfg(test)]
 mod test {
-    use paws_json_repair::JsonRepairError;
+    use paws_common::json_repair::JsonRepairError;
     use serde_json::Value;
 
     use crate::Error;

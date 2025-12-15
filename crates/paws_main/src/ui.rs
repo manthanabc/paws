@@ -8,6 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
+use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
@@ -15,15 +16,14 @@ use paws_api::{
 };
 use paws_app::utils::{format_display_path, truncate_key};
 use paws_app::{CommitResult, ToolResolver};
-use paws_display::MarkdownWriter;
+use paws_common::display::MarkdownWriter;
+use paws_common::fs::PawsFS;
+use paws_common::select::PawsSelect;
+use paws_common::spinner::SpinnerManager;
 use paws_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
-use paws_fs::PawsFS;
-use paws_select::PawsSelect;
-use paws_spinner::SpinnerManager;
-use paws_tracker::ToolCallPayload;
-use merge::Merge;
+use paws_services::tracker::ToolCallPayload;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
@@ -101,7 +101,7 @@ pub struct UI<A, F: Fn() -> A> {
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
-    _guard: paws_tracker::Guard,
+    _guard: paws_services::tracker::Guard,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -227,7 +227,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             spinner,
             ctrl_c_rx,
             markdown: MarkdownWriter::new(),
-            _guard: paws_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
+            _guard: paws_services::tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
 
@@ -2874,8 +2874,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         path: std::path::PathBuf,
         batch_size: usize,
     ) -> anyhow::Result<()> {
+        use paws_common::spinner::ProgressBarManager;
         use paws_domain::SyncProgress;
-        use paws_spinner::ProgressBarManager;
 
         // Check if auth already exists and create if needed
         if !self.api.is_authenticated().await? {

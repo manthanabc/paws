@@ -1,6 +1,6 @@
 use anyhow::Result;
 use paws_app::UserInfra;
-use paws_select::PawsSelect;
+use paws_common::select::PawsSelect;
 
 pub struct PawsInquire;
 

@@ -3,20 +3,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use futures::stream::BoxStream;
 use paws_app::dto::ToolsOverview;
 use paws_app::{
     AgentProviderResolver, AgentRegistry, AppConfigService, AuthService, CommandInfra,
     CommandLoaderService, ContextEngineService, ConversationService, DataGenerationApp,
-    EnvironmentInfra, EnvironmentService, FileDiscoveryService, PawsApp, GitApp, GrpcInfra,
-    McpConfigManager, McpService, ProviderAuthService, ProviderService, Services, User, UserUsage,
-    Walker,
+    EnvironmentInfra, EnvironmentService, FileDiscoveryService, GitApp, GrpcInfra,
+    McpConfigManager, McpService, PawsApp, ProviderAuthService, ProviderService, Services, User,
+    UserUsage, Walker,
 };
+use paws_common::stream::MpscStream;
 use paws_domain::{Agent, InitAuth, LoginInfo, *};
 use paws_infra::PawsInfra;
 use paws_repo::PawsRepo;
 use paws_services::PawsServices;
-use paws_stream::MpscStream;
-use futures::stream::BoxStream;
 use url::Url;
 
 use crate::API;

@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use handlebars::{Handlebars, no_escape};
 use paws_domain::{
     Attachment, ChatCompletionMessage, ChatResponse, Conversation, ConversationId, Event,
     ProviderId, ToolCallFull, ToolErrorTracker, ToolResult,
 };
-use handlebars::{Handlebars, no_escape};
 use rust_embed::Embed;
 use tokio::sync::Mutex;
 

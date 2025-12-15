@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
+use oauth2::basic::BasicClient;
+use oauth2::{ClientId, RefreshToken, TokenUrl};
 use paws_domain::{
     AuthCredential, AuthDetails, OAuthConfig, OAuthTokenResponse, OAuthTokens, ProviderId,
 };
-use oauth2::basic::BasicClient;
-use oauth2::{ClientId, RefreshToken, TokenUrl};
 
 use crate::auth::error::Error;
 

@@ -488,7 +488,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_responses() -> anyhow::Result<()> {
-        let content = paws_test_kit::fixture!("/src/dto/openai/responses.jsonl").await;
+        let content = paws_common::fixture!("/src/dto/openai/responses.jsonl").await;
 
         for (i, line) in content.split('\n').enumerate() {
             let i = i + 1;

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use convert_case::{Case, Casing};
+use futures::StreamExt;
+use paws_common::template::Element;
 use paws_domain::{
     AgentId, ChatRequest, ChatResponse, ChatResponseContent, Conversation, Event, TitleFormat,
     ToolCallContext, ToolDefinition, ToolName, ToolOutput,
 };
-use paws_template::Element;
-use futures::StreamExt;
 use tokio::sync::RwLock;
 
 use crate::error::Error;

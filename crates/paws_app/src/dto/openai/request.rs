@@ -641,10 +641,10 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
+    use insta::assert_json_snapshot;
     use paws_domain::{
         ContextMessage, Role, TextMessage, ToolCallFull, ToolCallId, ToolName, ToolResult,
     };
-    use insta::assert_json_snapshot;
 
     #[test]
     fn test_user_message_conversion() {

@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use paws_app::HttpClientService;
-use paws_app::domain::{
-    ChatCompletionMessage, Context, Model, ModelId, ResultStream, Transformer,
-};
+use paws_app::domain::{ChatCompletionMessage, Context, Model, ModelId, ResultStream, Transformer};
 use paws_app::dto::anthropic::{
     AuthSystemMessage, DropInvalidToolUse, EventData, ListModelResponse, ReasoningTransform,
     Request, SetCache,

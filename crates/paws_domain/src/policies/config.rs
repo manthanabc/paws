@@ -101,7 +101,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_yaml_policies_roundtrip() {
-            let yaml_content = paws_test_kit::fixture!("/src/fixtures/policies_test.yml").await;
+            let yaml_content = paws_common::fixture!("/src/fixtures/policies_test.yml").await;
 
             let policies: PolicyConfig =
                 serde_yml::from_str(&yaml_content).expect("Failed to parse policies YAML");

@@ -5,9 +5,9 @@ use std::str::FromStr;
 use std::sync::{Arc, OnceLock, RwLock};
 
 use backon::{ExponentialBuilder, Retryable};
+use http::{HeaderName, HeaderValue, header};
 use paws_app::McpClientInfra;
 use paws_domain::{Image, McpHttpServer, McpServerConfig, ToolDefinition, ToolName, ToolOutput};
-use http::{HeaderName, HeaderValue, header};
 use rmcp::model::{CallToolRequestParam, ClientInfo, Implementation, InitializeRequestParam};
 use rmcp::service::RunningService;
 use rmcp::transport::sse_client::SseClientConfig;

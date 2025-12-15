@@ -9,7 +9,7 @@ impl PawsWalkerService {
     }
 
     pub async fn walk(&self, config: Walker) -> Result<Vec<WalkedFile>> {
-        // Convert domain config to paws_walker config
+        // Convert domain config to paws_common::walker config
         let mut walker = if config.max_depth.is_none()
             && config.max_breadth.is_none()
             && config.max_file_size.is_none()
@@ -17,9 +17,9 @@ impl PawsWalkerService {
             && config.max_total_size.is_none()
             && !config.skip_binary
         {
-            paws_walker::Walker::max_all()
+            paws_common::walker::Walker::max_all()
         } else {
-            paws_walker::Walker::min_all()
+            paws_common::walker::Walker::min_all()
         };
 
         walker = walker.cwd(config.cwd);

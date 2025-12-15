@@ -3,29 +3,38 @@ name = "paws_api"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-anyhow.workspace = true
-url.workspace = true
-async-trait.workspace = true
-paws_domain.workspace = true
-paws_stream.workspace = true
-paws_services.workspace = true
-paws_repo.workspace = true
-paws_infra.workspace = true
-futures.workspace = true
+[dependencies.anyhow]
+workspace = true
 
+[dependencies.url]
+workspace = true
 
+[dependencies.async-trait]
+workspace = true
 
+[dependencies.paws_domain]
+workspace = true
 
+[dependencies.paws_services]
+workspace = true
 
+[dependencies.paws_repo]
+workspace = true
 
+[dependencies.paws_infra]
+workspace = true
 
+[dependencies.futures]
+workspace = true
 
-paws_app.workspace = true
-serde_json.workspace = true
+[dependencies.paws_app]
+workspace = true
 
-[dev-dependencies]
+[dependencies.serde_json]
+workspace = true
 
-tokio = { workspace = true }
+[dependencies.paws_common]
+workspace = true
 
-
+[dev-dependencies.tokio]
+workspace = true

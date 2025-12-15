@@ -5,9 +5,9 @@ use std::process::Command;
 
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
-use paws_api::{AgentId, ModelId, Usage};
-use paws_tracker::VERSION;
 use nu_ansi_term::{Color, Style};
+use paws_api::{AgentId, ModelId, Usage};
+use paws_services::tracker::VERSION;
 use reedline::{Prompt, PromptHistorySearchStatus};
 
 use crate::display_constants::markers;

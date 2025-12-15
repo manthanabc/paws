@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use paws_app::domain::File;
-use paws_app::{
-    DirectoryReaderInfra, EnvironmentInfra, FileDiscoveryService, Walker, WalkerInfra,
-};
+use paws_app::{DirectoryReaderInfra, EnvironmentInfra, FileDiscoveryService, Walker, WalkerInfra};
 
 pub struct PawsDiscoveryService<F> {
     service: Arc<F>,

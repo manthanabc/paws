@@ -675,11 +675,7 @@ mod tests {
                 Some("title".into()),
                 Some("make agents great again".into()),
             ],
-            vec![
-                Some("agent".into()),
-                Some("id".into()),
-                Some("paws".into()),
-            ],
+            vec![Some("agent".into()), Some("id".into()), Some("paws".into())],
             vec![
                 Some("agent".into()),
                 Some("model".into()),

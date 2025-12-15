@@ -116,7 +116,8 @@ mod tests {
 
     #[test]
     fn test_extract_tag_names_with_prefix_nested() {
-        let fixture = "<parent><paws_tool>Inner</paws_tool><paws_tool_call>Nested</paws_tool_call></parent>";
+        let fixture =
+            "<parent><paws_tool>Inner</paws_tool><paws_tool_call>Nested</paws_tool_call></parent>";
         let actual = remove_tag_with_prefix(fixture, "paws");
         let expected = "<parent></parent>";
         assert_eq!(actual, expected);

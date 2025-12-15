@@ -52,7 +52,7 @@ mod tests {
     use super::*;
 
     async fn load_auth_message() -> String {
-        paws_test_kit::fixture!("/src/dto/anthropic/transforms/claude_code.md").await
+        paws_common::fixture!("/src/dto/anthropic/transforms/claude_code.md").await
     }
 
     fn create_request_with_system_messages(system_count: usize) -> Request {

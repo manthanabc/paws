@@ -25,8 +25,8 @@ use crate::policy::PawsPolicyService;
 use crate::provider::PawsProviderService;
 use crate::template::PawsTemplateService;
 use crate::tool_services::{
-    PawsFetch, PawsFollowup, PawsFsCreate, PawsFsPatch, PawsFsRead, PawsFsRemove,
-    PawsFsSearch, PawsFsUndo, PawsImageRead, PawsPlanCreate, PawsShell, PawsSkillFetch,
+    PawsFetch, PawsFollowup, PawsFsCreate, PawsFsPatch, PawsFsRead, PawsFsRemove, PawsFsSearch,
+    PawsFsUndo, PawsImageRead, PawsPlanCreate, PawsShell, PawsSkillFetch,
 };
 use crate::workflow::PawsWorkflowService;
 

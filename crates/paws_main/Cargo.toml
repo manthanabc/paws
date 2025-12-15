@@ -1,70 +1,138 @@
+[[bin]]
+name = "paws"
+path = "src/main.rs"
+
 [package]
 name = "paws_main"
 version = "0.1.0"
 edition = "2024"
 
-[[bin]]
-name = "paws"
-path = "src/main.rs"
-
-
 [dependencies]
-thiserror = { workspace = true }
-clap.workspace = true
-console.workspace = true
-paws_app.workspace = true
-paws_api.workspace = true
-paws_domain.workspace = true
-paws_walker.workspace = true
-paws_display.workspace = true
-paws_tracker.workspace = true
-
-paws_spinner.workspace = true
-paws_select.workspace = true
-
-merge.workspace = true
-paws_fs.workspace = true
-tokio.workspace = true
-tokio-stream.workspace = true
-colored.workspace = true
-
-anyhow.workspace = true
-derive_setters.workspace = true
-lazy_static.workspace = true
-reedline.workspace = true
-nu-ansi-term.workspace = true
-nucleo.workspace = true
-tracing.workspace = true
-chrono.workspace = true
-serde_json.workspace = true
-serde.workspace = true
-strum.workspace = true
-strum_macros.workspace = true
-
-convert_case.workspace = true
-update-informer = { version = "1.2.0", default-features = false, features = [
-    "npm",
-    "ureq",
-    "rustls-tls",
-] }
-open.workspace = true
-humantime.workspace = true
-num-format.workspace = true
 atty = "0.2"
-url.workspace = true
-rust-embed = { version = "8.5", features = ["interpolate-folder-path"] }
-indexmap.workspace = true
-async-recursion.workspace = true
-
-[target.'cfg(not(target_os = "android"))'.dependencies]
-arboard = "3.4"
+paws_services.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
-insta.workspace = true
-pretty_assertions.workspace = true
-tempfile.workspace = true
 serial_test = "3.2"
-fake = { version = "4.4.0", features = ["derive"] }
-paws_domain = { path = "../paws_domain" }
 strip-ansi-escapes = "0.2"
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.clap]
+workspace = true
+
+[dependencies.console]
+workspace = true
+
+[dependencies.paws_app]
+workspace = true
+
+[dependencies.paws_api]
+workspace = true
+
+[dependencies.paws_domain]
+workspace = true
+
+[dependencies.merge]
+workspace = true
+
+[dependencies.tokio]
+workspace = true
+
+[dependencies.tokio-stream]
+workspace = true
+
+[dependencies.colored]
+workspace = true
+
+[dependencies.anyhow]
+workspace = true
+
+[dependencies.derive_setters]
+workspace = true
+
+[dependencies.lazy_static]
+workspace = true
+
+[dependencies.reedline]
+workspace = true
+
+[dependencies.nu-ansi-term]
+workspace = true
+
+[dependencies.nucleo]
+workspace = true
+
+[dependencies.tracing]
+workspace = true
+
+[dependencies.chrono]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.strum_macros]
+workspace = true
+
+[dependencies.convert_case]
+workspace = true
+
+[dependencies.update-informer]
+version = "1.2.0"
+default-features = false
+features = [ "npm", "ureq", "rustls-tls",]
+
+[dependencies.open]
+workspace = true
+
+[dependencies.humantime]
+workspace = true
+
+[dependencies.num-format]
+workspace = true
+
+[dependencies.url]
+workspace = true
+
+[dependencies.rust-embed]
+version = "8.5"
+features = [ "interpolate-folder-path",]
+
+[dependencies.indexmap]
+workspace = true
+
+[dependencies.async-recursion]
+workspace = true
+
+[dependencies.paws_common]
+workspace = true
+
+[dev-dependencies.tokio]
+workspace = true
+features = [ "macros", "rt", "time", "test-util",]
+
+[dev-dependencies.insta]
+workspace = true
+
+[dev-dependencies.pretty_assertions]
+workspace = true
+
+[dev-dependencies.tempfile]
+workspace = true
+
+[dev-dependencies.fake]
+version = "4.4.0"
+features = [ "derive",]
+
+[dev-dependencies.paws_domain]
+path = "../paws_domain"
+
+[target."cfg(not(target_os = \"android\"))".dependencies]
+arboard = "3.4"

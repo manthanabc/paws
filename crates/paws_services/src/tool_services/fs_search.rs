@@ -3,11 +3,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
+use grep_searcher::sinks::UTF8;
 use paws_app::{
     FileInfoInfra, FileReaderInfra, FsSearchService, Match, MatchResult, SearchResult, Walker,
     WalkerInfra,
 };
-use grep_searcher::sinks::UTF8;
 
 use crate::utils::assert_absolute_path;
 

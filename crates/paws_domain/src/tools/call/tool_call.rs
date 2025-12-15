@@ -173,14 +173,14 @@ impl ToolCallFull {
 
 fn json_repair_parse<T>(
     json_str: &str,
-) -> std::result::Result<T, paws_json_repair::JsonRepairError>
+) -> std::result::Result<T, paws_common::json_repair::JsonRepairError>
 where
     T: serde::de::DeserializeOwned,
 {
     serde_json::from_str(json_str)
-        .map_err(paws_json_repair::JsonRepairError::JsonError)
+        .map_err(paws_common::json_repair::JsonRepairError::JsonError)
         .or_else(|_| {
-            let repaired = paws_json_repair::json_repair(json_str);
+            let repaired = paws_common::json_repair::json_repair(json_str);
             if repaired.is_ok() {
                 tracing::info!("Tool call was successfully repaired.");
             }
@@ -482,7 +482,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_real_example() {
-        let message = paws_test_kit::fixture!("/src/fixtures/tool_call_01.md").await;
+        let message = paws_common::fixture!("/src/fixtures/tool_call_01.md").await;
 
         let tool_call = ToolCallFull::try_from_xml(&message).unwrap();
         let actual = tool_call.first().unwrap().name.to_string();
@@ -492,7 +492,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_from_xml_call_id() {
-        let message = paws_test_kit::fixture!("/src/fixtures/tool_call_01.md").await;
+        let message = paws_common::fixture!("/src/fixtures/tool_call_01.md").await;
 
         let tool_call = ToolCallFull::try_from_xml(&message).unwrap();
         let actual = tool_call.first().unwrap().call_id.as_ref().unwrap();

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use paws_api::Environment;
 use nu_ansi_term::{Color, Style};
+use paws_api::Environment;
 use reedline::{
     ColumnarMenu, DefaultHinter, EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers,
     MenuBuilder, Prompt, Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,

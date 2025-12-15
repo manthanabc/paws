@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 
 use console::strip_ansi_codes;
 use derive_setters::Setters;
-use paws_display::DiffFormat;
+use paws_common::display::DiffFormat;
+use paws_common::template::Element;
 use paws_domain::{
     CodebaseSearchResults, Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite,
     FileOperation, LineNumbers, Metrics, NetFetch, PlanCreate, ToolKind,
 };
-use paws_template::Element;
 
 use crate::truncation::{
     Stderr, Stdout, TruncationMode, truncate_fetch_content, truncate_search_output,

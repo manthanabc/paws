@@ -1,6 +1,6 @@
-use paws_domain::Template;
 use handlebars::{Handlebars, no_escape};
 use lazy_static::lazy_static;
+use paws_domain::Template;
 use rust_embed::Embed;
 
 #[derive(Embed)]

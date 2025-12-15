@@ -18,6 +18,6 @@ impl PawsFileRemoveService {
 #[async_trait::async_trait]
 impl FileRemoverInfra for PawsFileRemoveService {
     async fn remove(&self, path: &Path) -> anyhow::Result<()> {
-        Ok(paws_fs::PawsFS::remove_file(path).await?)
+        Ok(paws_common::fs::PawsFS::remove_file(path).await?)
     }
 }

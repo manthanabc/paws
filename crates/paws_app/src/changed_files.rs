@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use paws_common::template::Element;
 use paws_domain::{Agent, ContextMessage, Conversation, Role, TextMessage};
-use paws_template::Element;
 
 use crate::utils::format_display_path;
 use crate::{EnvironmentService, FsReadService};

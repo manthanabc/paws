@@ -7,18 +7,18 @@ pub struct PawsFileMetaService;
 #[async_trait::async_trait]
 impl FileInfoInfra for PawsFileMetaService {
     async fn is_file(&self, path: &Path) -> Result<bool> {
-        Ok(paws_fs::PawsFS::is_file(path))
+        Ok(paws_common::fs::PawsFS::is_file(path))
     }
 
     async fn is_binary(&self, path: &Path) -> Result<bool> {
-        paws_fs::PawsFS::is_binary_file(path).await
+        paws_common::fs::PawsFS::is_binary_file(path).await
     }
 
     async fn exists(&self, path: &Path) -> Result<bool> {
-        Ok(paws_fs::PawsFS::exists(path))
+        Ok(paws_common::fs::PawsFS::exists(path))
     }
 
     async fn file_size(&self, path: &Path) -> Result<u64> {
-        paws_fs::PawsFS::file_size(path).await
+        paws_common::fs::PawsFS::file_size(path).await
     }
 }

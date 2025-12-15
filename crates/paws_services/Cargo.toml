@@ -4,59 +4,165 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-
-chrono.workspace = true
-tokio.workspace = true
-
-tracing.workspace = true
-async-trait.workspace = true
-async-recursion.workspace = true
-
-paws_snaps.workspace = true
-paws_stream.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-derive_setters.workspace = true
-tokio-stream.workspace = true
-handlebars.workspace = true
-paws_fs.workspace = true
-dashmap.workspace = true
-
-anyhow.workspace = true
-futures.workspace = true
-reqwest.workspace = true
-regex.workspace = true
-humantime.workspace = true
-thiserror.workspace = true
-html2md.workspace = true
-glob.workspace = true
-grep-searcher.workspace = true
-grep-regex.workspace = true
-rust-embed.workspace = true
-base64.workspace = true
-strum_macros.workspace = true
-strum.workspace = true
-bytes.workspace = true
-serde_yml.workspace = true
-gray_matter.workspace = true
-merge.workspace = true
-strip-ansi-escapes.workspace = true
-paws_app.workspace = true
-url.workspace = true
-reqwest-eventsource.workspace = true
 lazy_static = "1.5.0"
-paws_domain.workspace = true
-oauth2 = { version = "5.0", features = ["reqwest"] }
 serde_urlencoded = "0.7.1"
-http.workspace = true
+sysinfo.workspace = true
 
-[dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
-insta.workspace = true
-mockito.workspace = true
-pretty_assertions.workspace = true
-tempfile.workspace = true
-fake = { version = "4.4.0", features = ["derive"] }
-paws_test_kit.workspace = true
+[dependencies.chrono]
+workspace = true
 
+[dependencies.tokio]
+workspace = true
 
+[dependencies.tracing]
+workspace = true
+
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.async-recursion]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.derive_setters]
+workspace = true
+
+[dependencies.tokio-stream]
+workspace = true
+
+[dependencies.handlebars]
+workspace = true
+
+[dependencies.dashmap]
+workspace = true
+
+[dependencies.anyhow]
+workspace = true
+
+[dependencies.futures]
+workspace = true
+
+[dependencies.reqwest]
+workspace = true
+
+[dependencies.regex]
+workspace = true
+
+[dependencies.humantime]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.html2md]
+workspace = true
+
+[dependencies.glob]
+workspace = true
+
+[dependencies.grep-searcher]
+workspace = true
+
+[dependencies.grep-regex]
+workspace = true
+
+[dependencies.rust-embed]
+workspace = true
+
+[dependencies.base64]
+workspace = true
+
+[dependencies.strum_macros]
+workspace = true
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.bytes]
+workspace = true
+
+[dependencies.serde_yml]
+workspace = true
+
+[dependencies.gray_matter]
+workspace = true
+
+[dependencies.merge]
+workspace = true
+
+[dependencies.strip-ansi-escapes]
+workspace = true
+
+[dependencies.paws_app]
+workspace = true
+
+[dependencies.url]
+workspace = true
+
+[dependencies.reqwest-eventsource]
+workspace = true
+
+[dependencies.paws_domain]
+workspace = true
+
+[dependencies.oauth2]
+version = "5.0"
+features = [ "reqwest",]
+
+[dependencies.http]
+workspace = true
+
+[dependencies.paws_common]
+workspace = true
+
+[dependencies.posthog-rs]
+workspace = true
+
+[dependencies.machineid-rs]
+workspace = true
+
+[dependencies.whoami]
+workspace = true
+
+[dependencies.tracing-appender]
+workspace = true
+
+[dependencies.tracing-subscriber]
+workspace = true
+
+[dependencies.convert_case]
+workspace = true
+
+[dependencies.derive_more]
+workspace = true
+
+[dependencies.insta]
+workspace = true
+
+[dev-dependencies.tokio]
+workspace = true
+features = [ "macros", "rt", "time", "test-util",]
+
+[dev-dependencies.insta]
+workspace = true
+
+[dev-dependencies.mockito]
+workspace = true
+
+[dev-dependencies.pretty_assertions]
+workspace = true
+
+[dev-dependencies.tempfile]
+workspace = true
+
+[dev-dependencies.fake]
+version = "4.4.0"
+features = [ "derive",]
+
+[dev-dependencies.paws_common]
+workspace = true

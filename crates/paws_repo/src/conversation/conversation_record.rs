@@ -469,9 +469,7 @@ impl From<&paws_domain::ContextMessage> for ContextMessageValueRecord {
     fn from(value: &paws_domain::ContextMessage) -> Self {
         match value {
             paws_domain::ContextMessage::Text(msg) => Self::Text(TextMessageRecord::from(msg)),
-            paws_domain::ContextMessage::Tool(result) => {
-                Self::Tool(ToolResultRecord::from(result))
-            }
+            paws_domain::ContextMessage::Tool(result) => Self::Tool(ToolResultRecord::from(result)),
             paws_domain::ContextMessage::Image(img) => Self::Image(ImageRecord::from(img)),
         }
     }

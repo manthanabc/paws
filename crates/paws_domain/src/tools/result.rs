@@ -1,5 +1,5 @@
 use derive_setters::Setters;
-use paws_template::Element;
+use paws_common::template::Element;
 use serde::{Deserialize, Serialize};
 
 use crate::{ConversationId, Image, ToolCallFull, ToolCallId, ToolName};

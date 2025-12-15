@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use colored::Colorize;
 use paws_api::{API, Update};
-use paws_tracker::VERSION;
+use paws_services::tracker::VERSION;
 use update_informer::{Check, Version, registry};
 
 /// Package name for paws on npm.
@@ -23,7 +23,7 @@ async fn execute_update_command(api: Arc<impl API>) {
         }
         Ok(output) => {
             if output.success() {
-                let answer = paws_select::PawsSelect::confirm(
+                let answer = paws_common::select::PawsSelect::confirm(
                     "You need to close paws to complete update. Do you want to close it now?",
                 )
                 .with_default(true)
@@ -44,7 +44,7 @@ async fn execute_update_command(api: Arc<impl API>) {
 }
 
 async fn confirm_update(version: Version) -> bool {
-    let answer = paws_select::PawsSelect::confirm(format!(
+    let answer = paws_common::select::PawsSelect::confirm(format!(
         "Confirm upgrade from {} -> {} (latest)?",
         VERSION.to_string().bold().white(),
         version.to_string().bold().white()

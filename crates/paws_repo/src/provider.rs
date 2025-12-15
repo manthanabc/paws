@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use bytes::Bytes;
+use handlebars::Handlebars;
+use merge::Merge;
 use paws_app::domain::{ProviderId, ProviderResponse};
 use paws_app::{EnvironmentInfra, FileReaderInfra, FileWriterInfra};
 use paws_domain::{
     AnyProvider, ApiKey, AuthCredential, AuthDetails, Error, MigrationResult, Provider,
     ProviderRepository, ProviderType, URLParam, URLParamValue,
 };
-use handlebars::Handlebars;
-use merge::Merge;
 use serde::Deserialize;
 use url::Url;
 
@@ -73,9 +73,7 @@ fn merge_configs(base: &mut Vec<ProviderConfig>, other: Vec<ProviderConfig>) {
 }
 
 impl From<&ProviderConfig>
-    for Provider<
-        paws_domain::Template<HashMap<paws_domain::URLParam, paws_domain::URLParamValue>>,
-    >
+    for Provider<paws_domain::Template<HashMap<paws_domain::URLParam, paws_domain::URLParamValue>>>
 {
     fn from(config: &ProviderConfig) -> Self {
         let models = config.models.as_ref().map(|m| match m {
@@ -335,9 +333,7 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> PawsProviderReposi
         &self,
         config: &ProviderConfig,
     ) -> anyhow::Result<
-        Provider<
-            paws_domain::Template<HashMap<paws_domain::URLParam, paws_domain::URLParamValue>>,
-        >,
+        Provider<paws_domain::Template<HashMap<paws_domain::URLParam, paws_domain::URLParamValue>>>,
     > {
         Ok(config.into())
     }

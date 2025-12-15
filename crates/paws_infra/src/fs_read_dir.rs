@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use paws_app::DirectoryReaderInfra;
-use paws_fs::PawsFS;
 use futures::future::join_all;
 use glob::Pattern;
+use paws_app::DirectoryReaderInfra;
+use paws_common::fs::PawsFS;
 
 /// Service for reading multiple files from a directory asynchronously
 pub struct PawsDirectoryReaderService;

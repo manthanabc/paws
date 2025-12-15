@@ -3,10 +3,10 @@ use std::path::Path;
 use std::time::Duration;
 
 use colored::Colorize;
+use num_format::{Locale, ToFormattedString};
 use paws_api::{Conversation, Environment, LoginInfo, Metrics, Role, Usage, UserUsage};
 use paws_app::utils::truncate_key;
-use paws_tracker::VERSION;
-use num_format::{Locale, ToFormattedString};
+use paws_services::tracker::VERSION;
 
 use crate::display_constants::markers;
 use crate::model::PawsCommandManager;

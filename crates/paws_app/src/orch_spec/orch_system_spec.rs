@@ -1,5 +1,5 @@
-use paws_domain::{ChatCompletionMessage, Content, FinishReason, Workflow};
 use insta::assert_snapshot;
+use paws_domain::{ChatCompletionMessage, Content, FinishReason, Workflow};
 
 use crate::orch_spec::orch_runner::TestContext;
 

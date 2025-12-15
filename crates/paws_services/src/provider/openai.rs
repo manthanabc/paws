@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
+use lazy_static::lazy_static;
 use paws_app::HttpClientService;
 use paws_app::domain::{
     ChatCompletionMessage, Context as ChatContext, ModelId, ProviderId, ResultStream, Transformer,
 };
 use paws_app::dto::openai::{ListModelResponse, ProviderPipeline, Request, Response};
 use paws_domain::Provider;
-use lazy_static::lazy_static;
 use reqwest::header::AUTHORIZATION;
 use tracing::{debug, info};
 use url::Url;

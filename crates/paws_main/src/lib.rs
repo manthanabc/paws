@@ -30,5 +30,6 @@ pub use title_display::*;
 pub use ui::UI;
 
 lazy_static! {
-    pub static ref TRACKER: paws_tracker::Tracker = paws_tracker::Tracker::default();
+    pub static ref TRACKER: paws_services::tracker::Tracker =
+        paws_services::tracker::Tracker::default();
 }

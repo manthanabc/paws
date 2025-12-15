@@ -1,12 +1,12 @@
 use std::time::Duration;
 
+use oauth2::basic::BasicClient;
+use oauth2::{ClientId, DeviceAuthorizationUrl, Scope, TokenUrl};
 use paws_app::{AuthStrategy, OAuthHttpProvider, StrategyFactory};
 use paws_domain::{
     ApiKey, ApiKeyRequest, AuthContextRequest, AuthContextResponse, AuthCredential, CodeRequest,
     DeviceCodeRequest, OAuthConfig, OAuthTokenResponse, OAuthTokens, ProviderId, URLParam,
 };
-use oauth2::basic::BasicClient;
-use oauth2::{ClientId, DeviceAuthorizationUrl, Scope, TokenUrl};
 use reqwest::header::{HeaderMap, HeaderValue};
 use url::Url;
 

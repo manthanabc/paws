@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use paws_json_repair::json_repair;
+use paws_common::json_repair::json_repair;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};

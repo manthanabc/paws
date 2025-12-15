@@ -216,7 +216,7 @@ impl<F: FileWriterInfra + SnapshotRepository + ValidationRepository> FsPatchServ
         assert_absolute_path(path)?;
 
         // Read the original content once
-        // TODO: use paws_fs
+        // TODO: use paws_common::fs
         let mut current_content = fs::read_to_string(path)
             .await
             .map_err(Error::FileOperation)?;

@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::Local;
+use paws_common::stream::MpscStream;
 use paws_domain::{InitAuth, *};
-use paws_stream::MpscStream;
 
 use crate::apply_tunable_parameters::ApplyTunableParameters;
 use crate::authenticator::Authenticator;

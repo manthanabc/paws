@@ -1,7 +1,7 @@
 use std::io;
 
 use colored::Colorize;
-use paws_tracker::VERSION;
+use paws_services::tracker::VERSION;
 
 const BANNER: &str = include_str!("banner");
 

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use paws_app::GrpcInfra;
+use paws_common::template::Element;
 use paws_domain::ValidationRepository;
-use paws_template::Element;
 use tracing::{debug, warn};
 
 // Include the generated proto code at module level

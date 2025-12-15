@@ -1,6 +1,6 @@
+use oauth2::PkceCodeChallenge;
 use paws_app::OAuthHttpProvider;
 use paws_domain::{AuthCodeParams, OAuthConfig, OAuthTokenResponse};
-use oauth2::PkceCodeChallenge;
 use serde::Serialize;
 
 use crate::auth::util::build_http_client;

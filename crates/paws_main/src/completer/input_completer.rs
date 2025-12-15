@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use paws_walker::Walker;
 use nucleo::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo::{Config, Matcher, Utf32Str};
+use paws_common::walker::Walker;
 use reedline::{Completer, Suggestion};
 
 use crate::completer::CommandCompleter;

@@ -5,13 +5,15 @@ use anyhow::Result;
 use paws_domain::{Environment, Snapshot, SnapshotRepository};
 
 pub struct PawsFileSnapshotService {
-    inner: Arc<paws_snaps::SnapshotService>,
+    inner: Arc<paws_services::snaps::SnapshotService>,
 }
 
 impl PawsFileSnapshotService {
     pub fn new(env: Environment) -> Self {
         Self {
-            inner: Arc::new(paws_snaps::SnapshotService::new(env.snapshot_path())),
+            inner: Arc::new(paws_services::snaps::SnapshotService::new(
+                env.snapshot_path(),
+            )),
         }
     }
 }

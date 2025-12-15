@@ -4,42 +4,112 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow.workspace = true
-async-trait.workspace = true
-chrono.workspace = true
-derive_more.workspace = true
-derive_setters.workspace = true
-fnv_rs.workspace = true
-indexmap.workspace = true
-nom.workspace = true
-schemars.workspace = true
-serde.workspace = true
-eserde = {version= "0.1.7", features=["json"]}
-serde_json = { workspace = true, features = ["raw_value"] }
-strum.workspace = true
-strum_macros.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tokio-stream.workspace = true
-uuid.workspace = true
-tracing.workspace = true
-url.workspace = true
-merge.workspace = true
-serde_yml.workspace = true
-paws_template.workspace = true
-base64.workspace = true
 derive-getters = "0.5.0"
-regex.workspace = true
-paws_tool_macros.workspace = true
 lazy_static = "1.5.0"
-convert_case.workspace = true
-paws_json_repair.workspace = true
-glob.workspace = true
-fake = { version = "4.4.0", features = ["derive"] }
 
-[dev-dependencies]
-paws_test_kit = { workspace = true, features = ["json"] }
-insta = { workspace = true, features = ["yaml"] }
-pretty_assertions.workspace = true
-is_ci.workspace = true
-fake = { version = "4.4.0", features = ["derive"] }
+[dependencies.anyhow]
+workspace = true
+
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.chrono]
+workspace = true
+
+[dependencies.derive_more]
+workspace = true
+
+[dependencies.derive_setters]
+workspace = true
+
+[dependencies.fnv_rs]
+workspace = true
+
+[dependencies.indexmap]
+workspace = true
+
+[dependencies.nom]
+workspace = true
+
+[dependencies.schemars]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.eserde]
+version = "0.1.7"
+features = [ "json",]
+
+[dependencies.serde_json]
+workspace = true
+features = [ "raw_value",]
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.strum_macros]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.tokio]
+workspace = true
+
+[dependencies.tokio-stream]
+workspace = true
+
+[dependencies.uuid]
+workspace = true
+
+[dependencies.tracing]
+workspace = true
+
+[dependencies.url]
+workspace = true
+
+[dependencies.merge]
+workspace = true
+
+[dependencies.serde_yml]
+workspace = true
+
+[dependencies.base64]
+workspace = true
+
+[dependencies.regex]
+workspace = true
+
+[dependencies.paws_tool_macros]
+workspace = true
+
+[dependencies.convert_case]
+workspace = true
+
+[dependencies.glob]
+workspace = true
+
+[dependencies.fake]
+version = "4.4.0"
+features = [ "derive",]
+
+[dependencies.paws_common]
+workspace = true
+
+[dev-dependencies.insta]
+workspace = true
+features = [ "yaml",]
+
+[dev-dependencies.pretty_assertions]
+workspace = true
+
+[dev-dependencies.is_ci]
+workspace = true
+
+[dev-dependencies.fake]
+version = "4.4.0"
+features = [ "derive",]
+
+[dev-dependencies.paws_common]
+workspace = true

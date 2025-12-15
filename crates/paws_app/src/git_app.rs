@@ -2,8 +2,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use paws_common::template::Element;
 use paws_domain::*;
-use paws_template::Element;
 
 use crate::{
     AgentProviderResolver, AgentRegistry, AppConfigService, EnvironmentService,

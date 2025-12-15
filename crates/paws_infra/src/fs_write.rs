@@ -16,10 +16,10 @@ impl PawsFileWriteService {
 
     /// Creates parent directories for the given file path if they don't exist
     async fn create_parent_dirs(&self, path: &Path) -> anyhow::Result<()> {
-        if !paws_fs::PawsFS::exists(path)
+        if !paws_common::fs::PawsFS::exists(path)
             && let Some(parent) = path.parent()
         {
-            paws_fs::PawsFS::create_dir_all(parent).await?;
+            paws_common::fs::PawsFS::create_dir_all(parent).await?;
         }
         Ok(())
     }
@@ -35,7 +35,7 @@ impl Default for PawsFileWriteService {
 impl FileWriterInfra for PawsFileWriteService {
     async fn write(&self, path: &Path, contents: Bytes) -> anyhow::Result<()> {
         self.create_parent_dirs(path).await?;
-        Ok(paws_fs::PawsFS::write(path, contents.to_vec()).await?)
+        Ok(paws_common::fs::PawsFS::write(path, contents.to_vec()).await?)
     }
 
     async fn write_temp(&self, prefix: &str, ext: &str, content: &str) -> anyhow::Result<PathBuf> {
