@@ -13,8 +13,8 @@ use reedline::{Prompt, PromptHistorySearchStatus};
 use crate::display_constants::markers;
 
 // Constants
-const MULTILINE_INDICATOR: &str = "::: ";
-const RIGHT_CHEVRON: &str = "❯";
+const MULTILINE_INDICATOR: &str = ":";
+const VERTICLE_LINE: &str = "┃";
 
 /// Very Specialized Prompt for the Agent Chat
 #[derive(Clone, Setters)]
@@ -63,7 +63,7 @@ impl Prompt for PawsPrompt {
             write!(result, " {} ", branch_style.paint(branch)).unwrap();
         }
 
-        write!(result, "\n{} ", branch_style.paint(RIGHT_CHEVRON)).unwrap();
+        write!(result, "\n{} ", mode_style.paint(VERTICLE_LINE)).unwrap();
 
         Cow::Owned(result)
     }
