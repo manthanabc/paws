@@ -92,11 +92,10 @@ impl SpinnerManager {
                         idx = 0;
                         last = std::time::Instant::now();
 
+                        eprintln!("\n");
                         // Enter raw mode
                         let _ = enable_raw_mode();
-                        // Hide cursor and draw initial spinner line
                         term(execute!(stderr, cursor::Hide));
-                        eprintln!();
                         render_spinner_line(spinner_frames[idx], &status_text, 0);
                     }
                     Ok(Cmd::Write(s)) => {
@@ -200,6 +199,9 @@ impl SpinnerManager {
 
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
+        if self.running {
+            return Ok(());
+        }
         let words = [
             "Thinking",
             "Processing",
