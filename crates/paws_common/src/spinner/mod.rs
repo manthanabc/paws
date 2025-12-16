@@ -5,10 +5,16 @@ use std::time::Duration;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::style::{Attribute, Stylize, style};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode};
+use crossterm::{cursor, execute};
 use rand::seq::SliceRandom;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
+
+#[inline]
+fn term(_res: std::io::Result<()>) {
+    // Intentionally ignored: terminal might be unavailable (pipes, CI, Ctrl+C)
+}
 
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
@@ -68,6 +74,7 @@ impl SpinnerManager {
             let mut status_text = String::new();
             let mut active = false;
             let mut hidden = false;
+            let mut stderr = io::stderr();
 
             loop {
                 let cmd = if active && !hidden {
@@ -88,12 +95,17 @@ impl SpinnerManager {
                         // Enter raw mode
                         let _ = enable_raw_mode();
                         // Hide cursor and draw initial spinner line
-                        eprintln!("\x1b[?25l");
+                        term(execute!(stderr, cursor::Hide));
+                        eprintln!();
                         render_spinner_line(spinner_frames[idx], &status_text, 0);
                     }
                     Ok(Cmd::Write(s)) => {
                         if active {
-                            eprint!("\r\x1b[2K");
+                            term(execute!(
+                                stderr,
+                                cursor::MoveToColumn(0),
+                                Clear(ClearType::CurrentLine)
+                            ));
                             println!("{}", s);
                             if !hidden {
                                 let elapsed = start_time.elapsed().as_secs();
@@ -107,8 +119,12 @@ impl SpinnerManager {
                     }
                     Ok(Cmd::Hide) => {
                         if active && !hidden {
-                            eprint!("\r\x1b[2K");
-                            eprint!("\x1b[?25h");
+                            term(execute!(
+                                stderr,
+                                cursor::MoveToColumn(0),
+                                Clear(ClearType::CurrentLine),
+                                cursor::Show
+                            ));
                             let _ = io::stdout().flush();
                             let _ = disable_raw_mode();
                             hidden = true;
@@ -117,7 +133,8 @@ impl SpinnerManager {
                     Ok(Cmd::Show) => {
                         if active && hidden {
                             let _ = enable_raw_mode();
-                            eprint!("\n\n\x1b[?25l");
+                            term(execute!(stderr, cursor::Hide));
+                            eprint!("\n\n");
                             let elapsed = start_time.elapsed().as_secs();
                             render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                             hidden = false;
@@ -125,8 +142,12 @@ impl SpinnerManager {
                     }
                     Ok(Cmd::Stop(tx)) => {
                         if active {
-                            eprint!("\r\x1b[2K");
-                            eprint!("\x1b[?25h");
+                            term(execute!(
+                                stderr,
+                                cursor::MoveToColumn(0),
+                                Clear(ClearType::CurrentLine),
+                                cursor::Show
+                            ));
                             let _ = io::stdout().flush();
                             let _ = disable_raw_mode();
                             active = false;
@@ -147,8 +168,12 @@ impl SpinnerManager {
                                 if key.modifiers.contains(KeyModifiers::CONTROL)
                                     && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
                                 {
-                                    eprint!("\r\x1b[2K");
-                                    eprint!("\x1b[?25h");
+                                    term(execute!(
+                                        stderr,
+                                        cursor::MoveToColumn(0),
+                                        Clear(ClearType::CurrentLine),
+                                        cursor::Show
+                                    ));
                                     // Notify UI
                                     let _ = ctrl_c_tx.send(());
                                 }
