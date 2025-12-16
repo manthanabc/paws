@@ -7,10 +7,9 @@ use futures::stream::BoxStream;
 use paws_app::dto::ToolsOverview;
 use paws_app::{
     AgentProviderResolver, AgentRegistry, AppConfigService, AuthService, CommandInfra,
-    CommandLoaderService, ContextEngineService, ConversationService, DataGenerationApp,
-    EnvironmentInfra, EnvironmentService, FileDiscoveryService, GitApp, GrpcInfra,
-    McpConfigManager, McpService, PawsApp, ProviderAuthService, ProviderService, Services, User,
-    UserUsage, Walker,
+    CommandLoaderService, ConversationService, DataGenerationApp, EnvironmentInfra,
+    EnvironmentService, FileDiscoveryService, GitApp, McpConfigManager, McpService, PawsApp,
+    ProviderAuthService, ProviderService, Services, User, UserUsage, Walker,
 };
 use paws_common::stream::MpscStream;
 use paws_domain::{Agent, InitAuth, LoginInfo, *};
@@ -55,10 +54,8 @@ impl PawsAPI<PawsServices<PawsRepo<PawsInfra>>, PawsRepo<PawsInfra>> {
 }
 
 #[async_trait::async_trait]
-impl<
-    A: Services,
-    F: CommandInfra + EnvironmentInfra + SkillRepository + AppConfigRepository + GrpcInfra,
-> API for PawsAPI<A, F>
+impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConfigRepository> API
+    for PawsAPI<A, F>
 {
     async fn discover(&self) -> Result<Vec<File>> {
         let environment = self.services.get_environment();
@@ -327,49 +324,6 @@ impl<
         self.services.remove_credential(provider_id).await
     }
 
-    async fn sync_codebase(
-        &self,
-        path: PathBuf,
-        batch_size: usize,
-    ) -> Result<MpscStream<Result<paws_domain::SyncProgress>>> {
-        self.services.sync_codebase(path, batch_size).await
-    }
-
-    async fn query_codebase(
-        &self,
-        path: PathBuf,
-        params: paws_domain::SearchParams<'_>,
-    ) -> Result<Vec<paws_domain::Node>> {
-        self.services.query_codebase(path, params).await
-    }
-
-    async fn list_codebases(&self) -> Result<Vec<paws_domain::WorkspaceInfo>> {
-        self.services.list_codebase().await
-    }
-
-    async fn get_workspace_info(
-        &self,
-        path: PathBuf,
-    ) -> Result<Option<paws_domain::WorkspaceInfo>> {
-        self.services.get_workspace_info(path).await
-    }
-
-    async fn delete_codebase(&self, workspace_id: paws_domain::WorkspaceId) -> Result<()> {
-        self.services.delete_codebase(&workspace_id).await
-    }
-
-    async fn is_authenticated(&self) -> Result<bool> {
-        self.services.is_authenticated().await
-    }
-
-    async fn create_auth_credentials(&self) -> Result<paws_domain::WorkspaceAuth> {
-        self.services.create_auth_credentials().await
-    }
-
-    async fn migrate_env_credentials(&self) -> Result<Option<paws_domain::MigrationResult>> {
-        Ok(self.services.migrate_env_credentials().await?)
-    }
-
     async fn generate_data(
         &self,
         data_parameters: DataGenerationParameters,
@@ -380,10 +334,5 @@ impl<
 
     async fn get_default_provider(&self) -> Result<Provider<Url>> {
         self.services.get_default_provider().await
-    }
-
-    fn hydrate_channel(&self) -> Result<()> {
-        self.infra.hydrate();
-        Ok(())
     }
 }

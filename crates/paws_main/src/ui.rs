@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,11 +40,9 @@ use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
 use crate::porcelain::Porcelain;
 use crate::prompt::PawsPrompt;
 use crate::state::UIState;
-use crate::sync_display::SyncProgressDisplay;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
 use crate::update::on_update;
-use crate::utils::humanize_time;
 use crate::{TRACKER, banner, tracker};
 
 // File-specific constants
@@ -365,10 +362,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         tokio::spawn(async move { api.get_tools().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.get_agents().await });
-        let api = self.api.clone();
-        tokio::spawn(async move {
-            let _ = api.hydrate_channel();
-        });
     }
 
     async fn handle_generate_conversation_id(&mut self) -> Result<()> {
@@ -569,46 +562,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         };
                         let command = self.command.parse(&command_with_slash)?;
                         self.on_command(command).await?;
-                    }
-                }
-                return Ok(());
-            }
-            TopLevelCommand::Workspace(index_group) => {
-                match index_group.command {
-                    crate::cli::WorkspaceCommand::Sync { path, batch_size } => {
-                        self.on_index(path, batch_size).await?;
-                    }
-                    crate::cli::WorkspaceCommand::List { porcelain } => {
-                        self.on_list_workspaces(porcelain).await?;
-                    }
-                    crate::cli::WorkspaceCommand::Query {
-                        query,
-                        path,
-                        limit,
-                        top_k,
-                        use_case,
-                        starts_with,
-                        ends_with,
-                    } => {
-                        let mut params =
-                            paws_domain::SearchParams::new(&query, &use_case).limit(limit);
-                        if let Some(k) = top_k {
-                            params = params.top_k(k);
-                        }
-                        if let Some(prefix) = starts_with {
-                            params = params.starts_with(prefix);
-                        }
-                        if let Some(suffix) = ends_with {
-                            params = params.ends_with(suffix);
-                        }
-                        self.on_query(path, params).await?;
-                    }
-
-                    crate::cli::WorkspaceCommand::Info { path } => {
-                        self.on_workspace_info(path).await?;
-                    }
-                    crate::cli::WorkspaceCommand::Delete { workspace_id } => {
-                        self.on_delete_workspace(workspace_id).await?;
                     }
                 }
                 return Ok(());
@@ -1677,11 +1630,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
-            SlashCommand::Index => {
-                let working_dir = self.state.cwd.clone();
-                // Use default batch size of 10 for slash command
-                self.on_index(working_dir, 10).await?;
-            }
             SlashCommand::AgentSwitch(agent_id) => {
                 // Validate that the agent exists by checking against loaded agents
                 let agents = self.api.get_agents().await?;
@@ -2029,13 +1977,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         provider_id: ProviderId,
         auth_methods: Vec<AuthMethod>,
     ) -> Result<Option<Provider<Url>>> {
-        if provider_id == ProviderId::FORGE_SERVICES {
-            let auth = self.api.create_auth_credentials().await?;
-            self.writeln_title(
-                TitleFormat::info("Paws API key created").sub_title(auth.token.as_str()),
-            )?;
-            return Ok(None);
-        }
         // Select auth method (or use the only one available)
         let auth_method = match self
             .select_auth_method(provider_id.clone(), &auth_methods)
@@ -2300,8 +2241,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn init_state(&mut self, first: bool) -> Result<Workflow> {
         // Run the independent initialization tasks in parallel for better performance
         let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
-
-        let _ = self.handle_migrate_credentials().await;
 
         // Ensure we have a model selected before proceeding with initialization
         let active_agent = self.api.get_active_agent().await;
@@ -2866,257 +2805,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             self.markdown.add_chunk(message, &mut self.spinner);
         }
 
-        Ok(())
-    }
-
-    async fn on_index(
-        &mut self,
-        path: std::path::PathBuf,
-        batch_size: usize,
-    ) -> anyhow::Result<()> {
-        use paws_common::spinner::ProgressBarManager;
-        use paws_domain::SyncProgress;
-
-        // Check if auth already exists and create if needed
-        if !self.api.is_authenticated().await? {
-            let auth = self.api.create_auth_credentials().await?;
-            self.writeln_title(
-                TitleFormat::info("Paws API key created").sub_title(auth.token.as_str()),
-            )?;
-        }
-
-        let mut stream = self.api.sync_codebase(path.clone(), batch_size).await?;
-        let mut progress_bar = ProgressBarManager::default();
-
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(ref progress @ SyncProgress::Completed { .. }) => {
-                    progress_bar.set_position(100)?;
-                    progress_bar.stop(None).await?;
-                    if let Some(msg) = progress.message() {
-                        self.writeln_title(TitleFormat::debug(msg))?;
-                    }
-                }
-                Ok(ref progress @ SyncProgress::Syncing { .. }) => {
-                    if !progress_bar.is_active() {
-                        progress_bar.start(100, "Indexing codebase")?;
-                    }
-                    if let Some(msg) = progress.message() {
-                        progress_bar.set_message(&msg)?;
-                    }
-                    if let Some(weight) = progress.weight() {
-                        progress_bar.set_position(weight)?;
-                    }
-                }
-                Ok(ref progress) => {
-                    if let Some(msg) = progress.message() {
-                        self.writeln_title(TitleFormat::debug(msg))?;
-                    }
-                }
-                Err(e) => {
-                    progress_bar.stop(None).await?;
-                    return Err(e);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn on_query(
-        &mut self,
-        path: PathBuf,
-        params: paws_domain::SearchParams<'_>,
-    ) -> anyhow::Result<()> {
-        self.spinner.start(Some("Searching codebase..."))?;
-
-        let results = match self.api.query_codebase(path.clone(), params).await {
-            Ok(results) => results,
-            Err(e) => {
-                self.spinner.stop(None)?;
-                return Err(e);
-            }
-        };
-
-        self.spinner.stop(None)?;
-
-        let mut info = Info::new().add_title(format!("FILES [{} RESULTS]", results.len()));
-
-        for result in results.iter() {
-            match &result.node {
-                paws_domain::NodeData::FileChunk(chunk) => {
-                    info = info.add_key_value(
-                        "File",
-                        format!(
-                            "{}:{}-{}",
-                            chunk.file_path, chunk.start_line, chunk.end_line
-                        ),
-                    );
-                }
-                paws_domain::NodeData::File(file) => {
-                    info = info.add_key_value("File", format!("{} (full file)", file.file_path));
-                }
-                paws_domain::NodeData::FileRef(file_ref) => {
-                    info =
-                        info.add_key_value("File", format!("{} (reference)", file_ref.file_path));
-                }
-                paws_domain::NodeData::Note(note) => {
-                    info = info.add_key_value("Note", &note.content);
-                }
-                paws_domain::NodeData::Task(task) => {
-                    info = info.add_key_value("Task", &task.task);
-                }
-            }
-        }
-
-        self.writeln(info)?;
-
-        Ok(())
-    }
-
-    /// Helper function to format workspace information consistently
-    fn format_workspace_info(workspace: &paws_domain::WorkspaceInfo, is_active: bool) -> Info {
-        let updated_time = workspace
-            .last_updated
-            .map_or("NEVER".to_string(), humanize_time);
-
-        let mut info = Info::new();
-
-        let title = if is_active {
-            "Workspace [Current]".to_string()
-        } else {
-            "Workspace".to_string()
-        };
-        info = info.add_title(title);
-
-        info.add_key_value("ID", workspace.workspace_id.to_string())
-            .add_key_value("Path", workspace.working_dir.to_string())
-            .add_key_value("File", workspace.node_count.to_string())
-            .add_key_value("Relations", workspace.relation_count.to_string())
-            .add_key_value("Created At", humanize_time(workspace.created_at))
-            .add_key_value("Updated At", updated_time)
-    }
-
-    async fn on_list_workspaces(&mut self, porcelain: bool) -> anyhow::Result<()> {
-        if !porcelain {
-            self.spinner.start(Some("Fetching workspaces..."))?;
-        }
-
-        // Fetch workspaces and current workspace info in parallel
-        let env = self.api.environment();
-        let (workspaces_result, current_workspace_result) = tokio::join!(
-            self.api.list_codebases(),
-            self.api.get_workspace_info(env.cwd)
-        );
-
-        match workspaces_result {
-            Ok(workspaces) => {
-                if !porcelain {
-                    self.spinner.stop(None)?;
-                }
-
-                // Get active workspace ID if current workspace info is available
-                let current_workspace = current_workspace_result.ok().flatten();
-                let active_workspace_id = current_workspace.as_ref().map(|ws| &ws.workspace_id);
-
-                // Build Info object once
-                let mut info = Info::new();
-
-                for workspace in &workspaces {
-                    let is_active = active_workspace_id == Some(&workspace.workspace_id);
-                    info = info.extend(Self::format_workspace_info(workspace, is_active));
-                }
-
-                // Output based on mode
-                if porcelain {
-                    // Skip header row in porcelain mode (consistent with conversation list)
-                    self.writeln(Porcelain::from(info).skip(1).drop_cols(&[0, 4, 5]))?;
-                } else {
-                    self.writeln(info)?;
-                }
-
-                Ok(())
-            }
-            Err(e) => {
-                self.spinner.stop(None)?;
-                Err(e)
-            }
-        }
-    }
-
-    /// Displays workspace information for a given path.
-    async fn on_workspace_info(&mut self, path: std::path::PathBuf) -> anyhow::Result<()> {
-        self.spinner.start(Some("Fetching workspace info..."))?;
-
-        match self.api.get_workspace_info(path).await {
-            Ok(Some(workspace)) => {
-                self.spinner.stop(None)?;
-
-                // When viewing a specific workspace's info, it's implicitly the active one
-                let info = Self::format_workspace_info(&workspace, true);
-
-                self.writeln(info)
-            }
-            Ok(None) => {
-                self.spinner.stop(None)?;
-                self.writeln_to_stderr(
-                    TitleFormat::error("No workspace found")
-                        .display()
-                        .to_string(),
-                )
-            }
-            Err(e) => {
-                self.spinner.stop(None)?;
-                Err(e)
-            }
-        }
-    }
-
-    async fn on_delete_workspace(&mut self, workspace_id: String) -> anyhow::Result<()> {
-        // Parse workspace ID
-        let workspace_id = paws_domain::WorkspaceId::from_string(&workspace_id)
-            .context("Invalid workspace ID format")?;
-
-        self.spinner.start(Some("Deleting workspace..."))?;
-
-        match self.api.delete_codebase(workspace_id.clone()).await {
-            Ok(()) => {
-                self.spinner.stop(None)?;
-                self.writeln_title(TitleFormat::debug(format!(
-                    "Successfully deleted workspace {}",
-                    workspace_id
-                )))?;
-                Ok(())
-            }
-            Err(e) => {
-                self.spinner.stop(None)?;
-                Err(e)
-            }
-        }
-    }
-
-    /// Handle credential migration
-    async fn handle_migrate_credentials(&mut self) -> Result<()> {
-        // Perform the migration
-        self.spinner.start(Some("Migrating credentials"))?;
-        let result = self.api.migrate_env_credentials().await?;
-        self.spinner.stop(None)?;
-
-        // Display results based on whether migration occurred
-        if let Some(result) = result {
-            self.writeln_title(
-                TitleFormat::warning("Paws no longer reads API keys from environment variables.")
-                    .sub_title("Learn more: https://pawscode.dev/docs/custom-providers/"),
-            )?;
-
-            let count = result.migrated_providers.len();
-            let message = if count == 1 {
-                "Migrated 1 provider from environment variables".to_string()
-            } else {
-                format!("Migrated {count} providers from environment variables")
-            };
-            self.writeln_title(TitleFormat::info(message))?;
-        }
         Ok(())
     }
 

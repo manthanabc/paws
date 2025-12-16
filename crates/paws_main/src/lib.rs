@@ -12,7 +12,6 @@ mod porcelain;
 mod prompt;
 mod sandbox;
 mod state;
-mod sync_display;
 mod title_display;
 mod tools_display;
 pub mod tracker;

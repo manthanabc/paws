@@ -6,8 +6,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use paws_app::{
     CommandInfra, DirectoryReaderInfra, EnvironmentInfra, FileDirectoryInfra, FileInfoInfra,
-    FileReaderInfra, FileRemoverInfra, FileWriterInfra, GrpcInfra, HttpInfra, McpServerInfra,
-    StrategyFactory, UserInfra, WalkerInfra,
+    FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra, McpServerInfra, StrategyFactory,
+    UserInfra, WalkerInfra,
 };
 use paws_domain::{
     AuthMethod, CommandOutput, Environment, FileInfo as FileInfoData, McpServerConfig, ProviderId,
@@ -26,7 +26,6 @@ use crate::fs_read::PawsFileReadService;
 use crate::fs_read_dir::PawsDirectoryReaderService;
 use crate::fs_remove::PawsFileRemoveService;
 use crate::fs_write::PawsFileWriteService;
-use crate::grpc::PawsGrpcClient;
 use crate::http::PawsHttpInfra;
 use crate::inquire::PawsInquire;
 use crate::mcp_client::PawsMcpClient;
@@ -50,7 +49,6 @@ pub struct PawsInfra {
     walker_service: Arc<PawsWalkerService>,
     http_service: Arc<PawsHttpInfra<PawsFileWriteService>>,
     strategy_factory: Arc<PawsAuthStrategyFactory>,
-    grpc_client: Arc<PawsGrpcClient>,
 }
 
 impl PawsInfra {
@@ -63,7 +61,6 @@ impl PawsInfra {
         let file_read_service = Arc::new(PawsFileReadService::new());
         let file_meta_service = Arc::new(PawsFileMetaService);
         let directory_reader_service = Arc::new(PawsDirectoryReaderService);
-        let grpc_client = Arc::new(PawsGrpcClient::new(env.workspace_server_url.clone()));
 
         Self {
             file_read_service,
@@ -82,7 +79,6 @@ impl PawsInfra {
             walker_service: Arc::new(PawsWalkerService::new()),
             strategy_factory: Arc::new(PawsAuthStrategyFactory::new()),
             http_service,
-            grpc_client,
         }
     }
 }
@@ -291,15 +287,5 @@ impl StrategyFactory for PawsInfra {
     ) -> anyhow::Result<Self::Strategy> {
         self.strategy_factory
             .create_auth_strategy(provider_id, method, required_params)
-    }
-}
-
-impl GrpcInfra for PawsInfra {
-    fn channel(&self) -> tonic::transport::Channel {
-        self.grpc_client.channel()
-    }
-
-    fn hydrate(&self) {
-        self.grpc_client.hydrate();
     }
 }

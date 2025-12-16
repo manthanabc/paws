@@ -4,7 +4,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use paws_app::domain::PatchOperation;
 use paws_app::{FileWriterInfra, FsPatchService, PatchOutput, compute_hash};
-use paws_domain::{SnapshotRepository, ValidationRepository};
+use paws_domain::SnapshotRepository;
 use thiserror::Error;
 use tokio::fs;
 
@@ -202,9 +202,7 @@ impl<F> PawsFsPatch<F> {
 }
 
 #[async_trait::async_trait]
-impl<F: FileWriterInfra + SnapshotRepository + ValidationRepository> FsPatchService
-    for PawsFsPatch<F>
-{
+impl<F: FileWriterInfra + SnapshotRepository> FsPatchService for PawsFsPatch<F> {
     async fn patch(
         &self,
         input_path: String,
@@ -236,20 +234,7 @@ impl<F: FileWriterInfra + SnapshotRepository + ValidationRepository> FsPatchServ
         // Compute hash of the final file content
         let content_hash = compute_hash(&current_content);
 
-        // Validate file syntax using remote validation API (graceful failure)
-        let syntax_warning = self
-            .infra
-            .validate_file(path, &current_content)
-            .await
-            .ok()
-            .flatten();
-
-        Ok(PatchOutput {
-            warning: syntax_warning,
-            before: old_content,
-            after: current_content,
-            content_hash,
-        })
+        Ok(PatchOutput { before: old_content, after: current_content, content_hash })
     }
 }
 

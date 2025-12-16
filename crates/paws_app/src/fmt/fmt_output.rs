@@ -22,7 +22,6 @@ impl FormatContent for ToolOperation {
             }
             ToolOperation::FsRemove { input: _, output: _ } => None,
             ToolOperation::FsSearch { input: _, output: _ } => None,
-            ToolOperation::CodebaseSearch { output: _ } => None,
             ToolOperation::FsPatch { input: _, output } => Some(ChatResponseContent::PlainText(
                 DiffFormat::format(&output.before, &output.after)
                     .diff()
@@ -142,7 +141,7 @@ mod tests {
             output: FsCreateOutput {
                 path: "/home/user/project/new_file.txt".to_string(),
                 before: None,
-                warning: None,
+
                 content_hash: crate::compute_hash(content),
             },
         };
@@ -166,7 +165,7 @@ mod tests {
             output: FsCreateOutput {
                 path: "/home/user/project/existing_file.txt".to_string(),
                 before: Some("old content".to_string()),
-                warning: None,
+
                 content_hash: crate::compute_hash(content),
             },
         };
@@ -194,7 +193,7 @@ mod tests {
             output: FsCreateOutput {
                 path: "/home/user/project/file.txt".to_string(),
                 before: None,
-                warning: Some("File created outside project directory".to_string()),
+
                 content_hash: crate::compute_hash(content),
             },
         };
@@ -313,7 +312,6 @@ mod tests {
                 operation: PatchOperation::Replace,
             },
             output: PatchOutput {
-                warning: None,
                 before: "Hello world\nThis is a test".to_string(),
                 after: after_content.to_string(),
                 content_hash: crate::compute_hash(after_content),
@@ -336,7 +334,6 @@ mod tests {
                 operation: PatchOperation::Replace,
             },
             output: PatchOutput {
-                warning: Some("Large file modification".to_string()),
                 before: "line1\nline2".to_string(),
                 after: after_content.to_string(),
                 content_hash: crate::compute_hash(after_content),

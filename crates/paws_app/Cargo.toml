@@ -99,8 +99,7 @@ workspace = true
 [dependencies.lazy_static]
 workspace = true
 
-[dependencies.tonic]
-workspace = true
+
 
 [dependencies.paws_common]
 workspace = true

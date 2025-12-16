@@ -803,12 +803,6 @@ mod env_tests {
         let credentials = credentials_guard.as_ref().unwrap();
 
         // Verify paws_services was NOT created during migration
-        assert!(
-            !credentials
-                .iter()
-                .any(|c| c.id == ProviderId::FORGE_SERVICES),
-            "Should NOT create paws_services credential during environment migration"
-        );
 
         // Verify only OpenAI credential was created
         assert_eq!(

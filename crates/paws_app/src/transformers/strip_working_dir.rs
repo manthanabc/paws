@@ -79,7 +79,6 @@ impl Transformer for StripWorkingDir {
                         }
                         SummaryTool::Shell { .. }
                         | SummaryTool::Search { .. }
-                        | SummaryTool::SemSearch { .. }
                         | SummaryTool::Fetch { .. }
                         | SummaryTool::Followup { .. }
                         | SummaryTool::Plan { .. }

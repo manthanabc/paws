@@ -5,8 +5,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use paws_app::{
     AgentRepository, CommandInfra, DirectoryReaderInfra, EnvironmentInfra, FileDirectoryInfra,
-    FileInfoInfra, FileReaderInfra, FileRemoverInfra, FileWriterInfra, GrpcInfra, HttpInfra,
-    KVStore, McpServerInfra, StrategyFactory, UserInfra, WalkedFile, Walker, WalkerInfra,
+    FileInfoInfra, FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra, KVStore,
+    McpServerInfra, StrategyFactory, UserInfra, WalkedFile, Walker, WalkerInfra,
 };
 use paws_domain::{
     AnyProvider, AppConfig, AppConfigRepository, AuthCredential, CommandOutput, Conversation,
@@ -21,12 +21,13 @@ use reqwest::Response;
 use reqwest_eventsource::EventSource;
 use url::Url;
 
+use crate::agent::PawsAgentRepository;
+use crate::app_config::AppConfigRepositoryImpl;
+use crate::conversation::ConversationRepositoryImpl;
+use crate::database::{DatabasePool, PoolConfig};
 use crate::fs_snap::PawsFileSnapshotService;
 use crate::provider::PawsProviderRepository;
-use crate::{
-    AppConfigRepositoryImpl, ConversationRepositoryImpl, DatabasePool, PawsAgentRepository,
-    PawsSkillRepository, PoolConfig,
-};
+use crate::skill::PawsSkillRepository;
 
 /// Repository layer that implements all domain repository traits
 ///
@@ -40,14 +41,11 @@ pub struct PawsRepo<F> {
     app_config_repository: Arc<AppConfigRepositoryImpl<F>>,
     mcp_cache_repository: Arc<CacacheStorage>,
     provider_repository: Arc<PawsProviderRepository<F>>,
-    indexing_repository: Arc<crate::PawsWorkspaceRepository>,
-    codebase_repo: Arc<crate::PawsContextEngineRepository<F>>,
     agent_repository: Arc<PawsAgentRepository<F>>,
     skill_repository: Arc<PawsSkillRepository<F>>,
-    validation_repository: Arc<crate::PawsValidationRepository<F>>,
 }
 
-impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra + GrpcInfra> PawsRepo<F> {
+impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> PawsRepo<F> {
     pub fn new(infra: Arc<F>) -> Self {
         let env = infra.get_environment();
         let file_snapshot_service = Arc::new(PawsFileSnapshotService::new(env.clone()));
@@ -67,12 +65,8 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra + GrpcInfra> PawsRe
 
         let provider_repository = Arc::new(PawsProviderRepository::new(infra.clone()));
 
-        let indexing_repository = Arc::new(crate::PawsWorkspaceRepository::new(db_pool.clone()));
-
-        let codebase_repo = Arc::new(crate::PawsContextEngineRepository::new(infra.clone()));
         let agent_repository = Arc::new(PawsAgentRepository::new(infra.clone()));
         let skill_repository = Arc::new(PawsSkillRepository::new(infra.clone()));
-        let validation_repository = Arc::new(crate::PawsValidationRepository::new(infra.clone()));
         Self {
             infra,
             file_snapshot_service,
@@ -80,11 +74,8 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra + GrpcInfra> PawsRe
             app_config_repository,
             mcp_cache_repository,
             provider_repository,
-            indexing_repository,
-            codebase_repo,
             agent_repository,
             skill_repository,
-            validation_repository,
         }
     }
 }
@@ -455,135 +446,5 @@ impl<F: StrategyFactory> StrategyFactory for PawsRepo<F> {
     ) -> anyhow::Result<Self::Strategy> {
         self.infra
             .create_auth_strategy(provider_id, auth_method, required_params)
-    }
-}
-
-#[async_trait::async_trait]
-impl<F: Send + Sync> paws_domain::WorkspaceRepository for PawsRepo<F> {
-    async fn upsert(
-        &self,
-        workspace_id: &paws_domain::WorkspaceId,
-        user_id: &paws_domain::UserId,
-        path: &std::path::Path,
-    ) -> anyhow::Result<()> {
-        self.indexing_repository
-            .upsert(workspace_id, user_id, path)
-            .await
-    }
-
-    async fn find_by_path(
-        &self,
-        path: &std::path::Path,
-    ) -> anyhow::Result<Option<paws_domain::Workspace>> {
-        self.indexing_repository.find_by_path(path).await
-    }
-
-    async fn get_user_id(&self) -> anyhow::Result<Option<paws_domain::UserId>> {
-        self.indexing_repository.get_user_id().await
-    }
-
-    async fn delete(&self, workspace_id: &paws_domain::WorkspaceId) -> anyhow::Result<()> {
-        self.indexing_repository.delete(workspace_id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl<F: GrpcInfra + Send + Sync> paws_domain::ContextEngineRepository for PawsRepo<F> {
-    async fn authenticate(&self) -> anyhow::Result<paws_domain::WorkspaceAuth> {
-        self.codebase_repo.authenticate().await
-    }
-
-    async fn create_workspace(
-        &self,
-        working_dir: &std::path::Path,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<paws_domain::WorkspaceId> {
-        self.codebase_repo
-            .create_workspace(working_dir, auth_token)
-            .await
-    }
-
-    async fn upload_files(
-        &self,
-        upload: &paws_domain::FileUpload,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<paws_domain::FileUploadInfo> {
-        self.codebase_repo.upload_files(upload, auth_token).await
-    }
-
-    async fn search(
-        &self,
-        query: &paws_domain::CodeSearchQuery<'_>,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<Vec<paws_domain::Node>> {
-        self.codebase_repo.search(query, auth_token).await
-    }
-
-    async fn list_workspaces(
-        &self,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<Vec<paws_domain::WorkspaceInfo>> {
-        self.codebase_repo.list_workspaces(auth_token).await
-    }
-
-    async fn get_workspace(
-        &self,
-        workspace_id: &paws_domain::WorkspaceId,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<Option<paws_domain::WorkspaceInfo>> {
-        self.codebase_repo
-            .get_workspace(workspace_id, auth_token)
-            .await
-    }
-
-    async fn list_workspace_files(
-        &self,
-        workspace: &paws_domain::WorkspaceFiles,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<Vec<paws_domain::FileHash>> {
-        self.codebase_repo
-            .list_workspace_files(workspace, auth_token)
-            .await
-    }
-
-    async fn delete_files(
-        &self,
-        deletion: &paws_domain::FileDeletion,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<()> {
-        self.codebase_repo.delete_files(deletion, auth_token).await
-    }
-
-    async fn delete_workspace(
-        &self,
-        workspace_id: &paws_domain::WorkspaceId,
-        auth_token: &paws_domain::ApiKey,
-    ) -> anyhow::Result<()> {
-        self.codebase_repo
-            .delete_workspace(workspace_id, auth_token)
-            .await
-    }
-}
-
-#[async_trait::async_trait]
-impl<F: GrpcInfra + Send + Sync> paws_domain::ValidationRepository for PawsRepo<F> {
-    async fn validate_file(
-        &self,
-        path: impl AsRef<std::path::Path> + Send,
-        content: &str,
-    ) -> anyhow::Result<Option<String>> {
-        self.validation_repository
-            .validate_file(path, content)
-            .await
-    }
-}
-
-impl<F: GrpcInfra> GrpcInfra for PawsRepo<F> {
-    fn channel(&self) -> tonic::transport::Channel {
-        self.infra.channel()
-    }
-
-    fn hydrate(&self) {
-        self.infra.hydrate();
     }
 }

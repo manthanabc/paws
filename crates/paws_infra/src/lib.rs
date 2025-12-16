@@ -9,7 +9,6 @@ mod fs_read;
 mod fs_read_dir;
 mod fs_remove;
 mod fs_write;
-mod grpc;
 mod http;
 mod inquire;
 mod kv_storage;
