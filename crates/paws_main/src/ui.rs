@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -363,7 +362,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         tokio::spawn(async move { api.get_tools().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.get_agents().await });
-
     }
 
     async fn handle_generate_conversation_id(&mut self) -> Result<()> {
@@ -1979,7 +1977,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         provider_id: ProviderId,
         auth_methods: Vec<AuthMethod>,
     ) -> Result<Option<Provider<Url>>> {
-
         // Select auth method (or use the only one available)
         let auth_method = match self
             .select_auth_method(provider_id.clone(), &auth_methods)
@@ -2244,8 +2241,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn init_state(&mut self, first: bool) -> Result<Workflow> {
         // Run the independent initialization tasks in parallel for better performance
         let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
-
- 
 
         // Ensure we have a model selected before proceeding with initialization
         let active_agent = self.api.get_active_agent().await;

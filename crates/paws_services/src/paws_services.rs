@@ -6,8 +6,8 @@ use paws_app::{
     McpServerInfra, Services, StrategyFactory, UserInfra, WalkerInfra,
 };
 use paws_domain::{
-    AppConfigRepository, ConversationRepository, ProviderRepository,
-    SkillRepository, SnapshotRepository,
+    AppConfigRepository, ConversationRepository, ProviderRepository, SkillRepository,
+    SnapshotRepository,
 };
 
 use crate::PawsProviderAuthService;
@@ -52,8 +52,7 @@ pub struct PawsServices<
         + KVStore
         + ProviderRepository
         + AgentRepository
-        + SkillRepository
-
+        + SkillRepository,
 > {
     chat_service: Arc<PawsProviderService<F>>,
     config_service: Arc<PawsAppConfigService<F>>,

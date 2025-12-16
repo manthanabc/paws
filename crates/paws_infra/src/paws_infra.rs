@@ -6,8 +6,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use paws_app::{
     CommandInfra, DirectoryReaderInfra, EnvironmentInfra, FileDirectoryInfra, FileInfoInfra,
-    FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra, McpServerInfra,
-    StrategyFactory, UserInfra, WalkerInfra,
+    FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra, McpServerInfra, StrategyFactory,
+    UserInfra, WalkerInfra,
 };
 use paws_domain::{
     AuthMethod, CommandOutput, Environment, FileInfo as FileInfoData, McpServerConfig, ProviderId,
@@ -289,5 +289,3 @@ impl StrategyFactory for PawsInfra {
             .create_auth_strategy(provider_id, method, required_params)
     }
 }
-
-

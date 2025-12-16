@@ -202,9 +202,7 @@ impl<F> PawsFsPatch<F> {
 }
 
 #[async_trait::async_trait]
-impl<F: FileWriterInfra + SnapshotRepository> FsPatchService
-    for PawsFsPatch<F>
-{
+impl<F: FileWriterInfra + SnapshotRepository> FsPatchService for PawsFsPatch<F> {
     async fn patch(
         &self,
         input_path: String,
@@ -236,11 +234,7 @@ impl<F: FileWriterInfra + SnapshotRepository> FsPatchService
         // Compute hash of the final file content
         let content_hash = compute_hash(&current_content);
 
-        Ok(PatchOutput {
-            before: old_content,
-            after: current_content,
-            content_hash,
-        })
+        Ok(PatchOutput { before: old_content, after: current_content, content_hash })
     }
 }
 

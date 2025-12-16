@@ -32,7 +32,6 @@ impl<
         + FileReaderInfra
         + FileWriterInfra
         + SnapshotRepository
-
         + Send
         + Sync,
 > FsCreateService for PawsFsCreate<F>
@@ -45,8 +44,6 @@ impl<
     ) -> anyhow::Result<FsCreateOutput> {
         let path = Path::new(&path);
         assert_absolute_path(path)?;
-
-
 
         if let Some(parent) = Path::new(&path).parent() {
             self.infra

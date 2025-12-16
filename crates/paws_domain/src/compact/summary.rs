@@ -5,8 +5,7 @@ use derive_more::From;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Context, ContextMessage, Role, TextMessage, ToolCallFull, ToolCallId, ToolCatalog,
-    ToolResult,
+    Context, ContextMessage, Role, TextMessage, ToolCallFull, ToolCallId, ToolCatalog, ToolResult,
 };
 
 /// A simplified summary of a context, focusing on messages and their tool calls
@@ -160,36 +159,16 @@ impl SummaryToolCall {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SummaryTool {
-    FileRead {
-        path: String,
-    },
-    FileUpdate {
-        path: String,
-    },
-    FileRemove {
-        path: String,
-    },
-    Shell {
-        command: String,
-    },
-    Search {
-        pattern: String,
-    },
-    Undo {
-        path: String,
-    },
-    Fetch {
-        url: String,
-    },
-    Followup {
-        question: String,
-    },
-    Plan {
-        plan_name: String,
-    },
-    Skill {
-        name: String,
-    },
+    FileRead { path: String },
+    FileUpdate { path: String },
+    FileRemove { path: String },
+    Shell { command: String },
+    Search { pattern: String },
+    Undo { path: String },
+    Fetch { url: String },
+    Followup { question: String },
+    Plan { plan_name: String },
+    Skill { name: String },
 }
 
 impl From<&Context> for ContextSummary {
@@ -930,38 +909,6 @@ mod tests {
                     .id("call_1")
                     .is_success(false)
                     .into(),
-            ],
-        )]);
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_context_summary_extracts_codebase_search_tool_calls() {
-        let fixture = context(vec![assistant_with_tools(
-            "Searching codebase",
-            vec![
-                ToolCatalog::tool_call_semantic_search(
-                    vec![SearchQuery::new("retry mechanism", "find retry logic")],
-                    None,
-                )
-                .call_id("call_1"),
-            ],
-        )]);
-
-        let actual = ContextSummary::from(&fixture);
-
-        let expected = ContextSummary::new(vec![SummaryBlock::new(
-            Role::Assistant,
-            vec![
-                Block::content("Searching codebase"),
-                SummaryToolCall::codebase_search(
-                    vec![SearchQuery::new("retry mechanism", "find retry logic")],
-                    None,
-                )
-                .id("call_1")
-                .is_success(false)
-                .into(),
             ],
         )]);
 

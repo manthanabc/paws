@@ -1,5 +1,5 @@
 ---
-source: crates/forge_app/src/operation.rs
+source: crates/paws_app/src/operation_tests.rs
 expression: to_value(actual)
 ---
 <file_diff
@@ -9,5 +9,4 @@ expression: to_value(actual)
   2 |+new line
 2 3 | line2
 ]]>
-<warning>Large file modification</warning>
 </file_diff>

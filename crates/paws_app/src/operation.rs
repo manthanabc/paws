@@ -6,8 +6,8 @@ use derive_setters::Setters;
 use paws_common::display::DiffFormat;
 use paws_common::template::Element;
 use paws_domain::{
-    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite,
-    FileOperation, LineNumbers, Metrics, NetFetch, PlanCreate, ToolKind,
+    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite, FileOperation, LineNumbers,
+    Metrics, NetFetch, PlanCreate, ToolKind,
 };
 
 use crate::truncation::{

@@ -7,8 +7,8 @@ use merge::Merge;
 use paws_domain::{
     AgentId, AnyProvider, Attachment, AuthContextRequest, AuthContextResponse, AuthMethod,
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
-    Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation,
-    Provider, ProviderId, ResultStream, Scope, Template, ToolCallFull,      ToolOutput, Workflow,
+    Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation, Provider,
+    ProviderId, ResultStream, Scope, Template, ToolCallFull, ToolOutput, Workflow,
 };
 use reqwest::Response;
 use reqwest::header::HeaderMap;
@@ -26,7 +26,6 @@ pub struct ShellOutput {
 
 #[derive(Debug)]
 pub struct PatchOutput {
-
     pub before: String,
     pub after: String,
     pub content_hash: String,
@@ -143,9 +142,8 @@ pub trait ProviderService: Send + Sync {
     /// Migrates environment variable-based credentials to file-based
     /// credentials. Returns Some(MigrationResult) if credentials were migrated,
     /// None if file already exists or no credentials to migrate.
-    async fn migrate_env_credentials(
-        &self,
-    ) -> anyhow::Result<Option<paws_domain::MigrationResult>>;
+    async fn migrate_env_credentials(&self)
+    -> anyhow::Result<Option<paws_domain::MigrationResult>>;
 }
 
 /// Manages user preferences for default providers and models.

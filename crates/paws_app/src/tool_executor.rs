@@ -1,19 +1,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use paws_domain::{
-    TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput,
-};
+use paws_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput};
 
 use crate::fmt::content::FormatContent;
 use crate::operation::{TempContentFiles, ToolOperation};
 use crate::services::ShellService;
 use crate::utils::format_display_path;
 use crate::{
-    ConversationService, EnvironmentService, FollowUpService,
-    FsCreateService, FsPatchService, FsReadService, FsRemoveService, FsSearchService,
-    FsUndoService, ImageReadService, NetFetchService, PlanCreateService, PolicyService,
-    SkillFetchService,
+    ConversationService, EnvironmentService, FollowUpService, FsCreateService, FsPatchService,
+    FsReadService, FsRemoveService, FsSearchService, FsUndoService, ImageReadService,
+    NetFetchService, PlanCreateService, PolicyService, SkillFetchService,
 };
 
 pub struct ToolExecutor<S> {
@@ -192,7 +189,7 @@ impl<
                     )
                     .await?;
                 (input, output).into()
-            },
+            }
             ToolCatalog::Remove(input) => {
                 let normalized_path = self.normalize_path(input.path.clone());
                 let output = self.services.remove(normalized_path).await?;

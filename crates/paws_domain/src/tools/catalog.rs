@@ -172,8 +172,6 @@ pub struct FSSearch {
     pub file_pattern: Option<String>,
 }
 
-
-
 /// Request to remove a file at the specified path. Use this when you need to
 /// delete an existing file. The path must be absolute. This operation cannot
 /// be undone, so use it carefully.
@@ -689,8 +687,6 @@ impl ToolCatalog {
             ..Default::default()
         }))
     }
-
-
 
     /// Creates an Undo tool call with the specified path
     pub fn tool_call_undo(path: &str) -> ToolCallFull {

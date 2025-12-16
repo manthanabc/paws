@@ -46,53 +46,6 @@ fn to_value(output: paws_domain::ToolOutput) -> String {
     result
 }
 
-// Helper functions for semantic search tests
-mod sem_search_helpers {
-    use fake::{Fake, Faker};
-    use paws_domain::{CodebaseQueryResult, CodebaseSearchResults, FileChunk, Node, NodeData};
-
-    /// Creates a file chunk node with auto-generated ID, computed end_line,
-    /// and default relevance
-    ///
-    /// # Arguments
-    /// * `file_path` - Path to the file
-    /// * `content` - Code content
-    /// * `start_line` - Starting line number
-    ///
-    /// The end_line is computed from content by counting newlines.
-    /// Node ID is auto-generated using faker.
-    /// Relevance defaults to 0.9.
-    pub fn chunk_node(file_path: &str, content: &str, start_line: u32) -> Node {
-        let line_count = content.lines().count() as u32;
-        let end_line = start_line + line_count.saturating_sub(1);
-        let relevance = 0.9;
-        let node_id: String = Faker.fake();
-
-        Node {
-            node_id: node_id.into(),
-            node: NodeData::FileChunk(FileChunk {
-                file_path: file_path.to_string(),
-                content: content.to_string(),
-                start_line,
-                end_line,
-            }),
-            relevance: Some(relevance),
-            distance: Some(1.0 - relevance),
-        }
-    }
-
-    /// Creates a CodebaseSearchResults with a single query
-    pub fn search_results(query: &str, use_case: &str, nodes: Vec<Node>) -> CodebaseSearchResults {
-        CodebaseSearchResults {
-            queries: vec![CodebaseQueryResult {
-                query: query.to_string(),
-                use_case: use_case.to_string(),
-                results: nodes,
-            }],
-        }
-    }
-}
-
 #[test]
 fn test_fs_read_basic() {
     let content = "Hello, world!\nThis is a test file.";
@@ -234,7 +187,7 @@ fn test_fs_create_basic() {
         output: FsCreateOutput {
             path: "/home/user/new_file.txt".to_string(),
             before: None,
-            warning: None,
+
             content_hash: compute_hash(content),
         },
     };
@@ -263,7 +216,7 @@ fn test_fs_create_overwrite() {
         output: FsCreateOutput {
             path: "/home/user/existing_file.txt".to_string(),
             before: Some("Old content".to_string()),
-            warning: None,
+
             content_hash: compute_hash(content),
         },
     };
@@ -738,7 +691,7 @@ fn test_fs_create_with_warning() {
         output: FsCreateOutput {
             path: "/home/user/file_with_warning.txt".to_string(),
             before: None,
-            warning: Some("File created in non-standard location".to_string()),
+
             content_hash: compute_hash(content),
         },
     };
@@ -852,7 +805,6 @@ fn test_fs_patch_basic() {
             content: "universe".to_string(),
         },
         output: PatchOutput {
-            warning: None,
             before: "Hello world\nThis is a test".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),
@@ -882,7 +834,6 @@ fn test_fs_patch_with_warning() {
             content: "\nnew line".to_string(),
         },
         output: PatchOutput {
-            warning: Some("Large file modification".to_string()),
             before: "line1\nline2".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),
@@ -1122,67 +1073,6 @@ fn test_follow_up_with_question() {
 }
 
 #[test]
-fn test_sem_search_with_results() {
-    use sem_search_helpers::{chunk_node, search_results};
-
-    let fixture = ToolOperation::CodebaseSearch {
-        output: search_results(
-            "retry mechanism with exponential backoff",
-            "where is the retrying logic written",
-            vec![
-                chunk_node(
-                    "src/retry.rs",
-                    "fn retry_with_backoff(max_attempts: u32) {\n    let mut delay = 100;\n    for attempt in 0..max_attempts {\n        if try_operation().is_ok() {\n            return;\n        }\n        thread::sleep(Duration::from_millis(delay));\n        delay *= 2;\n    }\n}",
-                    10,
-                ),
-                chunk_node(
-                    "src/http/client.rs",
-                    "async fn request_with_retry(&self, url: &str) -> Result<Response> {\n    const MAX_RETRIES: usize = 3;\n    let mut backoff = ExponentialBackoff::default();\n    // Implementation...\n}",
-                    45,
-                ),
-            ],
-        ),
-    };
-
-    let env = fixture_environment();
-    let actual = fixture.into_tool_output(
-        ToolKind::SemSearch,
-        TempContentFiles::default(),
-        &env,
-        &mut Metrics::default(),
-    );
-
-    insta::assert_snapshot!(to_value(actual));
-}
-
-#[test]
-fn test_sem_search_with_usecase() {
-    use sem_search_helpers::{chunk_node, search_results};
-
-    let fixture = ToolOperation::CodebaseSearch {
-        output: search_results(
-            "authentication logic",
-            "need to add similar auth to my endpoint",
-            vec![chunk_node(
-                "src/auth.rs",
-                "fn authenticate_user(token: &str) -> Result<User> {\n    verify_jwt(token)\n}",
-                10,
-            )],
-        ),
-    };
-
-    let env = fixture_environment();
-    let actual = fixture.into_tool_output(
-        ToolKind::SemSearch,
-        TempContentFiles::default(),
-        &env,
-        &mut Metrics::default(),
-    );
-
-    insta::assert_snapshot!(to_value(actual));
-}
-
-#[test]
 fn test_follow_up_no_question() {
     let fixture = ToolOperation::FollowUp { output: None };
 
@@ -1190,50 +1080,6 @@ fn test_follow_up_no_question() {
 
     let actual = fixture.into_tool_output(
         ToolKind::Followup,
-        TempContentFiles::default(),
-        &env,
-        &mut Metrics::default(),
-    );
-
-    insta::assert_snapshot!(to_value(actual));
-}
-
-#[test]
-fn test_sem_search_multiple_chunks_same_file_sorted() {
-    use sem_search_helpers::{chunk_node, search_results};
-
-    // Test that multiple chunks from the same file are sorted by start_line
-    // Chunks are provided in non-sequential order: 100, 10, 50
-    let fixture = ToolOperation::CodebaseSearch {
-        output: search_results(
-            "database operations",
-            "finding all database query implementations",
-            vec![
-                // Third chunk (lines 100-102) - provided first
-                chunk_node(
-                    "src/database.rs",
-                    "fn delete_user(id: u32) -> Result<()> {\n    db.execute(\"DELETE FROM users WHERE id = ?\", &[id])\n}",
-                    100,
-                ),
-                // First chunk (lines 10-12) - provided second
-                chunk_node(
-                    "src/database.rs",
-                    "fn get_user(id: u32) -> Result<User> {\n    db.query(\"SELECT * FROM users WHERE id = ?\", &[id])\n}",
-                    10,
-                ),
-                // Second chunk (lines 50-52) - provided third
-                chunk_node(
-                    "src/database.rs",
-                    "fn update_user(id: u32, name: &str) -> Result<()> {\n    db.execute(\"UPDATE users SET name = ? WHERE id = ?\", &[name, id])\n}",
-                    50,
-                ),
-            ],
-        ),
-    };
-
-    let env = fixture_environment();
-    let actual = fixture.into_tool_output(
-        ToolKind::SemSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),

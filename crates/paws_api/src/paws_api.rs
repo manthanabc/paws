@@ -7,10 +7,9 @@ use futures::stream::BoxStream;
 use paws_app::dto::ToolsOverview;
 use paws_app::{
     AgentProviderResolver, AgentRegistry, AppConfigService, AuthService, CommandInfra,
-    CommandLoaderService, ConversationService, DataGenerationApp,
-    EnvironmentInfra, EnvironmentService, FileDiscoveryService, GitApp,
-    McpConfigManager, McpService, PawsApp, ProviderAuthService, ProviderService, Services, User,
-    UserUsage, Walker,
+    CommandLoaderService, ConversationService, DataGenerationApp, EnvironmentInfra,
+    EnvironmentService, FileDiscoveryService, GitApp, McpConfigManager, McpService, PawsApp,
+    ProviderAuthService, ProviderService, Services, User, UserUsage, Walker,
 };
 use paws_common::stream::MpscStream;
 use paws_domain::{Agent, InitAuth, LoginInfo, *};
@@ -55,10 +54,8 @@ impl PawsAPI<PawsServices<PawsRepo<PawsInfra>>, PawsRepo<PawsInfra>> {
 }
 
 #[async_trait::async_trait]
-impl<
-    A: Services,
-    F: CommandInfra + EnvironmentInfra + SkillRepository + AppConfigRepository,
-> API for PawsAPI<A, F>
+impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConfigRepository> API
+    for PawsAPI<A, F>
 {
     async fn discover(&self) -> Result<Vec<File>> {
         let environment = self.services.get_environment();

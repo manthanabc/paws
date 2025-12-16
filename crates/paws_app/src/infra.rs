@@ -348,5 +348,3 @@ pub trait AgentRepository: Send + Sync {
     /// resolution.
     async fn get_agents(&self) -> anyhow::Result<Vec<paws_domain::AgentDefinition>>;
 }
-
-

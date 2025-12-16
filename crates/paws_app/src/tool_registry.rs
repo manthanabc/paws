@@ -388,16 +388,4 @@ mod tests {
         assert!(actual_match.is_ok());
         assert!(actual_no_match.is_err());
     }
-
-    #[test]
-    fn test_sem_search_included_when_supported() {
-        let actual = ToolRegistry::<()>::get_system_tools(true);
-        assert!(actual.iter().any(|t| t.name.as_str() == "sem_search"));
-    }
-
-    #[test]
-    fn test_sem_search_filtered_when_not_supported() {
-        let actual = ToolRegistry::<()>::get_system_tools(false);
-        assert!(actual.iter().all(|t| t.name.as_str() != "sem_search"));
-    }
 }

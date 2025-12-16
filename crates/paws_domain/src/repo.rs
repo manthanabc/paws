@@ -116,5 +116,3 @@ pub trait SkillRepository: Send + Sync {
     /// Returns an error if skill loading fails
     async fn load_skills(&self) -> Result<Vec<Skill>>;
 }
-
-
