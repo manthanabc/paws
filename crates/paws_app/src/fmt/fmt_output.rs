@@ -8,27 +8,11 @@ use crate::utils::format_display_path;
 impl FormatContent for ToolOperation {
     fn to_content(&self, env: &Environment) -> Option<ChatResponseContent> {
         match self {
-            ToolOperation::FsRead { input: _, output: _ } => None,
-            ToolOperation::ImageRead { output: _ } => None,
-            ToolOperation::FsCreate { input, output } => {
-                if let Some(ref before) = output.before {
-                    let after = &input.content;
-                    Some(ChatResponseContent::PlainText(
-                        DiffFormat::format(before, after).diff().to_string(),
-                    ))
-                } else {
-                    None
-                }
-            }
-            ToolOperation::FsRemove { input: _, output: _ } => None,
-            ToolOperation::FsSearch { input: _, output: _ } => None,
             ToolOperation::FsPatch { input: _, output } => Some(ChatResponseContent::PlainText(
                 DiffFormat::format(&output.before, &output.after)
                     .diff()
                     .to_string(),
             )),
-            ToolOperation::FsUndo { input: _, output: _ } => None,
-            ToolOperation::NetFetch { input: _, output: _ } => None,
             ToolOperation::Shell { output } => {
                 let mut text = output.output.stdout.clone();
                 if !output.output.stderr.is_empty() {
@@ -43,7 +27,6 @@ impl FormatContent for ToolOperation {
                     Some(ChatResponseContent::PlainText(text))
                 }
             }
-            ToolOperation::FollowUp { output: _ } => None,
             ToolOperation::PlanCreate { input: _, output } => Some({
                 let title = TitleFormat::debug(format!(
                     "Create {}",
@@ -51,7 +34,16 @@ impl FormatContent for ToolOperation {
                 ));
                 title.into()
             }),
-            ToolOperation::Skill { input: _, output: _ } => None,
+            ToolOperation::FsRead { input: _, output: _ }
+            | ToolOperation::ImageRead { output: _ }
+            | ToolOperation::FsCreate { .. }
+            | ToolOperation::FsRemove { .. }
+            | ToolOperation::FsSearch { .. }
+            | ToolOperation::CodebaseSearch { .. }
+            | ToolOperation::FsUndo { .. }
+            | ToolOperation::NetFetch { .. }
+            | ToolOperation::FollowUp { .. }
+            | ToolOperation::Skill { .. } => None,
         }
     }
 }
