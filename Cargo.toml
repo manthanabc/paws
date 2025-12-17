@@ -90,7 +90,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 url = { version = "2.5.4", features = ["serde"] }
 backon = "1.5.2"
-eserde = "0.1.7"
+eserede = "0.1.7"
 uuid = { version = "1.18.0", features = [
     "v4",
     "fast-rng",
@@ -111,6 +111,9 @@ gray_matter = "0.3.2"
 num-format = "0.4"
 humantime = "2.1.0"
 dashmap = "7.0.0-rc2"
+signal-hook = "0.3"
+signal-hook-tokio = "0.3"
+atty = "0.2"
 
 # Internal crates
 paws_api = { path = "crates/paws_api" }
@@ -124,4 +127,5 @@ paws_inte = { path = "crates/paws_inte" }
 paws_main = { path = "crates/paws_main" }
 paws_services = { path = "crates/paws_services" }
 paws_tool_macros = { path = "crates/paws_tool_macros" }
-
+paws_server = { path = "crates/paws_server" }
+paws_client = { path = "crates/paws_client" }

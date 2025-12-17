@@ -87,6 +87,17 @@ impl Cli {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum TopLevelCommand {
+    /// Start the background server.
+    Server {
+        /// Unix socket path for IPC
+        #[arg(long)]
+        socket: Option<PathBuf>,
+
+        /// Enable verbose logging
+        #[arg(long)]
+        verbose: bool,
+    },
+
     /// Manage agents.
     Agent(AgentCommandGroup),
 

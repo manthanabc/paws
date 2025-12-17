@@ -1,0 +1,39 @@
+[package]
+name = "paws_server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Re-export all server-side crates
+paws_api = { path = "../paws_api" }
+paws_services = { path = "../paws_services" }
+paws_repo = { path = "../paws_repo" }
+paws_infra = { path = "../paws_infra" }
+paws_domain = { path = "../paws_domain" }
+paws_common = { path = "../paws_common" }
+
+# Workspace dependencies
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "fs", "process", "signal", "io-util"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+signal-hook = "0.3"
+signal-hook-tokio = "0.3"
+dirs = "6.0.0"
+atty = "0.2"
+futures = { workspace = true }
+serde = { workspace = true }
+prost-types = "0.13"
+prost = "0.13"
+
+[build-dependencies]
+tonic-build = "0.14"
+
+[[bin]]
+name = "paws-server"
+path = "src/main.rs"

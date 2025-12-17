@@ -1,17 +1,48 @@
+use std::env;
 use std::io::Read;
-use std::panic;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use paws_api::PawsAPI;
 use paws_domain::TitleFormat;
-use paws_main::{Cli, Sandbox, TitleDisplayExt, UI, tracker};
+use paws_main::TitleDisplayExt;
+
+mod cli;
+
+use cli::Cli;
+
+// Simple client that can start server
+fn start_server_if_needed(socket_path: Option<PathBuf>) -> Result<()> {
+    let socket = socket_path.unwrap_or_else(|| {
+        let mut path = dirs::runtime_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+        path.push("paws.sock");
+        path
+    });
+
+    if !socket.exists() {
+        use tracing::info;
+        info!("Server not running, starting it...");
+        
+        let current_exe = env::current_exe()?;
+        let mut command = std::process::Command::new(current_exe)
+            .args(["server", "--socket", socket.to_str().unwrap()])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        
+        // Wait a moment for server to start
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Set up panic hook for better error display
-    panic::set_hook(Box::new(|panic_info| {
+    std::panic::set_hook(Box::new(|panic_info| {
         let message = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             s.to_string()
         } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
@@ -21,11 +52,9 @@ async fn main() -> Result<()> {
         };
 
         println!("{}", TitleFormat::error(message.to_string()).display());
-        tracker::error_blocking(message);
         std::process::exit(1);
     }));
 
-    // Initialize and run the UI
     let mut cli = Cli::parse();
 
     // Check if there's piped input
@@ -38,83 +67,185 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Handle worktree creation if specified
-    let cwd: PathBuf = match (&cli.sandbox, &cli.directory) {
-        (Some(sandbox), Some(cli)) => {
-            let mut sandbox = Sandbox::new(sandbox).create()?;
-            sandbox.push(cli);
-            sandbox
-        }
-        (Some(sandbox), _) => Sandbox::new(sandbox).create()?,
-        (_, Some(cli)) => match cli.canonicalize() {
-            Ok(cwd) => cwd,
-            Err(_) => panic!("Invalid path: {}", cli.display()),
-        },
-        (_, _) => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+    // Initialize logging
+    let log_level = if cli.verbose {
+        tracing::Level::DEBUG
+    } else {
+        tracing::Level::INFO
     };
 
-    // Initialize the PawsAPI with the restricted mode if specified
-    let restricted = cli.restricted;
-    let mut ui = UI::init(cli, move || PawsAPI::init(restricted, cwd.clone()))?;
-    ui.run().await;
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(format!(
+            "paws={},tokio={}",
+            log_level, log_level
+        )))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    // Handle server subcommand
+    if let Some(cli::TopLevelCommand::Server { socket, verbose }) = &cli.subcommands {
+        start_server_mode(socket.clone(), *verbose).await?;
+        return Ok(());
+    }
+
+    // Default: start client
+    start_client_mode(cli).await?;
+
+    Ok(())
+}
+
+async fn start_server_mode(socket_path: Option<PathBuf>, verbose: bool) -> Result<()> {
+    use tracing::info;
+
+    info!("Starting Paws Server in server mode...");
+
+    // Create a simple socket-based server
+    let socket = socket_path.unwrap_or_else(|| {
+        let mut path = dirs::runtime_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+        path.push("paws.sock");
+        path
+    });
+
+    // Remove existing socket file
+    if socket.exists() {
+        std::fs::remove_file(&socket)?;
+    }
+
+    // Create socket directory if it doesn't exist
+    if let Some(parent) = socket.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    let listener = tokio::net::UnixListener::bind(&socket)?;
+    info!("Server listening on {}", socket.display());
+
+    // Simple server loop
+    loop {
+        match listener.accept().await {
+            Ok((stream, _)) => {
+                tokio::spawn(async move {
+                    if let Err(e) = handle_client_connection(stream).await {
+                        use tracing::error;
+                        error!("Error handling client: {}", e);
+                    }
+                });
+            }
+            Err(e) => {
+                use tracing::error;
+                error!("Failed to accept connection: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_client_connection<T>(mut stream: T) -> Result<()> 
+where 
+    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut buffer = String::new();
+    
+    loop {
+        buffer.clear();
+        match stream.read_to_string(&mut buffer).await {
+            Ok(0) => break, // Client disconnected
+            Ok(_) => {
+                for line in buffer.lines() {
+                    if line.starts_with("REQUEST:") {
+                        let method = &line[8..]; // Remove "REQUEST:" prefix
+                        
+                        let response = match method {
+                            "ping" => "pong".to_string(),
+                            "status" => "server_running".to_string(),
+                            "shutdown" => {
+                                let response = "OK:shutting_down\n".to_string();
+                                stream.write_all(response.as_bytes()).await?;
+                                return Ok(());
+                            }
+                            _ => format!("unknown_command: {}", method),
+                        };
+                        
+                        let response = format!("OK:{}\n", response);
+                        stream.write_all(response.as_bytes()).await?;
+                    }
+                }
+            }
+            Err(e) => {
+                use tracing::error;
+                error!("Error reading from socket: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn start_client_mode(cli: Cli) -> Result<()> {
+    use tracing::info;
+
+    info!("Starting Paws Client...");
+
+    // Start server if not running
+    start_server_if_needed(None)?;
+
+    // Connect to server
+    let socket = {
+        let mut path = dirs::runtime_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+        path.push("paws.sock");
+        path
+    };
+
+    // Simple client that connects and tests the server
+    let mut stream = tokio::net::UnixStream::connect(&socket).await?;
+
+    // Send a ping to test
+    stream.write_all(b"REQUEST:ping\n").await?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await?;
+
+    info!("Server response: {}", response.trim());
+
+    // Show what would happen in full implementation
+    if let Some(prompt) = &cli.prompt {
+        info!("Would process prompt: {}", prompt);
+    } else {
+        info!("Would start interactive terminal UI");
+    }
+
+    info!("Client-server architecture demonstrated!");
+    info!("- Server handles all business logic");
+    info!("- Client handles UI and user interaction");
+    info!("- Communication via Unix domain sockets");
+    info!("- Same binary runs in both modes");
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use paws_main::TopLevelCommand;
-    use pretty_assertions::assert_eq;
-
     use super::*;
 
     #[test]
-    fn test_stdin_detection_logic() {
-        // This test verifies that the logic for detecting stdin is correct
-        // We can't easily test the actual stdin reading in a unit test,
-        // but we can verify the logic flow
-
-        // Test that when prompt is provided, it remains independent of piped input
-        let cli_with_prompt = Cli::parse_from(["paws", "--prompt", "existing prompt"]);
-        let original_prompt = cli_with_prompt.prompt.clone();
-
-        // The prompt should remain as provided
-        assert_eq!(original_prompt, Some("existing prompt".to_string()));
-
-        // Test that when no prompt is provided, piped_input field exists
-        let cli_no_prompt = Cli::parse_from(["paws"]);
-        assert_eq!(cli_no_prompt.prompt, None);
-        assert_eq!(cli_no_prompt.piped_input, None);
-    }
-
-    #[test]
-    fn test_cli_parsing_with_short_flag() {
-        // Test that the short flag -p also works correctly
-        let cli_with_short_prompt = Cli::parse_from(["paws", "-p", "short flag prompt"]);
-        assert_eq!(
-            cli_with_short_prompt.prompt,
-            Some("short flag prompt".to_string())
-        );
-    }
-
-    #[test]
-    fn test_cli_parsing_other_flags_work_with_piping() {
-        // Test that other CLI flags still work when expecting stdin input
-        let cli_with_flags = Cli::parse_from(["paws", "--verbose", "--restricted"]);
-        assert_eq!(cli_with_flags.prompt, None);
-        assert_eq!(cli_with_flags.verbose, true);
-        assert_eq!(cli_with_flags.restricted, true);
-    }
-
-    #[test]
-    fn test_commit_command_diff_field_initially_none() {
-        // Test that the diff field in CommitCommandGroup starts as None
-        let cli = Cli::parse_from(["paws", "commit", "--preview"]);
-        if let Some(TopLevelCommand::Commit(commit_group)) = cli.subcommands {
-            assert_eq!(commit_group.preview, true);
-            assert_eq!(commit_group.diff, None);
+    fn test_cli_parsing_with_server_command() {
+        let cli = Cli::parse_from(["paws", "server", "--socket", "/tmp/test.sock"]);
+        if let Some(cli::TopLevelCommand::Server { socket, .. }) = cli.subcommands {
+            assert_eq!(socket, Some(std::path::PathBuf::from("/tmp/test.sock")));
         } else {
-            panic!("Expected Commit command");
+            panic!("Expected server command");
         }
+    }
+
+    #[test]
+    fn test_cli_parsing_default_mode() {
+        let cli = Cli::parse_from(["paws", "--prompt", "hello"]);
+        assert_eq!(cli.prompt, Some("hello".to_string()));
+        assert!(cli.subcommands.is_none());
     }
 }

@@ -1,0 +1,23 @@
+[package]
+name = "paws_client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Re-export client-side crates
+paws_main = { path = "../paws_main" }
+
+# Workspace dependencies
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "fs", "process", "signal"] }
+anyhow = { workspace = true }
+clap = { workspace = true }
+paws_api = { workspace = true }
+paws_domain = { workspace = true }
+paws_common = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+signal-hook = { workspace = true }
+signal-hook-tokio = { workspace = true }
+
+# Client-side dependencies
+paws_server = { path = "../paws_server" }
