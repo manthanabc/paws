@@ -22,11 +22,11 @@ use paws_common::spinner::SpinnerManager;
 use paws_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
-use paws_services::tracker::ToolCallPayload;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
 
+use crate::banner;
 use crate::cli::{
     Cli, CommitCommandGroup, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
     TopLevelCommand,
@@ -42,7 +42,6 @@ use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
 use crate::update::on_update;
-use crate::{TRACKER, banner, tracker};
 
 // File-specific constants
 const MISSING_AGENT_TITLE: &str = "<missing agent.title>";
@@ -97,7 +96,7 @@ pub struct UI<A, F: Fn() -> A> {
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
-    _guard: paws_services::tracker::Guard,
+    _guard: paws_services::log::Guard,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -223,7 +222,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             spinner,
             ctrl_c_rx,
             markdown: MarkdownWriter::new(),
-            _guard: paws_services::tracker::init_tracing(env.log_path(), TRACKER.clone())?,
+            _guard: paws_services::log::init_tracing(env.log_path())?,
         })
     }
 
@@ -326,21 +325,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         if exit {return Ok(())}
                                 },
                                 Err(error) => {
-                                    if let Some(conversation_id) = self.state.conversation_id.as_ref()
-                                        && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
-                                            TRACKER.set_conversation(conversation).await;
-                                        }
-                                    tracker::error(&error);
                                     tracing::error!(error = ?error);
                                     self.spinner.stop(None)?;
                                     self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
-                                },
+                                }
                             }
                         }
                     }
                 }
                 Err(error) => {
-                    tracker::error(&error);
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
                     self.writeln_to_stderr(
@@ -2423,18 +2416,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 // Hide spinner while tool call
                 let _ = self.spinner.hide();
             }
-            ChatResponse::ToolCallEnd(toolcall_result) => {
+            ChatResponse::ToolCallEnd(_toolcall_result) => {
                 // Only track toolcall name in case of success else track the error.
-                let payload = if toolcall_result.is_error() {
-                    let mut r = ToolCallPayload::new(toolcall_result.name.to_string());
-                    if let Some(cause) = toolcall_result.output.as_str() {
-                        r = r.with_cause(cause.to_string());
-                    }
-                    r
-                } else {
-                    ToolCallPayload::new(toolcall_result.name.to_string())
-                };
-                tracker::tool_call(payload);
 
                 // Resume the spinner as tool call is over
                 let _ = self.spinner.show();
@@ -2624,11 +2607,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    fn update_model(&mut self, model: Option<ModelId>) {
-        if let Some(ref model) = model {
-            tracker::set_model(model.to_string());
-        }
-    }
+    fn update_model(&mut self, _model: Option<ModelId>) {}
 
     async fn on_custom_event(&mut self, event: Event) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
@@ -2671,9 +2650,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // NOTE: Spawning required so that we don't block the user while querying user
         // info
         tokio::spawn(async move {
-            if let Ok(Some(user_info)) = api.user_info().await {
-                tracker::login(user_info.auth_provider_id.into_string());
-            }
+            let _ = api.user_info().await;
         });
     }
 
