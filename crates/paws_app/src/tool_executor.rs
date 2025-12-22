@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use paws_common::template::Element;
 use paws_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput};
 
 use crate::fmt::content::FormatContent;
@@ -40,7 +41,6 @@ impl<
     }
 
     /// Check if a tool operation is allowed based on the workflow policies
-    #[allow(unused)]
     async fn check_tool_permission(
         &self,
         tool_input: &ToolCatalog,
@@ -280,19 +280,18 @@ impl<
             context.send(content).await?;
         }
 
-        // Check permissions before executing the tool
-        // if self.check_tool_permission(&tool_input, context).await? {
-        //     // Send formatted output message for policy denial
+        // Check permissions before executing the tool (if enabled)
+        if env.enable_permissions && self.check_tool_permission(&tool_input, context).await? {
+            // Send formatted output message for policy denial
+            context
+                .send(TitleFormat::error("Permission Denied"))
+                .await?;
 
-        //     context
-        //         .send(ContentFormat::from(TitleFormat::error("Permission Denied")))
-        //         .await?;
-
-        //     return Ok(ToolOutput::text(
-        //         Element::new("permission_denied")
-        //             .cdata("User has denied the permission to execute this tool"),
-        //     ));
-        // }
+            return Ok(ToolOutput::text(
+                Element::new("permission_denied")
+                    .cdata("User has denied the permission to execute this tool"),
+            ));
+        }
 
         let execution_result = self.call_internal(tool_input.clone()).await;
 

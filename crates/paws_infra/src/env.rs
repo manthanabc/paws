@@ -58,6 +58,8 @@ impl PawsEnvironmentInfra {
         let override_model = parse_env::<String>("FORGE_OVERRIDE_MODEL").map(ModelId::new);
         let override_provider = parse_env::<String>("FORGE_OVERRIDE_PROVIDER")
             .and_then(|s| ProviderId::from_str(&s).ok());
+        let enable_permissions =
+            parse_env::<bool>("FORGE_ENABLE_PERMISSIONS").unwrap_or(cfg!(debug_assertions));
 
         Environment {
             os: std::env::consts::OS.to_string(),
@@ -90,6 +92,7 @@ impl PawsEnvironmentInfra {
             sem_search_top_k: parse_env::<usize>("FORGE_SEM_SEARCH_TOP_K").unwrap_or(10),
             override_model,
             override_provider,
+            enable_permissions,
         }
     }
 

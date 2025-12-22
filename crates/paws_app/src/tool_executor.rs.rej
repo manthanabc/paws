@@ -1,0 +1,9 @@
+diff a/crates/paws_app/src/tool_executor.rs b/crates/paws_app/src/tool_executor.rs	(rejected hunks)
+@@ -4,6 +4,7 @@ use std::sync::Arc;
+ use paws_domain::{
+     CodebaseQueryResult, TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput,
+ };
++use paws_template::Element;
+ 
+ use crate::fmt::content::FormatContent;
+ use crate::operation::{TempContentFiles, ToolOperation};

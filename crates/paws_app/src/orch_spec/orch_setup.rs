@@ -89,6 +89,7 @@ impl Default for TestContext {
 
                 override_model: None,
                 override_provider: None,
+                enable_permissions: false,
             },
             title: Some("test-conversation".into()),
             agent: Agent::new(
