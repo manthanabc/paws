@@ -8,7 +8,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}Installing Forge...${NC}"
+echo -e "${BLUE}Installing Paws...${NC}"
 
 # Detect architecture
 ARCH=$(uname -m)
@@ -27,9 +27,9 @@ esac
 
 # Detect OS
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-if [ "$OS" != "linux" ]; then
-    echo -e "${RED}This script is for Linux only. For other platforms, please see:${NC}"
-    echo -e "${BLUE}https://github.com/antinomyhq/forge#installation${NC}"
+if [ "$OS" != "linuxe" ]; then
+    echo -e "${RED}This script is not ready yet. please see:${NC}"
+    echo -e "${BLUE}https://github.com/manthanabc/paws#installation${NC}"
     exit 1
 fi
 
@@ -45,25 +45,25 @@ fi
 VERSION="${1:-latest}"
 
 # Construct download URL
-DOWNLOAD_URL="https://release-download.tailcall.workers.dev/download/$VERSION/forge-$ARCH-unknown-linux$LIBC_SUFFIX"
+DOWNLOAD_URL="https://eeeeee.eeee/download/$VERSION/paws-$ARCH-unknown-linux$LIBC_SUFFIX"
 
 # Create temp directory
 TMP_DIR=$(mktemp -d)
 
-# Download Forge
-echo -e "${BLUE}Downloading Forge from $DOWNLOAD_URL...${NC}"
-curl -L "$DOWNLOAD_URL" -o "$TMP_DIR/forge"
+# Download Paws
+echo -e "${BLUE}Downloading PAWS from $DOWNLOAD_URL...${NC}"
+curl -L "$DOWNLOAD_URL" -o "$TMP_DIR/paws"
 
 # Install
 echo -e "${BLUE}Installing to /usr/local/bin...${NC}"
-sudo mv "$TMP_DIR/forge" "/usr/local/bin/"
-sudo chmod +x "/usr/local/bin/forge"
+sudo mv "$TMP_DIR/paws" "/usr/local/bin/"
+sudo chmod +x "/usr/local/bin/paws"
 rm -rf "$TMP_DIR"
 
 # Verify installation
-if command -v forge >/dev/null 2>&1; then
-    echo -e "${GREEN}Forge has been successfully installed!${NC}"
-    echo -e "${BLUE}You can now run 'forge' to get started.${NC}"
+if command -v paws >/dev/null 2>&1; then
+    echo -e "${GREEN}Paws has been successfully installed!${NC}"
+    echo -e "${BLUE}You can now run 'paws' to get started.${NC}"
 else
     echo -e "${RED}Installation failed. Please try again or install manually.${NC}"
     exit 1
