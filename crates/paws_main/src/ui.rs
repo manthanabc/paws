@@ -319,6 +319,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                         _ = ctrl_c_rx.recv() => {
                             tracing::info!("User interrupted operation with Ctrl+C (spinner)");
+                            println!("{} {}", "❌".red().bold(), "User interrupted.".bold());
                         }
                         result = self.on_command(command) => {
                             match result {
