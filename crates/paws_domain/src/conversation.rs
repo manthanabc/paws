@@ -6,7 +6,7 @@ use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Context, Error, Metrics, Result};
+use crate::{Context, Error, Metrics, Result, TokenCount};
 
 #[derive(Debug, Default, Display, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(transparent)]
@@ -118,6 +118,10 @@ impl Conversation {
             .as_ref()
             .and_then(|ctx| ctx.messages.last())
             .and_then(|msg| msg.usage)
+    }
+
+    pub fn token_count(&self) -> Option<TokenCount> {
+        self.context.as_ref().map(|ctx| ctx.token_count())
     }
 
     pub fn accumulated_cost(&self) -> Option<f64> {

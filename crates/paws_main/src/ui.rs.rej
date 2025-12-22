@@ -1,0 +1,18 @@
+diff a/crates/paws_main/src/ui.rs b/crates/paws_main/src/ui.rs	(rejected hunks)
+@@ -33,7 +33,6 @@ use crate::cli::{
+ };
+ use crate::conversation_selector::ConversationSelector;
+ use crate::display_constants::{CommandType, headers, markers, status};
+-use crate::env::should_show_completion_prompt;
+ use crate::info::Info;
+ use crate::input::Console;
+ use crate::model::{CliModel, CliProvider, ForgeCommandManager, SlashCommand};
+@@ -2835,7 +2830,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
+         let rprompt = ZshRPrompt::default()
+             .agent(std::env::var("_FORGE_ACTIVE_AGENT").ok().map(AgentId::new))
+             .model(model_id)
+-            .token_count(conversation.and_then(|c| c.usage()).map(|u| u.total_tokens));
++            .token_count(conversation.and_then(|conversation| conversation.token_count()));
+ 
+         Some(rprompt.to_string())
+     }

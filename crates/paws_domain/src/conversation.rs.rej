@@ -1,0 +1,12 @@
+diff a/crates/paws_domain/src/conversation.rs b/crates/paws_domain/src/conversation.rs	(rejected hunks)
+@@ -121,6 +121,10 @@ impl Conversation {
+             .last()
+     }
+ 
++    pub fn token_count(&self) -> Option<TokenCount> {
++        self.context.as_ref().map(|ctx| ctx.token_count())
++    }
++
+     pub fn accumulated_cost(&self) -> Option<f64> {
+         self.accumulated_usage().and_then(|usage| usage.cost)
+     }

@@ -33,7 +33,6 @@ use crate::cli::{
 };
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
-use crate::env::should_show_completion_prompt;
 use crate::info::Info;
 use crate::input::Console;
 use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
@@ -2496,10 +2495,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
-        if !should_show_completion_prompt() {
-            return Ok(());
-        }
-
         self.spinner.start(Some("Loading Summary"))?;
 
         let info = Info::default().extend(&conversation);
