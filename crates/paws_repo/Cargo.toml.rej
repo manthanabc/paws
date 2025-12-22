@@ -1,0 +1,9 @@
+diff a/crates/paws_repo/Cargo.toml b/crates/paws_repo/Cargo.toml	(rejected hunks)
+@@ -10,6 +10,7 @@ paws_infra.workspace = true
+ paws_snaps.workspace = true
+ paws_fs.workspace = true
+ paws_template.workspace = true
++paws_json_repair.workspace = true
+ 
+ anyhow.workspace = true
+ futures.workspace = true
