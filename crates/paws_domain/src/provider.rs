@@ -63,6 +63,7 @@ impl ProviderId {
     pub const OPENAI_COMPATIBLE: ProviderId = ProviderId(Cow::Borrowed("openai_compatible"));
     pub const ANTHROPIC_COMPATIBLE: ProviderId = ProviderId(Cow::Borrowed("anthropic_compatible"));
     pub const IO_INTELLIGENCE: ProviderId = ProviderId(Cow::Borrowed("io_intelligence"));
+    pub const BEDROCK: ProviderId = ProviderId(Cow::Borrowed("bedrock"));
 
     /// Returns all built-in provider IDs
     ///
@@ -86,6 +87,7 @@ impl ProviderId {
             ProviderId::OPENAI_COMPATIBLE,
             ProviderId::ANTHROPIC_COMPATIBLE,
             ProviderId::IO_INTELLIGENCE,
+            ProviderId::BEDROCK,
         ]
     }
 
@@ -105,6 +107,7 @@ impl ProviderId {
             "vertex_ai" => "VertexAI".to_string(),
             "openai_compatible" => "OpenAICompatible".to_string(),
             "io_intelligence" => "IOIntelligence".to_string(),
+            "bedrock" => "Bedrock".to_string(),
             _ => {
                 // For other providers, use UpperCamelCase conversion
                 use convert_case::{Case, Casing};
@@ -161,6 +164,7 @@ impl From<String> for ProviderId {
 pub enum ProviderResponse {
     OpenAI,
     Anthropic,
+    Bedrock,
 }
 
 /// Represents the source of models for a provider
