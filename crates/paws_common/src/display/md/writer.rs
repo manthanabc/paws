@@ -8,6 +8,7 @@ pub struct MarkdownWriter {
     renderer: MarkdownRenderer,
     previous_rendered: String,
     last_was_dimmed: bool,
+    max_height: Option<usize>,
 }
 
 impl MarkdownWriter {
@@ -17,7 +18,16 @@ impl MarkdownWriter {
             renderer: MarkdownRenderer::default(),
             previous_rendered: String::new(),
             last_was_dimmed: false,
+            max_height: None,
         }
+    }
+
+    pub fn set_max_height(&mut self, max_height: Option<usize>) {
+        self.max_height = max_height;
+    }
+
+    pub fn height(&self) -> usize {
+        self.renderer.height
     }
 }
 impl Default for MarkdownWriter {
@@ -53,12 +63,21 @@ impl MarkdownWriter {
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
-        let lines_new: Vec<&str> = content.lines().collect();
+        let mut lines_new: Vec<&str> = content.lines().collect();
         let lines_prev: Vec<String> = self
             .previous_rendered
             .lines()
             .map(|s| s.to_string())
             .collect();
+
+        // Apply max_height truncation if set
+        if let Some(max_h) = self.max_height {
+            if lines_new.len() > max_h {
+                // Keep only the last max_h lines
+                let start = lines_new.len() - max_h;
+                lines_new = lines_new[start..].to_vec();
+            }
+        }
 
         // Compute common prefix to minimize redraw
         let common = lines_prev
@@ -92,7 +111,7 @@ impl MarkdownWriter {
 
         // Write above spinner; spinner will redraw itself
         let _ = spn.write_ln(out);
-        self.previous_rendered = content.to_string();
+        self.previous_rendered = lines_new.join("\n");
     }
 }
 

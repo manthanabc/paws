@@ -95,6 +95,7 @@ pub struct UI<A, F: Fn() -> A> {
     cli: Cli,
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
+    thinking_start: Option<std::time::Instant>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: paws_services::log::Guard,
 }
@@ -222,6 +223,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             spinner,
             ctrl_c_rx,
             markdown: MarkdownWriter::new(),
+            thinking_start: None,
             _guard: paws_services::log::init_tracing(env.log_path())?,
         })
     }
@@ -2409,6 +2411,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
+                    self.finish_thinking().await?;
                     self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
@@ -2416,11 +2419,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 // Hide spinner while tool call
                 let _ = self.spinner.hide();
             }
-            ChatResponse::ToolCallEnd(_toolcall_result) => {
-                // Only track toolcall name in case of success else track the error.
-
+            ChatResponse::ToolCallEnd(toolcall_result) => {
+                self.finish_thinking().await?;
                 // Resume the spinner as tool call is over
                 let _ = self.spinner.show();
+
+                if toolcall_result.name.as_str() == "execute_shell_command" {
+                    if let Some(output) = toolcall_result.output.as_str() {
+                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
+                        self.markdown.set_max_height(Some(max_h));
+                        self.markdown.add_chunk(output, &mut self.spinner);
+                        self.markdown.reset();
+                        self.markdown.set_max_height(None);
+                    }
+                }
 
                 if !self.cli.verbose {
                     return Ok(());
@@ -2449,10 +2461,16 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
+                    if self.thinking_start.is_none() {
+                        self.thinking_start = Some(std::time::Instant::now());
+                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
+                        self.markdown.set_max_height(Some(max_h));
+                    }
                     self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
                 }
             }
             ChatResponse::TaskComplete => {
+                self.finish_thinking().await?;
                 if let Some(conversation_id) = self.state.conversation_id
                     && let Ok(conversation) =
                         self.validate_conversation_exists(&conversation_id).await
@@ -2460,6 +2478,21 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.on_show_conv_info(conversation).await?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    async fn finish_thinking(&mut self) -> Result<()> {
+        if let Some(start) = self.thinking_start.take() {
+            let duration = start.elapsed();
+            self.markdown.reset();
+            self.markdown.set_max_height(None);
+            // Clear the boxed thinking from terminal
+            self.spinner.write_ln("\x1b[1A\x1b[0J")?;
+            self.writeln_title(TitleFormat::info(format!(
+                "Thought for {:.1} seconds",
+                duration.as_secs_f64()
+            )))?;
         }
         Ok(())
     }
