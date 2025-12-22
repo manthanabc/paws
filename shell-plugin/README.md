@@ -4,7 +4,7 @@ A powerful ZSH plugin that provides intelligent command transformation, file tag
 
 ## Features
 
-- **Smart Command Transformation**: Convert `:command` syntax into forge executions
+- **Smart Command Transformation**: Convert `:command` syntax into paws executions
 - **Agent Selection**: Tab completion for available agents using `:agent_name`
 - **File Tagging**: Interactive file selection with `@[filename]` syntax
 - **Syntax Highlighting**: Visual feedback for commands and tagged files
@@ -17,7 +17,7 @@ Before using this plugin, ensure you have the following tools installed:
 
 - **fzf** - Command-line fuzzy finder
 - **fd** - Fast file finder (alternative to find)
-- **forge** - The Forge CLI tool
+- **paws** - The Forge CLI tool
 
 ### Installation of Prerequisites
 
@@ -164,13 +164,13 @@ The plugin provides visual feedback through syntax highlighting:
 Customize the plugin behavior by setting these variables before loading the plugin:
 
 ```bash
-# Custom forge binary location
-export FORGE_BIN="/path/to/custom/forge"
+# Custom paws binary location
+export PAWS_BIN="/path/to/custom/paws"
 ```
 
 ### Available Configuration Variables
 
-- `FORGE_BIN`: Path to the forge executable (default: `forge`)
+- `PAWS_BIN`: Path to the paws executable (default: `paws`)
 - Internal pattern matching for conversation syntax (`:`)
 - New session command keyword: `:new` or `:n`
 
@@ -184,11 +184,11 @@ Sync your codebase for semantic search:
 
 This will index the current directory for semantic code search.
 
-### .forge Directory
+### .paws Directory
 
-The plugin creates a `.forge` directory in your current working directory (similar to `.git`) for temporary files:
+The plugin creates a `.paws` directory in your current working directory (similar to `.git`) for temporary files:
 
-- `FORGE_EDITMSG.md`: Temporary file used when opening an external editor with `:edit`
+- `PAWS_EDITMSG.md`: Temporary file used when opening an external editor with `:edit`
 
 ## Advanced Features
 
@@ -197,14 +197,14 @@ The plugin creates a `.forge` directory in your current working directory (simil
 All transformed commands are properly saved to ZSH history, allowing you to:
 
 - Navigate command history with arrow keys
-- Search previous forge commands with `Ctrl+R`
+- Search previous paws commands with `Ctrl+R`
 - Reuse complex commands with file tags
 
 ### Keyboard Shortcuts
 
 - **Tab**: Interactive completion for files (`@`) and agents (`:`)
 - **Enter**: Transform and execute `:commands`
-- **Ctrl+C**: Interrupt running forge commands
+- **Ctrl+C**: Interrupt running paws commands
 
 ## Examples
 

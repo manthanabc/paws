@@ -7,20 +7,20 @@
 # 1. Check if user_action is a CUSTOM command -> execute with `cmd` subcommand
 # 2. If no input_text -> switch to agent (for AGENT type commands)
 # 3. If input_text -> execute command with active agent context
-function _forge_action_default() {
+function _paws_action_default() {
     local user_action="$1"
     local input_text="$2"
     
     # Validate that the command exists in show-commands (if user_action is provided)
     if [[ -n "$user_action" ]]; then
-        local commands_list=$(_forge_get_commands)
+        local commands_list=$(_paws_get_commands)
         if [[ -n "$commands_list" ]]; then
             # Check if the user_action is in the list of valid commands and extract the row
             local command_row=$(echo "$commands_list" | grep "^${user_action}\b")
             if [[ -z "$command_row" ]]; then
                 echo
-                _forge_log error "Command '\033[1m${user_action}\033[0m' not found"
-                _forge_reset
+                _paws_log error "Command '\033[1m${user_action}\033[0m' not found"
+                _paws_reset
                 return 0
             fi
             
@@ -30,16 +30,16 @@ function _forge_action_default() {
             # Case-insensitive comparison using :l (lowercase) modifier
             if [[ "${command_type:l}" == "custom" ]]; then
                 # Generate conversation ID if needed
-                [[ -z "$_FORGE_CONVERSATION_ID" ]] && _FORGE_CONVERSATION_ID=$($_FORGE_BIN conversation new)
+                [[ -z "$_PAWS_CONVERSATION_ID" ]] && _PAWS_CONVERSATION_ID=$($_PAWS_BIN conversation new)
                 
                 echo
                 # Execute custom command with run subcommand
                 if [[ -n "$input_text" ]]; then
-                    _forge_exec cmd --cid "$_FORGE_CONVERSATION_ID" "$user_action" "$input_text"
+                    _paws_exec cmd --cid "$_PAWS_CONVERSATION_ID" "$user_action" "$input_text"
                 else
-                    _forge_exec cmd --cid "$_FORGE_CONVERSATION_ID" "$user_action"
+                    _paws_exec cmd --cid "$_PAWS_CONVERSATION_ID" "$user_action"
                 fi
-                _forge_reset
+                _paws_reset
                 return 0
             fi
         fi
@@ -50,33 +50,33 @@ function _forge_action_default() {
         if [[ -n "$user_action" ]]; then
             echo
             # Set the agent in the local variable
-            _FORGE_ACTIVE_AGENT="$user_action"
-            _forge_log info "\033[1;37m${_FORGE_ACTIVE_AGENT:u}\033[0m \033[90mis now the active agent\033[0m"
+            _PAWS_ACTIVE_AGENT="$user_action"
+            _paws_log info "\033[1;37m${_PAWS_ACTIVE_AGENT:u}\033[0m \033[90mis now the active agent\033[0m"
         fi
-        _forge_reset
+        _paws_reset
         return 0
     fi
     
     # Generate conversation ID if needed (in parent shell context)
-    if [[ -z "$_FORGE_CONVERSATION_ID" ]]; then
-        _FORGE_CONVERSATION_ID=$($_FORGE_BIN conversation new)
+    if [[ -z "$_PAWS_CONVERSATION_ID" ]]; then
+        _PAWS_CONVERSATION_ID=$($_PAWS_BIN conversation new)
     fi
     
     echo
     
     # Only set the agent if user explicitly specified one
     if [[ -n "$user_action" ]]; then
-        _FORGE_ACTIVE_AGENT="$user_action"
+        _PAWS_ACTIVE_AGENT="$user_action"
     fi
     
-    # Execute the forge command directly with proper escaping
-    _forge_exec -p "$input_text" --cid "$_FORGE_CONVERSATION_ID"
+    # Execute the paws command directly with proper escaping
+    _paws_exec -p "$input_text" --cid "$_PAWS_CONVERSATION_ID"
     
     # Reset the prompt
-    _forge_reset
+    _paws_reset
 }
 
-function forge-accept-line() {
+function paws-accept-line() {
     # Save the original command for history
     local original_buffer="$BUFFER"
     
@@ -108,7 +108,7 @@ function forge-accept-line() {
     print -s -- "$original_buffer"
     
     # CRITICAL: For multiline buffers, move cursor to end so output doesn't overwrite
-    # Don't clear BUFFER yet - let _forge_reset do that after action completes
+    # Don't clear BUFFER yet - let _paws_reset do that after action completes
     # This keeps buffer state consistent if Ctrl+C is pressed
     if [[ "$BUFFER" == *$'\n'* ]]; then
         CURSOR=${#BUFFER}
@@ -126,70 +126,70 @@ function forge-accept-line() {
     esac
     
     # ⚠️  IMPORTANT: When adding a new command here, you MUST also update:
-    #     crates/forge_main/src/built_in_commands.json
+    #     crates/paws_main/src/built_in_commands.json
     #     Add a new entry: {"command": "name", "description": "Description [alias: x]"}
     #
     # Dispatch to appropriate action handler using pattern matching
     case "$user_action" in
         new|n)
-            _forge_action_new
+            _paws_action_new
         ;;
         info|i)
-            _forge_action_info
+            _paws_action_info
         ;;
         env|e)
-            _forge_action_env
+            _paws_action_env
         ;;
         dump|d)
-            _forge_action_dump "$input_text"
+            _paws_action_dump "$input_text"
         ;;
         compact)
-            _forge_action_compact
+            _paws_action_compact
         ;;
         retry|r)
-            _forge_action_retry
+            _paws_action_retry
         ;;
         agent|a)
-            _forge_action_agent "$input_text"
+            _paws_action_agent "$input_text"
         ;;
         conversation|c)
-            _forge_action_conversation "$input_text"
+            _paws_action_conversation "$input_text"
         ;;
         provider|p)
-            _forge_action_provider
+            _paws_action_provider
         ;;
         model|m)
-            _forge_action_model
+            _paws_action_model
         ;;
         tools|t)
-            _forge_action_tools
+            _paws_action_tools
         ;;
         skill)
-            _forge_action_skill
+            _paws_action_skill
         ;;
         edit|ed)
-            _forge_action_editor "$input_text"
+            _paws_action_editor "$input_text"
         ;;
         commit)
-            _forge_action_commit "$input_text"
+            _paws_action_commit "$input_text"
         ;;
         suggest|s)
-            _forge_action_suggest "$input_text"
+            _paws_action_suggest "$input_text"
         ;;
         clone)
-            _forge_action_clone "$input_text"
+            _paws_action_clone "$input_text"
         ;;
         sync)
-            _forge_action_sync
+            _paws_action_sync
         ;;
         login)
-            _forge_action_login
+            _paws_action_login
         ;;
         logout)
-            _forge_action_logout
+            _paws_action_logout
         ;;
         *)
-            _forge_action_default "$user_action" "$input_text"
+            _paws_action_default "$user_action" "$input_text"
         ;;
     esac
 }

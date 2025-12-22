@@ -14,7 +14,7 @@ const BANNER: &str = include_str!("banner");
 ///
 /// # Environment Variables
 ///
-/// * `FORGE_BANNER` - Optional custom banner text to display instead of the
+/// * `PAWS_BANNER` - Optional custom banner text to display instead of the
 ///   default
 pub fn display(cli_mode: bool) -> io::Result<()> {
     // Check for custom banner via environment variable

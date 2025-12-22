@@ -3,35 +3,35 @@
 # Editor and command suggestion action handlers
 
 # Action handler: Open external editor for command composition
-function _forge_action_editor() {
+function _paws_action_editor() {
     local initial_text="$1"
     echo
     
-    # Determine editor in order of preference: FORGE_EDITOR > EDITOR > nano
-    local editor_cmd="${FORGE_EDITOR:-${EDITOR:-nano}}"
+    # Determine editor in order of preference: PAWS_EDITOR > EDITOR > nano
+    local editor_cmd="${PAWS_EDITOR:-${EDITOR:-nano}}"
     
     # Validate editor exists
     if ! command -v "${editor_cmd%% *}" &>/dev/null; then
-        _forge_log error "Editor not found: $editor_cmd (set FORGE_EDITOR or EDITOR)"
-        _forge_reset
+        _paws_log error "Editor not found: $editor_cmd (set PAWS_EDITOR or EDITOR)"
+        _paws_reset
         return 1
     fi
     
-    # Create .forge directory if it doesn't exist
-    local forge_dir=".forge"
-    if [[ ! -d "$forge_dir" ]]; then
-        mkdir -p "$forge_dir" || {
-            _forge_log error "Failed to create .forge directory"
-            _forge_reset
+    # Create .paws directory if it doesn't exist
+    local paws_dir=".paws"
+    if [[ ! -d "$paws_dir" ]]; then
+        mkdir -p "$paws_dir" || {
+            _paws_log error "Failed to create .paws directory"
+            _paws_reset
             return 1
         }
     fi
     
-    # Create temporary file with git-like naming: FORGE_EDITMSG.md
-    local temp_file="${forge_dir}/FORGE_EDITMSG.md"
+    # Create temporary file with git-like naming: PAWS_EDITMSG.md
+    local temp_file="${paws_dir}/PAWS_EDITMSG.md"
     touch "$temp_file" || {
-        _forge_log error "Failed to create temporary file"
-        _forge_reset
+        _paws_log error "Failed to create temporary file"
+        _paws_reset
         return 1
     }
     
@@ -48,8 +48,8 @@ function _forge_action_editor() {
     local editor_exit_code=$?
     
     if [ $editor_exit_code -ne 0 ]; then
-        _forge_log error "Editor exited with error code $editor_exit_code"
-        _forge_reset
+        _paws_log error "Editor exited with error code $editor_exit_code"
+        _paws_reset
         return 1
     fi
     
@@ -58,8 +58,8 @@ function _forge_action_editor() {
     content=$(cat "$temp_file" | tr -d '\r')
     
     if [ -z "$content" ]; then
-        _forge_log info "Editor closed with no content"
-        _forge_reset
+        _paws_log info "Editor closed with no content"
+        _paws_reset
         return 0
     fi
     
@@ -67,25 +67,25 @@ function _forge_action_editor() {
     BUFFER=": $content"
     CURSOR=${#BUFFER}
     
-    _forge_log info "Command ready - press Enter to execute"
+    _paws_log info "Command ready - press Enter to execute"
     zle reset-prompt
 }
 
 # Action handler: Generate shell command from natural language
 # Usage: :? <description>
-function _forge_action_suggest() {
+function _paws_action_suggest() {
     local description="$1"
     
     if [[ -z "$description" ]]; then
-        _forge_log error "Please provide a command description"
-        _forge_reset
+        _paws_log error "Please provide a command description"
+        _paws_reset
         return 0
     fi
     
     echo
     # Generate the command
     local generated_command
-    generated_command=$(FORCE_COLOR=true CLICOLOR_FORCE=1 _forge_exec suggest "$description")
+    generated_command=$(FORCE_COLOR=true CLICOLOR_FORCE=1 _paws_exec suggest "$description")
     
     if [[ -n "$generated_command" ]]; then
         # Replace the buffer with the generated command
@@ -93,7 +93,7 @@ function _forge_action_suggest() {
         CURSOR=${#BUFFER}
         zle reset-prompt
     else
-        _forge_log error "Failed to generate command"
-        _forge_reset
+        _paws_log error "Failed to generate command"
+        _paws_reset
     fi
 }

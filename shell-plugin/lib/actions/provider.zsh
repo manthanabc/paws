@@ -3,16 +3,16 @@
 # Provider selection helper
 
 # Helper function to select a provider from the list
-# Usage: _forge_select_provider [filter_status] [current_provider] [filter_type]
+# Usage: _paws_select_provider [filter_status] [current_provider] [filter_type]
 # Returns: selected provider line (via stdout)
-function _forge_select_provider() {
+function _paws_select_provider() {
     local filter_status="${1:-}"
     local current_provider="${2:-}"
     local filter_type="${3:-}"
     local output
     
     # Build the command with type filter if specified
-    local cmd="$_FORGE_BIN list provider --porcelain"
+    local cmd="$_PAWS_BIN list provider --porcelain"
     if [[ -n "$filter_type" ]]; then
         cmd="$cmd --type=$filter_type"
     fi
@@ -20,7 +20,7 @@ function _forge_select_provider() {
     output=$(eval "$cmd" 2>/dev/null)
     
     if [[ -z "$output" ]]; then
-        _forge_log error "No providers available"
+        _paws_log error "No providers available"
         return 1
     fi
     
@@ -30,7 +30,7 @@ function _forge_select_provider() {
         local header=$(echo "$output" | head -n 1)
         local filtered=$(echo "$output" | tail -n +2 | grep -i "$filter_status")
         if [[ -z "$filtered" ]]; then
-            _forge_log error "No ${filter_status} providers found"
+            _paws_log error "No ${filter_status} providers found"
             return 1
         fi
         output=$(printf "%s\n%s" "$header" "$filtered")
@@ -38,11 +38,11 @@ function _forge_select_provider() {
     
     # Get current provider if not provided
     if [[ -z "$current_provider" ]]; then
-        current_provider=$($_FORGE_BIN config get provider --porcelain 2>/dev/null)
+        current_provider=$($_PAWS_BIN config get provider --porcelain 2>/dev/null)
     fi
     
     local fzf_args=(
-        --delimiter="$_FORGE_DELIMITER"
+        --delimiter="$_PAWS_DELIMITER"
         --prompt="Provider ❯ "
         --with-nth=1,3..
     )
@@ -50,12 +50,12 @@ function _forge_select_provider() {
     # Position cursor on current provider if available
     if [[ -n "$current_provider" ]]; then
         # For providers, compare against the first field (display name)
-        local index=$(_forge_find_index "$output" "$current_provider" 1)
+        local index=$(_paws_find_index "$output" "$current_provider" 1)
         fzf_args+=(--bind="start:pos($index)")
     fi
     
     local selected
-    selected=$(echo "$output" | _forge_fzf --header-lines=1 "${fzf_args[@]}")
+    selected=$(echo "$output" | _paws_fzf --header-lines=1 "${fzf_args[@]}")
     
     if [[ -n "$selected" ]]; then
         echo "$selected"
