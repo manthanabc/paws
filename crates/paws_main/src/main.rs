@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 use paws_api::PawsAPI;
 use paws_domain::TitleFormat;
-use paws_main::{Cli, Sandbox, TitleDisplayExt, UI, tracker};
+use paws_main::{Cli, Sandbox, TitleDisplayExt, UI};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
         };
 
         println!("{}", TitleFormat::error(message.to_string()).display());
-        tracker::error_blocking(message);
+
         std::process::exit(1);
     }));
 

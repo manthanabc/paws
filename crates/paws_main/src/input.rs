@@ -5,7 +5,6 @@ use paws_api::Environment;
 use crate::editor::{PawsEditor, ReadResult};
 use crate::model::{PawsCommandManager, SlashCommand};
 use crate::prompt::PawsPrompt;
-use crate::tracker;
 
 /// Console implementation for handling user input via command line.
 pub struct Console {
@@ -32,7 +31,6 @@ impl Console {
                 ReadResult::Exit => return Ok(SlashCommand::Exit),
                 ReadResult::Empty => continue,
                 ReadResult::Success(text) => {
-                    tracker::prompt(text.clone());
                     return self.command.parse(&text);
                 }
             }

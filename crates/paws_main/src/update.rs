@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use colored::Colorize;
 use paws_api::{API, Update};
-use paws_services::tracker::VERSION;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 use update_informer::{Check, Version, registry};
 
 /// Package name for paws on npm.
@@ -17,9 +17,7 @@ async fn execute_update_command(api: Arc<impl API>) {
 
     match output {
         Err(err) => {
-            // Send an event to the tracker on failure
-            // We don't need to handle this result since we're failing silently
-            let _ = send_update_failure_event(&format!("Auto update failed {err}")).await;
+            tracing::error!(error = ?err, "Auto update failed");
         }
         Ok(output) => {
             if output.success() {
@@ -36,8 +34,7 @@ async fn execute_update_command(api: Arc<impl API>) {
                     Some(code) => format!("Process exited with code: {code}"),
                     None => "Process exited without code".to_string(),
                 };
-                let _ =
-                    send_update_failure_event(&format!("Auto update failed, {exit_output}",)).await;
+                tracing::error!(error = exit_output, "Auto update failed");
             }
         }
     }
@@ -80,11 +77,4 @@ pub async fn on_update(api: Arc<impl API>, update: Option<&Update>) {
     {
         execute_update_command(api).await;
     }
-}
-
-/// Sends an event to the tracker when an update fails
-async fn send_update_failure_event(error_msg: &str) -> anyhow::Result<()> {
-    tracing::error!(error = error_msg, "Update failed");
-    // Always return Ok since we want to fail silently
-    Ok(())
 }

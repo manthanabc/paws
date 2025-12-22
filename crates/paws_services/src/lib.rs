@@ -10,6 +10,7 @@ mod env;
 mod error;
 mod http;
 mod instructions;
+pub mod log;
 mod mcp;
 mod paws_services;
 mod policy;
@@ -19,7 +20,6 @@ mod range;
 pub mod snaps;
 mod template;
 mod tool_services;
-pub mod tracker;
 mod utils;
 mod workflow;
 
