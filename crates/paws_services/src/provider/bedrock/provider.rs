@@ -54,6 +54,7 @@ impl<H: HttpClientService> BedrockProvider<H> {
         let config = aws_sdk_bedrockruntime::Config::builder()
             .region(aws_sdk_bedrockruntime::config::Region::new(region.clone()))
             .bearer_token(Token::new(bearer_token, None))
+            .sleep_impl(aws_smithy_async::rt::sleep::TokioSleep::new())
             .build();
 
         let client = aws_sdk_bedrockruntime::Client::from_conf(config);

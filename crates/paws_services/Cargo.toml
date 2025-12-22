@@ -126,6 +126,9 @@ workspace = true
 [dependencies.aws-smithy-types]
 workspace = true
 
+[dependencies.aws-smithy-async]
+workspace = true
+
 [dependencies.schemars]
 workspace = true
 
