@@ -117,6 +117,21 @@ features = [ "reqwest",]
 [dependencies.http]
 workspace = true
 
+[dependencies.aws-config]
+workspace = true
+
+[dependencies.aws-sdk-bedrockruntime]
+workspace = true
+
+[dependencies.aws-smithy-types]
+workspace = true
+
+[dependencies.aws-smithy-async]
+workspace = true
+
+[dependencies.schemars]
+workspace = true
+
 [dependencies.paws_common]
 workspace = true
 
