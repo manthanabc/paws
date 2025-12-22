@@ -4,7 +4,7 @@
 
 set -e
 
-FORGE_BIN="${1:-./target/debug/forge}"
+FORGE_BIN="${1:-./target/debug/paws}"
 
 if [ ! -f "$FORGE_BIN" ]; then
     echo "Error: forge binary not found at $FORGE_BIN"
