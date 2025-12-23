@@ -179,9 +179,6 @@ function paws-accept-line() {
         clone)
             _paws_action_clone "$input_text"
         ;;
-        sync)
-            _paws_action_sync
-        ;;
         login)
             _paws_action_login
         ;;

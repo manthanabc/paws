@@ -99,13 +99,6 @@ function _paws_action_model() {
     _paws_reset
 }
 
-# Action handler: Sync workspace for codebase search
-function _paws_action_sync() {
-    echo
-    _paws_exec workspace sync
-    _paws_reset
-}
-
 # Helper function to select and set config values with fzf
 function _paws_select_and_set_config() {
     local show_command="$1"
