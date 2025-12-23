@@ -2789,28 +2789,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage { content, role, .. }) => {
-                    match role {
-                        Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str())
-                                .expect("UMM");
-                            eprintln!("\n\n\n||{}", content_to_show);
-                        }
-                        Role::Assistant => {
-                            // let agent_id = self
-                            //     .api
-                            //     .get_active_agent()
-                            //     .await
-                            //     .unwrap_or_else(|| AgentId::new("paws"));
-                            self.markdown.add_chunk(content, &mut self.spinner);
-                            //self.markdown.reset();
-                        }
-                        _ => {}
+                ContextMessage::Text(TextMessage { content, role, .. }) => match role {
+                    Role::User => {
+                        let content_to_show = message
+                            .as_value()
+                            .and_then(|v| v.as_user_prompt())
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_else(|| content.clone());
+
+                        println!("{}", TitleFormat::user(content_to_show).display());
                     }
-                }
+                    Role::Assistant => {
+                        self.writeln("")?;
+                        self.markdown.add_chunk(content, &mut self.spinner);
+                        self.writeln("")?;
+                        self.markdown.reset();
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
         }
