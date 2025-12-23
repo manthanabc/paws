@@ -2788,30 +2788,27 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
         for message in &context.messages {
-            match &**message {
-                ContextMessage::Text(TextMessage { content, role, .. }) => {
-                    match role {
-                        Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str())
-                                .expect("UMM");
-                            eprintln!("\n\n\n||{}", content_to_show);
-                        }
-                        Role::Assistant => {
-                            // let agent_id = self
-                            //     .api
-                            //     .get_active_agent()
-                            //     .await
-                            //     .unwrap_or_else(|| AgentId::new("paws"));
-                            self.markdown.add_chunk(content, &mut self.spinner);
-                            //self.markdown.reset();
-                        }
-                        _ => {}
+            if let ContextMessage::Text(TextMessage { content, role, .. }) = &**message {
+                match role {
+                    Role::User => {
+                        let content_to_show = message
+                            .as_value()
+                            .and_then(|v| v.as_user_prompt())
+                            .map(|p| p.as_str())
+                            .expect("UMM");
+                        eprintln!("\n\n\n||{}", content_to_show);
                     }
+                    Role::Assistant => {
+                        // let agent_id = self
+                        //     .api
+                        //     .get_active_agent()
+                        //     .await
+                        //     .unwrap_or_else(|| AgentId::new("paws"));
+                        self.markdown.add_chunk(content, &mut self.spinner);
+                        //self.markdown.reset();
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
