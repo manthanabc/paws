@@ -81,10 +81,11 @@ impl MarkdownWriter {
 
         // Apply max_height truncation if set
         if let Some(max_h) = self.max_height
-            && lines_new.len() > max_h {
-                // Keep only the last max_h lines
-                let start = lines_new.len() - max_h;
-                lines_new = lines_new[start..].to_vec();
+            && lines_new.len() > max_h
+        {
+            // Keep only the last max_h lines
+            let start = lines_new.len() - max_h;
+            lines_new = lines_new[start..].to_vec();
         }
 
         // Compute common prefix to minimize redraw
