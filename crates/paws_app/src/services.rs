@@ -8,7 +8,8 @@ use paws_domain::{
     AgentId, AnyProvider, Attachment, AuthContextRequest, AuthContextResponse, AuthMethod,
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
     Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation, Provider,
-    ProviderId, ResultStream, Scope, Template, ToolCallFull, ToolOutput, Workflow,
+    ProviderId, ResultStream, Scope, SyntaxError, Template, ToolCallFull, ToolOutput, Workflow,
+
 };
 use reqwest::Response;
 use reqwest::header::HeaderMap;
@@ -26,6 +27,7 @@ pub struct ShellOutput {
 
 #[derive(Debug)]
 pub struct PatchOutput {
+    pub errors: Vec<SyntaxError>,
     pub before: String,
     pub after: String,
     pub content_hash: String,
@@ -94,7 +96,7 @@ pub struct FsCreateOutput {
     pub path: String,
     // Set when the file already exists
     pub before: Option<String>,
-
+    pub errors: Vec<SyntaxError>,
     pub content_hash: String,
 }
 

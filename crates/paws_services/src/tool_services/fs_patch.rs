@@ -234,7 +234,16 @@ impl<F: FileWriterInfra + SnapshotRepository> FsPatchService for PawsFsPatch<F> 
         // Compute hash of the final file content
         let content_hash = compute_hash(&current_content);
 
-        Ok(PatchOutput { before: old_content, after: current_content, content_hash })
+        // Paws: Validation not implemented yet, returning empty errors
+        let errors = vec![];
+
+        Ok(PatchOutput {
+            errors,
+            before: old_content,
+            after: current_content,
+            content_hash,
+        })
+
     }
 }
 
