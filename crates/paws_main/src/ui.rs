@@ -2788,15 +2788,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
         for message in &context.messages {
-            match &**message {
-                ContextMessage::Text(TextMessage { content, role, .. }) => match role {
+            if let ContextMessage::Text(TextMessage { content, role, .. }) = &**message {
+                match role {
                     Role::User => {
                         let content_to_show = message
                             .as_value()
                             .and_then(|v| v.as_user_prompt())
                             .map(|p| p.as_str().to_string())
                             .unwrap_or_else(|| content.clone());
-
                         println!("{}", TitleFormat::user(content_to_show).display());
                     }
                     Role::Assistant => {
@@ -2806,8 +2805,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         self.markdown.reset();
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
 
