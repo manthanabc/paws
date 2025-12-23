@@ -4,7 +4,7 @@
 
 # Action handler: Commit changes with AI-generated message
 # Usage: :commit [additional context]
-function _forge_action_commit() {
+function _paws_action_commit() {
     local additional_context="$1"
     local commit_message
     # Generate AI commit message
@@ -15,9 +15,9 @@ function _forge_action_commit() {
     
     # Build commit command with optional additional context
     if [[ -n "$additional_context" ]]; then
-        commit_message=$(FORCE_COLOR=true CLICOLOR_FORCE=1 $_FORGE_BIN commit --preview --max-diff "$_FORGE_MAX_COMMIT_DIFF" $additional_context)
+        commit_message=$(FORCE_COLOR=true CLICOLOR_FORCE=1 $_PAWS_BIN commit --preview --max-diff "$_PAWS_MAX_COMMIT_DIFF" $additional_context)
     else
-        commit_message=$(FORCE_COLOR=true CLICOLOR_FORCE=1 $_FORGE_BIN commit --preview --max-diff "$_FORGE_MAX_COMMIT_DIFF")
+        commit_message=$(FORCE_COLOR=true CLICOLOR_FORCE=1 $_PAWS_BIN commit --preview --max-diff "$_PAWS_MAX_COMMIT_DIFF")
     fi
     
     # Proceed only if command succeeded
@@ -36,6 +36,6 @@ function _forge_action_commit() {
         zle reset-prompt
     else
         echo "$commit_message"
-        _forge_reset
+        _paws_reset
     fi
 }

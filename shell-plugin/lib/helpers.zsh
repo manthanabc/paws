@@ -1,32 +1,32 @@
 #!/usr/bin/env zsh
 
-# Core utility functions for forge plugin
+# Core utility functions for paws plugin
 
 # Lazy loader for commands cache
 # Loads the commands list only when first needed, avoiding startup cost
-function _forge_get_commands() {
-    if [[ -z "$_FORGE_COMMANDS" ]]; then
-        _FORGE_COMMANDS="$(CLICOLOR_FORCE=0 $_FORGE_BIN list commands --porcelain 2>/dev/null)"
+function _paws_get_commands() {
+    if [[ -z "$_PAWS_COMMANDS" ]]; then
+        _PAWS_COMMANDS="$(CLICOLOR_FORCE=0 $_PAWS_BIN list commands --porcelain 2>/dev/null)"
     fi
-    echo "$_FORGE_COMMANDS"
+    echo "$_PAWS_COMMANDS"
 }
 
 # Private fzf function with common options for consistent UX
-function _forge_fzf() {
+function _paws_fzf() {
     fzf --exact --cycle --select-1 --height 100% --no-scrollbar --ansi --color="header:bold" "$@"
 }
 
-# Helper function to execute forge commands consistently
+# Helper function to execute paws commands consistently
 # This ensures proper handling of special characters and consistent output
-function _forge_exec() {
-    # Ensure FORGE_ACTIVE_AGENT always has a value, default to "forge"
-    local agent_id="${_FORGE_ACTIVE_AGENT:-forge}"
+function _paws_exec() {
+    # Ensure PAWS_ACTIVE_AGENT always has a value, default to "paws"
+    local agent_id="${_PAWS_ACTIVE_AGENT:-paws}"
     
-    eval "$_FORGE_BIN --agent $(printf '%q' "$agent_id") $(printf '%q ' "$@")"
+    eval "$_PAWS_BIN --agent $(printf '%q' "$agent_id") $(printf '%q ' "$@")"
 }
 
 # Helper function to clear buffer and reset prompt
-function _forge_reset() {
+function _paws_reset() {
     # Invoke precmd hooks to ensure prompt customizations (starship, oh-my-zsh themes, etc.) refresh properly
     for precmd in $precmd_functions; do
         if typeset -f "$precmd" >/dev/null 2>&1; then
@@ -43,10 +43,10 @@ function _forge_reset() {
 
 # Helper function to find the index of a value in a list (1-based)
 # Returns the index if found, 1 otherwise
-# Usage: _forge_find_index <output> <value_to_find> [field_number]
+# Usage: _paws_find_index <output> <value_to_find> [field_number]
 # field_number: which field to compare (1 for first field, 2 for second field, etc.)
 # Note: This function expects porcelain output WITH headers and skips the header line
-function _forge_find_index() {
+function _paws_find_index() {
     local output="$1"
     local value_to_find="$2"
     local field_number="${3:-1}"  # Default to first field if not specified
@@ -74,10 +74,10 @@ function _forge_find_index() {
 }
 
 # Helper function to print messages with consistent formatting based on log level
-# Usage: _forge_log <level> <message>
+# Usage: _paws_log <level> <message>
 # Levels: error, info, success, warning, debug
-# Color scheme matches crates/forge_main/src/title_display.rs
-function _forge_log() {
+# Color scheme matches crates/paws_main/src/title_display.rs
+function _paws_log() {
     local level="$1"
     local message="$2"
     local timestamp="\033[90m[$(date '+%H:%M:%S')]\033[0m"
