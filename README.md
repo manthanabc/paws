@@ -1,19 +1,22 @@
 <h1 align="center">Paws</h1>
-<p align="center">Simplified version of forge with hopefully lot of cool features</p>
+<p align="center">Simplified wersion of forge</p>
 
-Do check ![forge](https://github.com/antimonyhq/forge)
+Do check original ![forge](https://github.com/antimonyhq/forge)
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
 
-// Insert demo here
+^ ignowre this
 
+[![asciicast](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP.svg)](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP)
 ---
 <summary>About fork</summary>
 
-Features -
+Difference -
  - [X] Streaming tokens
  - [X] Persistent spinner
+ - [X] Fixed thinking buffer
+ - [X] Hide thinking text after thinking over
 
 Planned - 
  - [o] Undo/ Redo controll
@@ -34,7 +37,16 @@ Dropeed stuff-
 - [ ] posthog tracking
 - [ ] codebase indexing
 
+
+ ## About Forge
 <details>
+<summary>About forge</summary>
+
+ - [X] 500+ models supported (Openai, GLM coding, copiloit...)
+ - [X] Support custom agents
+
+<details>
+  
 <summary><strong>Table&nbsp;of&nbsp;Contents</strong></summary>
 
 - [Quickstart](#quickstart)
@@ -57,18 +69,6 @@ Dropeed stuff-
 </details>
 
 ---
-
-## Quickstart
-
-To get started with Paws, build and run:
-
-```bash
-git clone https://github.com/manthanabc/paws
-cargo run
-```
-
-That's it! Paws is now ready to assist you with your development tasks.
-
 ## Usage Examples
 
 Paws can be used in different ways depending on your needs. Here are some common usage patterns:
