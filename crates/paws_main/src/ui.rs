@@ -2479,29 +2479,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
-
         let info = Info::default().extend(&conversation);
 
         self.spinner.stop(None)?;
         self.writeln(info)?;
-
-        // Only prompt for new conversation if in interactive mode and prompt is enabled
-        if self.cli.is_interactive() {
-            let prompt_text = "Start a new conversation?";
-            let should_start_new_chat = PawsSelect::confirm(prompt_text)
-                // Pressing ENTER should start new
-                .with_default(true)
-                .with_help_message("ESC = No, continue current conversation")
-                .prompt()
-                // Cancel or failure should continue with the session
-                .unwrap_or(Some(false))
-                .unwrap_or(false);
-
-            // if conversation is over
-            if should_start_new_chat {
-                self.on_new().await?;
-            }
-        }
 
         Ok(())
     }
