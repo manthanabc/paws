@@ -2475,9 +2475,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn finish_thinking(&mut self) -> Result<()> {
         if let Some(start) = self.thinking_start.take() {
             let duration = start.elapsed();
-            // self.markdown.reset();
-            // self.markdown.set_max_height(None);
-            // Clear the boxed thinking from terminal
+
             self.markdown
                 .clear(&mut self.spinner, duration.as_secs_f64());
         }
