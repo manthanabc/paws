@@ -2478,7 +2478,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // self.markdown.reset();
             // self.markdown.set_max_height(None);
             // Clear the boxed thinking from terminal
-            self.markdown.clear(&mut self.spinner, duration.as_secs_f64());
+            self.markdown
+                .clear(&mut self.spinner, duration.as_secs_f64());
         }
         Ok(())
     }

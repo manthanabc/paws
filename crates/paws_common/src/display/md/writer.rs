@@ -1,4 +1,4 @@
-use termimad::crossterm::style::Attribute;
+use termimad::crossterm::style::{Attribute, Stylize};
 
 use crate::display::md::render::MarkdownRenderer;
 use crate::spinner::SpinnerManager;
@@ -63,7 +63,12 @@ impl MarkdownWriter {
     }
 
     pub fn clear(&mut self, spn: &mut SpinnerManager, dur: f64) {
-       self.stream(&format!("Thought for {:.2}s", dur), spn);
+        let msg = format!("- Thought for {:.2}s", dur)
+            .attribute(Attribute::Bold)
+            .attribute(Attribute::Dim)
+            .to_string();
+
+        self.stream(&msg, spn);
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
@@ -75,12 +80,11 @@ impl MarkdownWriter {
             .collect();
 
         // Apply max_height truncation if set
-        if let Some(max_h) = self.max_height {
-            if lines_new.len() > max_h {
+        if let Some(max_h) = self.max_height
+            && lines_new.len() > max_h {
                 // Keep only the last max_h lines
                 let start = lines_new.len() - max_h;
                 lines_new = lines_new[start..].to_vec();
-            }
         }
 
         // Compute common prefix to minimize redraw
