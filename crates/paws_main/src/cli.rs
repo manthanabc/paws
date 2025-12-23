@@ -184,6 +184,7 @@ pub enum AgentCommand {
     List,
 }
 
+
 /// Command group for listing resources.
 #[derive(Parser, Debug, Clone)]
 pub struct ListCommandGroup {
