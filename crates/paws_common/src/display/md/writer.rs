@@ -62,6 +62,10 @@ impl MarkdownWriter {
         self.last_was_dimmed = true;
     }
 
+    pub fn clear(&mut self, spn: &mut SpinnerManager, dur: f64) {
+       self.stream(&format!("Thought for {:.2}s", dur), spn);
+    }
+
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
         let mut lines_new: Vec<&str> = content.lines().collect();
         let lines_prev: Vec<String> = self

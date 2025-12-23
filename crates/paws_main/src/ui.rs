@@ -2419,20 +2419,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 // Hide spinner while tool call
                 let _ = self.spinner.hide();
             }
-            ChatResponse::ToolCallEnd(toolcall_result) => {
+            ChatResponse::ToolCallEnd(_toolcall_result) => {
                 self.finish_thinking().await?;
                 // Resume the spinner as tool call is over
                 let _ = self.spinner.show();
-
-                if toolcall_result.name.as_str() == "execute_shell_command" {
-                    if let Some(output) = toolcall_result.output.as_str() {
-                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
-                        self.markdown.set_max_height(Some(max_h));
-                        self.markdown.add_chunk(output, &mut self.spinner);
-                        self.markdown.reset();
-                        self.markdown.set_max_height(None);
-                    }
-                }
 
                 if !self.cli.verbose {
                     return Ok(());
@@ -2485,14 +2475,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn finish_thinking(&mut self) -> Result<()> {
         if let Some(start) = self.thinking_start.take() {
             let duration = start.elapsed();
-            self.markdown.reset();
-            self.markdown.set_max_height(None);
+            // self.markdown.reset();
+            // self.markdown.set_max_height(None);
             // Clear the boxed thinking from terminal
-            self.spinner.write_ln("\x1b[1A\x1b[0J")?;
-            self.writeln_title(TitleFormat::info(format!(
-                "Thought for {:.1} seconds",
-                duration.as_secs_f64()
-            )))?;
+            self.markdown.clear(&mut self.spinner, duration.as_secs_f64());
         }
         Ok(())
     }
