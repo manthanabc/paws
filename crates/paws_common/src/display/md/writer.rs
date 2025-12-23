@@ -63,7 +63,7 @@ impl MarkdownWriter {
     }
 
     pub fn clear(&mut self, spn: &mut SpinnerManager, dur: f64) {
-        let msg = format!("- Thought for {:.2}s", dur)
+        let msg = format!("\n- Thought for {:.2}s", dur)
             .attribute(Attribute::Bold)
             .attribute(Attribute::Dim)
             .to_string();
