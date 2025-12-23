@@ -1,7 +1,7 @@
 use std::io;
 
 use colored::Colorize;
-use paws_services::tracker::VERSION;
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const BANNER: &str = include_str!("banner");
 

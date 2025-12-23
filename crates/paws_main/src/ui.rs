@@ -22,11 +22,11 @@ use paws_common::spinner::SpinnerManager;
 use paws_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
-use paws_services::tracker::ToolCallPayload;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
 
+use crate::banner;
 use crate::cli::{
     Cli, CommitCommandGroup, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
     TopLevelCommand,
@@ -42,7 +42,6 @@ use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
 use crate::update::on_update;
-use crate::{TRACKER, banner, tracker};
 
 // File-specific constants
 const MISSING_AGENT_TITLE: &str = "<missing agent.title>";
@@ -96,8 +95,9 @@ pub struct UI<A, F: Fn() -> A> {
     cli: Cli,
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
+    thinking_start: Option<std::time::Instant>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
-    _guard: paws_services::tracker::Guard,
+    _guard: paws_services::log::Guard,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -223,7 +223,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             spinner,
             ctrl_c_rx,
             markdown: MarkdownWriter::new(),
-            _guard: paws_services::tracker::init_tracing(env.log_path(), TRACKER.clone())?,
+            thinking_start: None,
+            _guard: paws_services::log::init_tracing(env.log_path())?,
         })
     }
 
@@ -326,21 +327,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         if exit {return Ok(())}
                                 },
                                 Err(error) => {
-                                    if let Some(conversation_id) = self.state.conversation_id.as_ref()
-                                        && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
-                                            TRACKER.set_conversation(conversation).await;
-                                        }
-                                    tracker::error(&error);
                                     tracing::error!(error = ?error);
                                     self.spinner.stop(None)?;
                                     self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
-                                },
+                                }
                             }
                         }
                     }
                 }
                 Err(error) => {
-                    tracker::error(&error);
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
                     self.writeln_to_stderr(
@@ -2416,6 +2411,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
+                    self.finish_thinking().await?;
                     self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
@@ -2423,19 +2419,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 // Hide spinner while tool call
                 let _ = self.spinner.hide();
             }
-            ChatResponse::ToolCallEnd(toolcall_result) => {
-                // Only track toolcall name in case of success else track the error.
-                let payload = if toolcall_result.is_error() {
-                    let mut r = ToolCallPayload::new(toolcall_result.name.to_string());
-                    if let Some(cause) = toolcall_result.output.as_str() {
-                        r = r.with_cause(cause.to_string());
-                    }
-                    r
-                } else {
-                    ToolCallPayload::new(toolcall_result.name.to_string())
-                };
-                tracker::tool_call(payload);
-
+            ChatResponse::ToolCallEnd(_toolcall_result) => {
+                self.finish_thinking().await?;
                 // Resume the spinner as tool call is over
                 let _ = self.spinner.show();
 
@@ -2466,10 +2451,16 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
+                    if self.thinking_start.is_none() {
+                        self.thinking_start = Some(std::time::Instant::now());
+                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
+                        self.markdown.set_max_height(Some(max_h));
+                    }
                     self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
                 }
             }
             ChatResponse::TaskComplete => {
+                self.finish_thinking().await?;
                 if let Some(conversation_id) = self.state.conversation_id
                     && let Ok(conversation) =
                         self.validate_conversation_exists(&conversation_id).await
@@ -2477,6 +2468,16 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.on_show_conv_info(conversation).await?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    async fn finish_thinking(&mut self) -> Result<()> {
+        if let Some(start) = self.thinking_start.take() {
+            let duration = start.elapsed();
+
+            self.markdown
+                .clear(&mut self.spinner, duration.as_secs_f64());
         }
         Ok(())
     }
@@ -2496,29 +2497,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
-
         let info = Info::default().extend(&conversation);
 
         self.spinner.stop(None)?;
         self.writeln(info)?;
-
-        // Only prompt for new conversation if in interactive mode and prompt is enabled
-        if self.cli.is_interactive() {
-            let prompt_text = "Start a new conversation?";
-            let should_start_new_chat = PawsSelect::confirm(prompt_text)
-                // Pressing ENTER should start new
-                .with_default(true)
-                .with_help_message("ESC = No, continue current conversation")
-                .prompt()
-                // Cancel or failure should continue with the session
-                .unwrap_or(Some(false))
-                .unwrap_or(false);
-
-            // if conversation is over
-            if should_start_new_chat {
-                self.on_new().await?;
-            }
-        }
 
         Ok(())
     }
@@ -2624,11 +2606,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    fn update_model(&mut self, model: Option<ModelId>) {
-        if let Some(ref model) = model {
-            tracker::set_model(model.to_string());
-        }
-    }
+    fn update_model(&mut self, _model: Option<ModelId>) {}
 
     async fn on_custom_event(&mut self, event: Event) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
@@ -2671,9 +2649,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // NOTE: Spawning required so that we don't block the user while querying user
         // info
         tokio::spawn(async move {
-            if let Ok(Some(user_info)) = api.user_info().await {
-                tracker::login(user_info.auth_provider_id.into_string());
-            }
+            let _ = api.user_info().await;
         });
     }
 

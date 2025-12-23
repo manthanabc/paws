@@ -46,8 +46,9 @@ impl MarkdownRenderer {
 
     pub fn render(&self, content: &str, attr: Option<Attribute>) -> String {
         let skin = create_skin(attr);
-        let segments = self.render_markdown(content);
-        let mut result = String::new();
+        let no_color = attr == Some(Attribute::Dim);
+        let segments = self.render_markdown(content, no_color);
+        let mut result = "\n".to_string();
         for segment in segments {
             match segment {
                 Segment::Text(t) => {
@@ -55,7 +56,14 @@ impl MarkdownRenderer {
                     result.push_str(&rendered.to_string());
                 }
                 Segment::Code(c) => {
-                    result.push_str(&c);
+                    if no_color {
+                        // Apply dim attribute to code block if no_color is set
+                        result.push_str("\x1b[2m");
+                        result.push_str(&c);
+                        result.push_str("\x1b[0m");
+                    } else {
+                        result.push_str(&c);
+                    }
                 }
             }
         }
@@ -72,7 +80,7 @@ impl MarkdownRenderer {
         wrap_ansi_simple(&cleaned, self.width)
     }
 
-    fn render_markdown(&self, text: &str) -> Vec<Segment> {
+    fn render_markdown(&self, text: &str, no_color: bool) -> Vec<Segment> {
         // Match fenced code blocks similar to markdown_renderer::renderer
         let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
@@ -87,22 +95,27 @@ impl MarkdownRenderer {
             let code = cap.get(2).unwrap().as_str();
 
             let wrapped_code = wrap_ansi_simple(code, self.width);
-            let syntax = self
-                .ss
-                .find_syntax_by_token(lang)
-                .unwrap_or_else(|| self.ss.find_syntax_plain_text());
 
-            let mut h = HighlightLines::new(syntax, &self.theme);
-            let mut highlighted = String::from("\n");
+            if no_color {
+                segments.push(Segment::Code(format!("\n{wrapped_code}")));
+            } else {
+                let syntax = self
+                    .ss
+                    .find_syntax_by_token(lang)
+                    .unwrap_or_else(|| self.ss.find_syntax_plain_text());
 
-            for line in LinesWithEndings::from(&wrapped_code) {
-                let ranges: Vec<(syntect::highlighting::Style, &str)> =
-                    h.highlight_line(line, &self.ss).unwrap();
-                highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
+                let mut h = HighlightLines::new(syntax, &self.theme);
+                let mut highlighted = String::from("\n");
+
+                for line in LinesWithEndings::from(&wrapped_code) {
+                    let ranges: Vec<(syntect::highlighting::Style, &str)> =
+                        h.highlight_line(line, &self.ss).unwrap();
+                    highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
+                }
+
+                highlighted.push_str("\x1b[0m");
+                segments.push(Segment::Code(highlighted));
             }
-
-            highlighted.push_str("\x1b[0m");
-            segments.push(Segment::Code(highlighted));
             last_end = cap.get(0).unwrap().end();
         }
         if last_end < text.len() {
@@ -116,8 +129,14 @@ impl MarkdownRenderer {
 fn create_skin(attr: Option<Attribute>) -> MadSkin {
     let mut skin = MadSkin::default();
 
+    let no_color = attr == Some(Attribute::Dim);
+
     // Inline Code
-    let style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+    let style = if no_color {
+        CompoundStyle::new(None, None, Attribute::Bold.into())
+    } else {
+        CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into())
+    };
     skin.inline_code = style;
 
     // Code Blocks
@@ -132,7 +151,9 @@ fn create_skin(attr: Option<Attribute>) -> MadSkin {
     // Headings
     let mut style = LineStyle::default();
     style.add_attr(Attribute::Bold);
-    style.set_fg(Color::Green);
+    if !no_color {
+        style.set_fg(Color::Green);
+    }
 
     let mut h1 = style.clone();
     h1.align = Alignment::Center;
@@ -203,7 +224,7 @@ mod tests {
     fn test_segments_plain_text() {
         let fixture = MarkdownRenderer::new(80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
-        let segments = fixture.render_markdown(input);
+        let segments = fixture.render_markdown(input, false);
         assert_eq!(segments.len(), 1);
         assert!(matches!(segments[0], Segment::Text(ref t) if t == input));
     }
@@ -212,7 +233,7 @@ mod tests {
     fn test_segments_single_code_block_middle() {
         let fixture = MarkdownRenderer::new(80, 24);
         let input = "Before code.\n\n```\nfn main() {}\n```\n\nAfter code.";
-        let segments = fixture.render_markdown(input);
+        let segments = fixture.render_markdown(input, false);
         assert_eq!(segments.len(), 3);
         assert!(matches!(segments[0], Segment::Text(ref t) if t.contains("Before code.")));
         assert!(
@@ -225,7 +246,7 @@ mod tests {
     fn test_segments_multiple_code_blocks() {
         let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
-        let segments = fixture.render_markdown(input);
+        let segments = fixture.render_markdown(input, false);
         assert_eq!(segments.len(), 5); // Text, Code, Text, Code, Text
         let code_count = segments
             .iter()
@@ -237,5 +258,15 @@ mod tests {
             .filter(|s| matches!(s, Segment::Text(_)))
             .count();
         assert_eq!(text_count, 3);
+    }
+
+    #[test]
+    fn test_render_dimmed_no_color() {
+        let fixture = MarkdownRenderer::new(80, 24);
+        let input = "# Header\n\n```rust\nfn main() {}\n```\n\n`inline code`";
+        let actual = fixture.render(input, Some(Attribute::Dim));
+
+        // Check that it contains the dim attribute \x1b[2m
+        assert!(actual.contains("\x1b[2m"));
     }
 }

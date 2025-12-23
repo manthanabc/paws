@@ -135,9 +135,6 @@ workspace = true
 [dependencies.paws_common]
 workspace = true
 
-[dependencies.posthog-rs]
-workspace = true
-
 [dependencies.machineid-rs]
 workspace = true
 
