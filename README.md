@@ -18,8 +18,21 @@ Features -
 Planned - 
  - [o] Undo/ Redo controll
  - [o] Background tasks
- - [o] WebUI
+ - [e] Parallel tasks
+ - [o] WebUI -> conversation history management
  - [e] Hybrid agent flows
+ - [e] Reduce instructions, remove tools -> simplify
+ - [o] Optimize information density on UI
+ - [o] Rename paws to .paws
+
+Updates -
+ Additional provideres
+ - [ ] Xiomi
+ - [ ] AI studio
+
+Dropeed stuff-
+- [ ] posthog tracking
+- [ ] codebase indexing
 
 <details>
 <summary><strong>Table&nbsp;of&nbsp;Contents</strong></summary>

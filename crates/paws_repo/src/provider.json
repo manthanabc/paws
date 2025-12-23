@@ -1,11 +1,32 @@
 [
   {
-    "id": "paws",
-    "api_key_vars": "PAWS_API_KEY",
+    "id": "forge",
+    "api_key_vars": "FORGE_API_KEY",
     "url_param_vars": [],
     "response_type": "OpenAI",
     "url": "https://antinomy.ai/api/v1/chat/completions",
     "models": "https://antinomy.ai/api/v1/models",
+    "auth_methods": [
+      "api_key"
+    ]
+  },
+  {
+    "id": "ai_studio",
+    "api_key_vars": "GEMINI_API_KEY",
+    "response_type": "OpenAI",
+    "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "models": "https://generativelanguage.googleapis.com/v1beta/openai/models",
+    "auth_methods": [
+      "api_key"
+    ]
+  },
+  {
+    "id": "mimo",
+    "api_key_vars": "MIMO_API_KEY",
+    "url_param_vars": [],
+    "response_type": "OpenAI",
+    "url": "https://api.xiaomimimo.com/v1/chat/completions",
+    "models": "https://api.xiaomimimo.com/v1/models",
     "auth_methods": [
       "api_key"
     ]
