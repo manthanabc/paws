@@ -288,27 +288,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             return self.handle_dispatch(dispatch_json).await;
         }
 
-        // Handle direct prompt if provided (raw text messages)
-        let prompt = self.cli.prompt.clone();
-        if let Some(prompt) = prompt {
-            self.spinner.start(None)?;
-            self.on_message(Some(prompt)).await?;
-            return Ok(());
-        }
-
-        // Handle piped input if provided (treat it like --prompt)
-        let piped_input = self.cli.piped_input.clone();
-        if let Some(piped) = piped_input {
-            self.spinner.start(None)?;
-            self.on_message(Some(piped)).await?;
-            return Ok(());
-        }
-
         // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
         let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
 
-        // Get initial input from prompt
-        let mut command = self.prompt().await;
+        // Get initial input from prompt or CLI
+        let mut command =
+            if let Some(prompt) = self.cli.prompt.clone().or(self.cli.piped_input.clone()) {
+                Ok(SlashCommand::Message(prompt))
+            } else {
+                self.prompt().await
+            };
+
+        let is_interactive = self.cli.is_interactive();
 
         loop {
             match command {
@@ -324,12 +315,13 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         result = self.on_command(command) => {
                             match result {
                                 Ok(exit) => {
-                                        if exit {return Ok(())}
+                                    if exit || !is_interactive { return Ok(()) }
                                 },
                                 Err(error) => {
                                     tracing::error!(error = ?error);
                                     self.spinner.stop(None)?;
                                     self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
+                                    if !is_interactive { return Ok(()) }
                                 }
                             }
                         }
@@ -341,12 +333,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln_to_stderr(
                         TitleFormat::error(error.to_string()).display().to_string(),
                     )?;
+                    if !is_interactive {
+                        return Ok(());
+                    }
                 }
             }
             self.spinner.stop(None)?;
+            if !is_interactive {
+                break;
+            }
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
         }
+        Ok(())
     }
 
     // Improve startup time by hydrating caches
