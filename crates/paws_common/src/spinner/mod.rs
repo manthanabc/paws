@@ -92,7 +92,7 @@ impl SpinnerManager {
                         idx = 0;
                         last = std::time::Instant::now();
 
-                        eprint!("\n");
+                        eprintln!();
                         // Enter raw mode
                         let _ = enable_raw_mode();
                         term(execute!(stderr, cursor::Hide));
