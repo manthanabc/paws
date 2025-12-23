@@ -189,6 +189,24 @@ impl TitleFormat {
             timestamp: Local::now().into(),
         }
     }
+
+    pub fn user(message: impl Into<String>) -> Self {
+        Self {
+            title: message.into(),
+            sub_title: None,
+            category: Category::Info,
+            timestamp: Local::now().into(),
+        }
+    }
+
+    pub fn agent(message: impl Into<String>) -> Self {
+        Self {
+            title: message.into(),
+            sub_title: None,
+            category: Category::Action,
+            timestamp: Local::now().into(),
+        }
+    }
 }
 
 #[cfg(test)]

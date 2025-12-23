@@ -410,6 +410,13 @@ pub enum ConversationCommand {
         porcelain: bool,
     },
 
+    /// Print conversation history.
+    #[command(alias = "pr")]
+    Print {
+        /// Conversation ID to print.
+        id: Option<ConversationId>,
+    },
+
     /// Create a new conversation.
     New,
 
@@ -812,6 +819,39 @@ mod tests {
             id,
             ConversationId::parse("550e8400-e29b-41d4-a716-446655440002").unwrap()
         );
+    }
+
+    #[test]
+    fn test_conversation_print_with_id() {
+        let fixture = Cli::parse_from([
+            "paws",
+            "conversation",
+            "print",
+            "550e8400-e29b-41d4-a716-446655440003",
+        ]);
+        let id = match fixture.subcommands {
+            Some(TopLevelCommand::Conversation(conversation)) => match conversation.command {
+                ConversationCommand::Print { id } => id,
+                _ => None,
+            },
+            _ => None,
+        };
+        assert_eq!(
+            id,
+            Some(ConversationId::parse("550e8400-e29b-41d4-a716-446655440003").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_conversation_print_alias() {
+        let fixture = Cli::parse_from(["paws", "conversation", "pr"]);
+        let is_print = match fixture.subcommands {
+            Some(TopLevelCommand::Conversation(conversation)) => {
+                matches!(conversation.command, ConversationCommand::Print { .. })
+            }
+            _ => false,
+        };
+        assert!(is_print);
     }
 
     #[test]
