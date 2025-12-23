@@ -28,6 +28,10 @@
     "description": "List all conversations for the active workspace [alias: c]"
   },
   {
+    "command": "print",
+    "description": "Print conversation history [alias: pr]"
+  },
+  {
     "command": "retry",
     "description": "Retry the last command [alias: r]"
   },

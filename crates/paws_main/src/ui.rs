@@ -642,6 +642,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
                 self.on_show_last_message(conversation).await?;
             }
+            ConversationCommand::Print { id } => {
+                let id = id.unwrap_or_else(|| self.state.conversation_id.unwrap_or_default());
+                let conversation = self.validate_conversation_exists(&id).await?;
+
+                self.on_print_conversation(conversation).await?;
+            }
             ConversationCommand::Info { id } => {
                 let conversation = self.validate_conversation_exists(&id).await?;
 
@@ -2752,11 +2758,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
     }
 
-    /// Shows the last message from a conversation
-    ///
-    /// # Errors
-    /// - If the conversation doesn't exist
-    /// - If the conversation has no messages
     async fn on_show_last_message(&mut self, conversation: Conversation) -> Result<()> {
         let context = conversation
             .context
@@ -2774,6 +2775,38 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Format and display the message using the message_display module
         if let Some(message) = message {
             self.markdown.add_chunk(message, &mut self.spinner);
+        }
+
+        Ok(())
+    }
+
+    /// Prints the conversation history
+    async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
+        let context = conversation
+            .context
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
+
+        for message in &context.messages {
+            if let ContextMessage::Text(TextMessage { content, role, .. }) = &**message {
+                match role {
+                    Role::User => {
+                        let content_to_show = message
+                            .as_value()
+                            .and_then(|v| v.as_user_prompt())
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_else(|| content.clone());
+                        println!("{}", TitleFormat::user(content_to_show).display());
+                    }
+                    Role::Assistant => {
+                        self.writeln("")?;
+                        self.markdown.add_chunk(content, &mut self.spinner);
+                        self.writeln("")?;
+                        self.markdown.reset();
+                    }
+                    _ => {}
+                }
+            }
         }
 
         Ok(())
