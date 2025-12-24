@@ -1,4 +1,4 @@
-# Forge ZSH Plugin
+# Paws ZSH Plugin
 
 A powerful ZSH plugin that provides intelligent command transformation, file tagging, and conversation management for the Forge AI assistant.
 
@@ -17,7 +17,7 @@ Before using this plugin, ensure you have the following tools installed:
 
 - **fzf** - Command-line fuzzy finder
 - **fd** - Fast file finder (alternative to find)
-- **paws** - The Forge CLI tool
+- **paws** - The CLI binary
 
 ### Installation of Prerequisites
 
@@ -174,16 +174,6 @@ export PAWS_BIN="/path/to/custom/paws"
 - Internal pattern matching for conversation syntax (`:`)
 - New session command keyword: `:new` or `:n`
 
-### Codebase Indexing
-
-Sync your codebase for semantic search:
-
-```bash
-:sync
-```
-
-This will index the current directory for semantic code search.
-
 ### .paws Directory
 
 The plugin creates a `.paws` directory in your current working directory (similar to `.git`) for temporary files:
@@ -232,12 +222,4 @@ All transformed commands are properly saved to ZSH history, allowing you to:
 :info
 :new
 : New conversation starts here
-```
-
-
-### Codebase Indexing
-
-```bash
-# Sync current directory for semantic search
-:sync
 ```
