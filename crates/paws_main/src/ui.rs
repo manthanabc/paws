@@ -2803,13 +2803,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         for message in &context.messages {
+            // in sync
             match &**message {
                 ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
-                    // Update last seen model if present
-                    if let Some(m) = model {
-                        last_seen_model = Some(m.to_string());
-                    }
-
                     match role {
                         Role::User => {
                             let content_to_show = message
@@ -2818,7 +2814,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 .map(|p| p.as_str().to_string())
                                 .unwrap_or_else(|| content.clone());
 
-                            // Vertical bar prepended (U+2503 ┃, white bold)
                             println!();
                             for line in content_to_show.lines() {
                                 println!("{} {}", "┃".white().bold(), line);
@@ -2838,15 +2833,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                     .next_back()
                                     .map(|s| s.to_string())
                                     .unwrap_or(model_str);
-                                self.writeln(format!("\n{}", formatted_model.dimmed()))?;
+                                println!("\n[{}]", formatted_model.dimmed());
                             } else {
-                                self.writeln("")?;
+                                println!("");
                             }
 
                             if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner);
-                                self.writeln("")?;
-                                self.markdown.reset();
+                                // self.markdown.add_chunk(content, &mut self.spinner);
+                                println!("{content}");
+                                // self.markdown.reset();
                             }
 
                             // Show tool calls if any
@@ -2880,13 +2875,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         })
                         .collect::<Vec<_>>()
                         .join("\n");
-
-                    // println!(
-                    //     "{} {} -> {}",
-                    //     "Tool Result:".green().bold(),
-                    //     name.to_string().cyan(),
-                    //     output.dimmed()
-                    // );
                 }
                 _ => {}
             }
