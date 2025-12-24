@@ -2808,9 +2808,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 .map(|p| p.as_str().to_string())
                                 .unwrap_or_else(|| content.clone());
 
-                            println!();
+                            self.writeln("")?;
                             for line in content_to_show.lines() {
-                                println!("{} {}", "┃".white().bold(), line);
+                                self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
                             }
                         }
                         Role::Assistant => {
@@ -2821,21 +2821,21 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 .map(|m| m.to_string())
                                 .or(last_seen_model.clone());
 
-                            if let Some(model_str) = model_to_show {
+                            let model_str = if let Some(model_str) = model_to_show {
                                 let formatted_model = model_str
                                     .split('/')
                                     .next_back()
                                     .map(|s| s.to_string())
                                     .unwrap_or(model_str);
-                                println!("\n[{}]", formatted_model.dimmed());
+                                format!("[{}]\n", formatted_model.dimmed())
                             } else {
-                                println!("");
-                            }
+                                String::new()
+                            };
 
                             if !content.is_empty() {
-                                // self.markdown.add_chunk(content, &mut self.spinner);
-                                println!("{content}");
-                                // self.markdown.reset();
+                                self.markdown
+                                    .add_chunk(&(model_str + content), &mut self.spinner);
+                                self.markdown.reset();
                             }
 
                             // Show tool calls if any
@@ -2844,11 +2844,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                     let name = &call.name;
                                     // Only show tool name, reusing the style (yellow bold label,
                                     // cyan name)
-                                    println!(
-                                        "{} {}",
-                                        "Tool Call:".yellow().bold(),
-                                        name.to_string().cyan(),
-                                    );
+                                    self.writeln(format!(
+                                        "{} {}\n",
+                                        "⏺".cyan(),
+                                        name.to_string().dimmed(),
+                                    ))?;
                                 }
                             }
                         }
