@@ -1417,14 +1417,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             let conversation_id = conversation.id;
             self.state.conversation_id = Some(conversation_id);
 
-            // Show conversation content
-            self.on_show_last_message(conversation).await?;
-
-            // Print log about conversation switching
-            self.writeln_title(TitleFormat::info(format!(
-                "Switched to conversation {}",
-                conversation_id.into_string().bold()
-            )))?;
+            // Show conversation
+            self.on_print_conversation(conversation).await?;
 
             // Show conversation info
             self.on_info(false, Some(conversation_id)).await?;
@@ -2785,25 +2779,96 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
-        for message in &context.messages {
-            if let ContextMessage::Text(TextMessage { content, role, .. }) = &**message {
-                match role {
-                    Role::User => {
-                        let content_to_show = message
-                            .as_value()
-                            .and_then(|v| v.as_user_prompt())
-                            .map(|p| p.as_str().to_string())
-                            .unwrap_or_else(|| content.clone());
-                        println!("{}", TitleFormat::user(content_to_show).display());
-                    }
-                    Role::Assistant => {
-                        self.writeln("")?;
-                        self.markdown.add_chunk(content, &mut self.spinner);
-                        self.writeln("")?;
-                        self.markdown.reset();
-                    }
-                    _ => {}
+        let active_agent = self.api.get_active_agent().await;
+        let default_model = self.get_agent_model(active_agent).await;
+        let mut last_seen_model: Option<String> = default_model.map(|m| m.to_string());
+
+        // If no default model, try to find one in the conversation history
+        if last_seen_model.is_none() {
+            last_seen_model = context.messages.iter().find_map(|msg| {
+                if let ContextMessage::Text(text_msg) = &**msg {
+                    text_msg.model.as_ref().map(|m| m.to_string())
+                } else {
+                    None
                 }
+            });
+        }
+
+        for message in &context.messages {
+            // in sync
+            match &**message {
+                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
+                    match role {
+                        Role::User => {
+                            let content_to_show = message
+                                .as_value()
+                                .and_then(|v| v.as_user_prompt())
+                                .map(|p| p.as_str().to_string())
+                                .unwrap_or_else(|| content.clone());
+
+                            self.writeln("")?;
+                            for line in content_to_show.lines() {
+                                self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                            }
+                        }
+                        Role::Assistant => {
+                            // Show model name above the response (dimmed)
+                            // Use current message model or fallback to last seen model
+                            let model_to_show = model
+                                .as_ref()
+                                .map(|m| m.to_string())
+                                .or(last_seen_model.clone());
+
+                            let model_str = if let Some(model_str) = model_to_show {
+                                let formatted_model = model_str
+                                    .split('/')
+                                    .next_back()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or(model_str);
+                                format!("[{}]\n", formatted_model.dimmed())
+                            } else {
+                                String::new()
+                            };
+
+                            if !content.is_empty() {
+                                self.markdown
+                                    .add_chunk(&(model_str + content), &mut self.spinner);
+                                self.markdown.reset();
+                            }
+
+                            // Show tool calls if any
+                            if let Some(calls) = tool_calls {
+                                for call in calls {
+                                    let name = &call.name;
+                                    // Only show tool name, reusing the style (yellow bold label,
+                                    // cyan name)
+                                    self.writeln(format!(
+                                        "{} {}\n",
+                                        "⏺".cyan(),
+                                        name.to_string().dimmed(),
+                                    ))?;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                ContextMessage::Tool(result) => {
+                    let _name = &result.name;
+                    let _output = result
+                        .output
+                        .values
+                        .iter()
+                        .map(|v| match v {
+                            paws_domain::ToolValue::Text(t) => t.clone(),
+                            paws_domain::ToolValue::AI { value, .. } => value.clone(),
+                            paws_domain::ToolValue::Image(_) => "[Image]".to_string(),
+                            paws_domain::ToolValue::Empty => "".to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                }
+                _ => {}
             }
         }
 
