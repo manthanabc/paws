@@ -21,6 +21,7 @@ Difference -
 Planned - 
  - [o] Undo/ Redo controll
  - [o] Background tasks
+ - [o] Always visible prompt and enque pending tasks
  - [e] Parallel tasks
  - [o] WebUI -> conversation history management
  - [e] Hybrid agent flows
