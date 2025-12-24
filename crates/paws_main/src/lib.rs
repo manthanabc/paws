@@ -16,7 +16,6 @@ mod tools_display;
 
 mod ui;
 mod utils;
-mod vscode;
 mod zsh_plugin;
 
 mod update;

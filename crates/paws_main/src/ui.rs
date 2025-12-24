@@ -2310,8 +2310,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn on_message(&mut self, content: Option<String>) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
 
-        self.install_vscode_extension();
-
         // Track if content was provided to decide whether to use piped input as
         // additional context
         let has_content = content.is_some();
@@ -2810,19 +2808,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         Ok(())
-    }
-
-    /// Silently install VS Code extension if in VS Code and extension not
-    /// installed.
-    /// NOTE: This is a non-cancellable and a slow task. We should only run this
-    /// if the user has provided a prompt because that is guaranteed to run for
-    /// at least a few seconds.
-    fn install_vscode_extension(&self) {
-        tokio::task::spawn_blocking(|| {
-            if crate::vscode::should_install_extension() {
-                let _ = crate::vscode::install_extension();
-            }
-        });
     }
 }
 
