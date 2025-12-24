@@ -2788,24 +2788,88 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
         for message in &context.messages {
-            if let ContextMessage::Text(TextMessage { content, role, .. }) = &**message {
-                match role {
+            match &**message {
+                ContextMessage::Text(TextMessage {
+                    content,
+                    role,
+                    tool_calls,
+                    model,
+                    ..
+                }) => match role {
                     Role::User => {
                         let content_to_show = message
                             .as_value()
                             .and_then(|v| v.as_user_prompt())
                             .map(|p| p.as_str().to_string())
                             .unwrap_or_else(|| content.clone());
-                        println!("{}", TitleFormat::user(content_to_show).display());
+
+                        // Show model name above the prompt (dimmed)
+                        // If model is available, format it like prompt.rs: model.split('/').next_back()
+                        if let Some(model_id) = model.as_ref() {
+                            let model_str = model_id.to_string();
+                            let formatted_model = model_str
+                                .split('/')
+                                .next_back()
+                                .unwrap_or_else(|| model_id.as_str());
+                            println!("\n{}", formatted_model.dimmed());
+                        } else {
+                            // If no model info, just print a newline for spacing
+                            println!("");
+                        }
+
+                        // Vertical bar prepended (U+2503 ┃, white bold)
+                        for line in content_to_show.lines() {
+                            println!("{} {}", "┃".white().bold(), line);
+                        }
                     }
                     Role::Assistant => {
                         self.writeln("")?;
-                        self.markdown.add_chunk(content, &mut self.spinner);
-                        self.writeln("")?;
-                        self.markdown.reset();
+
+                        if !content.is_empty() {
+                            self.markdown.add_chunk(content, &mut self.spinner);
+                            self.writeln("")?;
+                            self.markdown.reset();
+                        }
+
+                        // Show tool calls if any
+                        if let Some(calls) = tool_calls {
+                            for call in calls {
+                                let name = &call.name;
+                                let args = &call.arguments;
+                                println!(
+                                    "{} {}({})",
+                                    "Tool Call:".yellow().bold(),
+                                    name.to_string().cyan(),
+                                    args.clone().into_string().dimmed()
+                                );
+                            }
+                        }
                     }
                     _ => {}
+                },
+                ContextMessage::Tool(result) => {
+                    let name = &result.name;
+                    let output = result
+                        .output
+                        .values
+                        .iter()
+                        .map(|v| match v {
+                            paws_domain::ToolValue::Text(t) => t.clone(),
+                            paws_domain::ToolValue::AI { value, .. } => value.clone(),
+                            paws_domain::ToolValue::Image(_) => "[Image]".to_string(),
+                            paws_domain::ToolValue::Empty => "".to_string(),
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    println!(
+                        "{} {} -> {}",
+                        "Tool Result:".green().bold(),
+                        name.to_string().cyan(),
+                        output.dimmed()
+                    );
                 }
+                _ => {}
             }
         }
 
