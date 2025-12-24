@@ -2793,7 +2793,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // If no default model, try to find one in the conversation history
         if last_seen_model.is_none() {
-             last_seen_model = context.messages.iter().find_map(|msg| {
+            last_seen_model = context.messages.iter().find_map(|msg| {
                 if let ContextMessage::Text(text_msg) = &**msg {
                     text_msg.model.as_ref().map(|m| m.to_string())
                 } else {
@@ -2804,73 +2804,71 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage {
-                    content,
-                    role,
-                    tool_calls,
-                    model,
-                    ..
-                }) => {
+                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
                     // Update last seen model if present
                     if let Some(m) = model {
                         last_seen_model = Some(m.to_string());
                     }
 
                     match role {
-                    Role::User => {
-                        let content_to_show = message
-                            .as_value()
-                            .and_then(|v| v.as_user_prompt())
-                            .map(|p| p.as_str().to_string())
-                            .unwrap_or_else(|| content.clone());
+                        Role::User => {
+                            let content_to_show = message
+                                .as_value()
+                                .and_then(|v| v.as_user_prompt())
+                                .map(|p| p.as_str().to_string())
+                                .unwrap_or_else(|| content.clone());
 
-                        // Vertical bar prepended (U+2503 ┃, white bold)
-                        println!("");
-                        for line in content_to_show.lines() {
-                            println!("{} {}", "┃".white().bold(), line);
-                        }
-                    }
-                    Role::Assistant => {
-                        // Show model name above the response (dimmed)
-                        // Use current message model or fallback to last seen model
-                        let model_to_show = model.as_ref().map(|m| m.to_string()).or(last_seen_model.clone());
-
-                        if let Some(model_str) = model_to_show {
-                            let formatted_model = model_str
-                                .split('/')
-                                .next_back()
-                                .map(|s| s.to_string())
-                                .unwrap_or(model_str);
-                            self.writeln(format!("\n{}", formatted_model.dimmed()))?;
-                        } else {
-                            self.writeln("")?;
-                        }
-
-                        if !content.is_empty() {
-                            self.markdown.add_chunk(content, &mut self.spinner);
-                            self.writeln("")?;
-                            self.markdown.reset();
-                        }
-
-                        // Show tool calls if any
-                        if let Some(calls) = tool_calls {
-                            for call in calls {
-                                let name = &call.name;
-                                // Only show tool name, reusing the style (yellow bold label, cyan name)
-                                println!(
-                                    "{} {}",
-                                    "Tool Call:".yellow().bold(),
-                                    name.to_string().cyan(),
-                                );
+                            // Vertical bar prepended (U+2503 ┃, white bold)
+                            println!();
+                            for line in content_to_show.lines() {
+                                println!("{} {}", "┃".white().bold(), line);
                             }
                         }
+                        Role::Assistant => {
+                            // Show model name above the response (dimmed)
+                            // Use current message model or fallback to last seen model
+                            let model_to_show = model
+                                .as_ref()
+                                .map(|m| m.to_string())
+                                .or(last_seen_model.clone());
+
+                            if let Some(model_str) = model_to_show {
+                                let formatted_model = model_str
+                                    .split('/')
+                                    .next_back()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or(model_str);
+                                self.writeln(format!("\n{}", formatted_model.dimmed()))?;
+                            } else {
+                                self.writeln("")?;
+                            }
+
+                            if !content.is_empty() {
+                                self.markdown.add_chunk(content, &mut self.spinner);
+                                self.writeln("")?;
+                                self.markdown.reset();
+                            }
+
+                            // Show tool calls if any
+                            if let Some(calls) = tool_calls {
+                                for call in calls {
+                                    let name = &call.name;
+                                    // Only show tool name, reusing the style (yellow bold label,
+                                    // cyan name)
+                                    println!(
+                                        "{} {}",
+                                        "Tool Call:".yellow().bold(),
+                                        name.to_string().cyan(),
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            },
                 ContextMessage::Tool(result) => {
-                    let name = &result.name;
-                    let output = result
+                    let _name = &result.name;
+                    let _output = result
                         .output
                         .values
                         .iter()
