@@ -1417,14 +1417,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             let conversation_id = conversation.id;
             self.state.conversation_id = Some(conversation_id);
 
-            // Show conversation content
-            self.on_show_last_message(conversation).await?;
-
-            // Print log about conversation switching
-            self.writeln_title(TitleFormat::info(format!(
-                "Switched to conversation {}",
-                conversation_id.into_string().bold()
-            )))?;
+            // Show conversation
+            self.on_print_conversation(conversation).await?;
 
             // Show conversation info
             self.on_info(false, Some(conversation_id)).await?;
