@@ -2835,7 +2835,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                     .unwrap_or(model_str);
                                 println!("\n[{}]", formatted_model.dimmed());
                             } else {
-                                println!("");
+                                println!();
                             }
 
                             if !content.is_empty() {
