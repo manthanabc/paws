@@ -349,7 +349,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
             print!("\x1b[3J\x1b[2J\x1b[H");
-            let conversation = self.api.conversation(&self.state.conversation_id.expect("SHOULD HAVE ONE")).await.unwrap();
+            let conversation = self
+                .api
+                .conversation(&self.state.conversation_id.expect("SHOULD HAVE ONE"))
+                .await
+                .unwrap();
             self.on_print_conversation(conversation.expect("H")).await?;
         }
         Ok(())
