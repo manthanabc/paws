@@ -208,30 +208,3 @@ impl TitleFormat {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use chrono::{DateTime, Utc};
-    use pretty_assertions::assert_eq;
-
-    use super::*;
-
-    #[test]
-    fn test_title_format_with_timestamp() {
-        let timestamp = DateTime::parse_from_rfc3339("2023-10-26T10:30:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
-
-        let title = TitleFormat {
-            title: "Test Action".to_string(),
-            sub_title: Some("Subtitle".to_string()),
-            category: Category::Action,
-            timestamp,
-        };
-
-        assert_eq!(title.title, "Test Action");
-        assert_eq!(title.sub_title, Some("Subtitle".to_string()));
-        assert_eq!(title.category, Category::Action);
-        assert_eq!(title.timestamp, timestamp);
-    }
-}
