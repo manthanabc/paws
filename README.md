@@ -32,8 +32,9 @@ Planned -
 
 Updates -
  Additional provideres
- - [ ] Xiomi
- - [ ] AI studio
+ - [ ] Xiomi (free mimo v2-flash)
+ - [ ] AI studio (free all models from google under free tier limit)
+ - [ ] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
 
 Dropeed stuff-
 - [ ] posthog tracking
