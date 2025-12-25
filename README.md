@@ -33,14 +33,14 @@ Planned -
 
 Updates -
  Additional provideres
- - [ ] Xiomi (free mimo v2-flash)
- - [ ] AI studio (free all models from google under free tier limit)
- - [ ] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
+ - [X] Xiomi (free mimo v2-flash)
+ - [X] AI studio (free all models from google under free tier limit)
+ - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
 
 Dropeed stuff-
-- [ ] posthog tracking
-- [ ] codebase indexing
-- [ ] VS code extension 
+- [X] posthog tracking
+- [X] codebase indexing
+- [X] VS code extension 
 
 
  ## About Forge
