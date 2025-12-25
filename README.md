@@ -12,11 +12,12 @@ Do check original ![forge](https://github.com/antimonyhq/forge)
 ---
 <summary>About fork</summary>
 
-Difference -
+Difference so far-
  - [X] Streaming tokens
  - [X] Persistent spinner
  - [X] Fixed thinking buffer
  - [X] Hide thinking text after thinking over
+ - [X] Switching conversation shows full history 
 
 Planned - 
  - [o] Undo/ Redo controll
@@ -37,6 +38,7 @@ Updates -
 Dropeed stuff-
 - [ ] posthog tracking
 - [ ] codebase indexing
+- [ ] VS code extension 
 
 
  ## About Forge
