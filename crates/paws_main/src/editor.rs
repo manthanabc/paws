@@ -98,8 +98,6 @@ impl PawsEditor {
         let signal = self.editor.read_line(prompt);
         signal.map(Into::into).map_err(|e| anyhow::anyhow!(e))
     }
-
-
 }
 
 impl From<Signal> for ReadResult {

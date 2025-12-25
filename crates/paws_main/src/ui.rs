@@ -13,8 +13,8 @@ use paws_api::{
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
     InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
 };
-use paws_app::utils::{format_display_path, truncate_key};
 use paws_app::ToolResolver;
+use paws_app::utils::{format_display_path, truncate_key};
 use paws_common::display::MarkdownWriter;
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
@@ -28,8 +28,7 @@ use url::Url;
 
 use crate::banner;
 use crate::cli::{
-    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
-    TopLevelCommand,
+    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand, TopLevelCommand,
 };
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
@@ -813,8 +812,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         Ok(false)
     }
-
-
 
     /// Builds an Info structure for agents with their details
     async fn build_agents_info(&self) -> anyhow::Result<Info> {

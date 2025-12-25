@@ -178,7 +178,6 @@ impl PawsCommandManager {
                 | "retry"
                 | "conversations"
                 | "list"
-
         )
     }
 
@@ -497,8 +496,6 @@ pub enum SlashCommand {
     /// Switch directly to a specific agent by ID
     #[strum(props(usage = "Switch directly to a specific agent"))]
     AgentSwitch(String),
-
-
 }
 
 impl SlashCommand {
@@ -1093,10 +1090,6 @@ mod tests {
         let expected = format!("✓ Paws                {}", markers::EMPTY);
         assert_eq!(actual, expected);
     }
-
-
-
-
 
     #[test]
     fn test_parse_invalid_agent_command() {

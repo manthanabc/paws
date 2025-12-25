@@ -36,6 +36,4 @@ impl Console {
             }
         }
     }
-
-
 }

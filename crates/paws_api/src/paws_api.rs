@@ -78,8 +78,6 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
         Ok(self.services.get_all_providers().await?)
     }
 
-
-
     async fn get_provider(&self, id: &ProviderId) -> Result<AnyProvider> {
         let providers = self.services.get_all_providers().await?;
         Ok(providers

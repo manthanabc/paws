@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use paws_main::TopLevelCommand;
+    
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -105,6 +105,4 @@ mod tests {
         assert_eq!(cli_with_flags.verbose, true);
         assert_eq!(cli_with_flags.restricted, true);
     }
-
-
 }

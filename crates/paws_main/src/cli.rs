@@ -121,8 +121,6 @@ pub enum TopLevelCommand {
     #[command(alias = "session")]
     Conversation(ConversationCommandGroup),
 
-
-
     /// Manage Model Context Protocol servers.
     Mcp(McpCommandGroup),
 
@@ -524,8 +522,6 @@ pub enum ProviderCommand {
     },
 }
 
-
-
 /// Group of Data-related commands
 #[derive(Parser, Debug, Clone)]
 pub struct DataCommandGroup {
@@ -590,8 +586,6 @@ mod tests {
         };
         assert_eq!(actual, expected);
     }
-
-
 
     #[test]
     fn test_config_set_with_model() {
@@ -1224,12 +1218,6 @@ mod tests {
         let expected = true;
         assert_eq!(actual, expected);
     }
-
-
-
-
-
-
 
     #[test]
     fn test_list_skill_command() {
