@@ -48,7 +48,7 @@ impl MarkdownRenderer {
         let skin = create_skin(attr);
         let no_color = attr == Some(Attribute::Dim);
         let segments = self.render_markdown(content, no_color);
-        let mut result = "\n".to_string();
+        let mut result = String::new();
         for segment in segments {
             match segment {
                 Segment::Text(t) => {
