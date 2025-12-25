@@ -21,6 +21,16 @@
     ]
   },
   {
+    "id": "opencode_zen",
+    "api_key_vars": "ZEN_API_KEY",
+    "response_type": "OpenAI",
+    "url": "https://opencode.ai/zen/v1/chat/completions",
+    "models": "https://opencode.ai/zen/v1/models",
+    "auth_methods": [
+      "api_key"
+    ]
+  },
+  {
     "id": "mimo",
     "api_key_vars": "MIMO_API_KEY",
     "url_param_vars": [],

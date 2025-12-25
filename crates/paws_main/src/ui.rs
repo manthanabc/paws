@@ -247,7 +247,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .get_agent_model(self.api.get_active_agent().await)
             .await;
         let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), usage, model, agent_id };
-        self.console.prompt(paws_prompt).await
+        let command = self.console.prompt(paws_prompt).await?;
+
+        // Make space
+        println!();
+        Ok(command)
     }
 
     pub async fn run(&mut self) {
@@ -2478,6 +2482,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
             self.markdown
                 .clear(&mut self.spinner, duration.as_secs_f64());
+
+            self.markdown.set_max_height(None);
         }
         Ok(())
     }

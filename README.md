@@ -12,11 +12,12 @@ Do check original ![forge](https://github.com/antimonyhq/forge)
 ---
 <summary>About fork</summary>
 
-Difference -
+Difference so far-
  - [X] Streaming tokens
  - [X] Persistent spinner
  - [X] Fixed thinking buffer
  - [X] Hide thinking text after thinking over
+ - [X] Switching conversation shows full history 
 
 Planned - 
  - [o] Undo/ Redo controll
@@ -31,12 +32,14 @@ Planned -
 
 Updates -
  Additional provideres
- - [ ] Xiomi
- - [ ] AI studio
+ - [ ] Xiomi (free mimo v2-flash)
+ - [ ] AI studio (free all models from google under free tier limit)
+ - [ ] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
 
 Dropeed stuff-
 - [ ] posthog tracking
 - [ ] codebase indexing
+- [ ] VS code extension 
 
 
  ## About Forge
