@@ -16,7 +16,9 @@ Difference so far-
  - [X] Streaming tokens
  - [X] Persistent spinner
  - [X] Fixed thinking buffer
- - [X] Hide thinking text after thinking over
+ - [X] changes to UI to maximize information density
+      [X] thinking only shown during thinking in a finite preview window
+      [X] Erase summary after next prompt
  - [X] Switching conversation shows full history 
 
 Planned - 
@@ -25,7 +27,6 @@ Planned -
  - [o] Always visible prompt and enque pending tasks
  - [e] Parallel tasks
  - [o] WebUI -> conversation history management
- - [e] Hybrid agent flows
  - [e] Reduce instructions, remove tools -> simplify
  - [o] Optimize information density on UI
  - [o] Rename paws to .paws
