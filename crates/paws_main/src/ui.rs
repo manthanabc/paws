@@ -2475,6 +2475,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
             self.markdown
                 .clear(&mut self.spinner, duration.as_secs_f64());
+
+            self.markdown.set_max_height(None);
         }
         Ok(())
     }
