@@ -99,11 +99,7 @@ impl PawsEditor {
         signal.map(Into::into).map_err(|e| anyhow::anyhow!(e))
     }
 
-    /// Sets the buffer content to be pre-filled on the next prompt
-    pub fn set_buffer(&mut self, content: String) {
-        self.editor
-            .run_edit_commands(&[EditCommand::InsertString(content)]);
-    }
+
 }
 
 impl From<Signal> for ReadResult {

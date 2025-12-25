@@ -8,7 +8,7 @@ use paws_app::dto::ToolsOverview;
 use paws_app::{
     AgentProviderResolver, AgentRegistry, AppConfigService, AuthService, CommandInfra,
     CommandLoaderService, ConversationService, DataGenerationApp, EnvironmentInfra,
-    EnvironmentService, FileDiscoveryService, GitApp, McpConfigManager, McpService, PawsApp,
+    EnvironmentService, FileDiscoveryService, McpConfigManager, McpService, PawsApp,
     ProviderAuthService, ProviderService, Services, User, UserUsage, Walker,
 };
 use paws_common::stream::MpscStream;
@@ -78,26 +78,7 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
         Ok(self.services.get_all_providers().await?)
     }
 
-    async fn commit(
-        &self,
-        preview: bool,
-        max_diff_size: Option<usize>,
-        diff: Option<String>,
-        additional_context: Option<String>,
-    ) -> Result<paws_app::CommitResult> {
-        let git_app = GitApp::new(self.services.clone());
-        let result = git_app
-            .commit_message(max_diff_size, diff, additional_context)
-            .await?;
 
-        if preview {
-            Ok(result)
-        } else {
-            git_app
-                .commit(result.message, result.has_staged_files)
-                .await
-        }
-    }
 
     async fn get_provider(&self, id: &ProviderId) -> Result<AnyProvider> {
         let providers = self.services.get_all_providers().await?;

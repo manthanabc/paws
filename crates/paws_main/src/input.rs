@@ -37,9 +37,5 @@ impl Console {
         }
     }
 
-    /// Sets the buffer content for the next prompt
-    pub fn set_buffer(&self, content: String) {
-        let mut editor = self.editor.lock().unwrap();
-        editor.set_buffer(content);
-    }
+
 }
