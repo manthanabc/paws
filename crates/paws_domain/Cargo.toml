@@ -25,9 +25,6 @@ workspace = true
 [dependencies.fnv_rs]
 workspace = true
 
-[dependencies.indexmap]
-workspace = true
-
 [dependencies.nom]
 workspace = true
 
@@ -113,3 +110,4 @@ features = [ "derive",]
 
 [dev-dependencies.paws_common]
 workspace = true
+features = ["json"]

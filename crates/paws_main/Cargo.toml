@@ -15,9 +15,6 @@ paws_services.workspace = true
 serial_test = "3.2"
 strip-ansi-escapes = "0.2"
 
-[dependencies.thiserror]
-workspace = true
-
 [dependencies.clap]
 workspace = true
 
@@ -49,9 +46,6 @@ workspace = true
 workspace = true
 
 [dependencies.derive_setters]
-workspace = true
-
-[dependencies.lazy_static]
 workspace = true
 
 [dependencies.reedline]

@@ -5,8 +5,6 @@ edition = "2024"
 
 [dependencies]
 lazy_static = "1.5.0"
-serde_urlencoded = "0.7.1"
-sysinfo.workspace = true
 
 [dependencies.chrono]
 workspace = true
@@ -53,9 +51,6 @@ workspace = true
 [dependencies.regex]
 workspace = true
 
-[dependencies.humantime]
-workspace = true
-
 [dependencies.thiserror]
 workspace = true
 
@@ -71,16 +66,13 @@ workspace = true
 [dependencies.grep-regex]
 workspace = true
 
-[dependencies.rust-embed]
-workspace = true
-
 [dependencies.base64]
 workspace = true
 
-[dependencies.strum_macros]
+[dependencies.strum]
 workspace = true
 
-[dependencies.strum]
+[dependencies.strum_macros]
 workspace = true
 
 [dependencies.bytes]
@@ -110,16 +102,6 @@ workspace = true
 [dependencies.paws_domain]
 workspace = true
 
-[dependencies.oauth2]
-version = "5.0"
-features = [ "reqwest",]
-
-[dependencies.http]
-workspace = true
-
-[dependencies.aws-config]
-workspace = true
-
 [dependencies.aws-sdk-bedrockruntime]
 workspace = true
 
@@ -135,22 +117,10 @@ workspace = true
 [dependencies.paws_common]
 workspace = true
 
-[dependencies.machineid-rs]
-workspace = true
-
-[dependencies.whoami]
-workspace = true
-
 [dependencies.tracing-appender]
 workspace = true
 
 [dependencies.tracing-subscriber]
-workspace = true
-
-[dependencies.convert_case]
-workspace = true
-
-[dependencies.derive_more]
 workspace = true
 
 [dependencies.insta]
