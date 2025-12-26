@@ -13,8 +13,8 @@ use paws_api::{
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
     InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
 };
+use paws_app::ToolResolver;
 use paws_app::utils::{format_display_path, truncate_key};
-use paws_app::{CommitResult, ToolResolver};
 use paws_common::display::MarkdownWriter;
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
@@ -28,8 +28,7 @@ use url::Url;
 
 use crate::banner;
 use crate::cli::{
-    Cli, CommitCommandGroup, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
-    TopLevelCommand,
+    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand, TopLevelCommand,
 };
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
@@ -564,14 +563,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 return Ok(());
             }
-            TopLevelCommand::Commit(commit_group) => {
-                let preview = commit_group.preview;
-                let result = self.handle_commit_command(commit_group).await?;
-                if preview {
-                    self.writeln(&result.message)?;
-                }
-                return Ok(());
-            }
+
             TopLevelCommand::Data(data_command_group) => {
                 let mut stream = self.api.generate_data(data_command_group.into()).await?;
                 while let Some(data) = stream.next().await {
@@ -819,42 +811,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         Ok(false)
-    }
-
-    async fn handle_commit_command(
-        &mut self,
-        commit_group: CommitCommandGroup,
-    ) -> anyhow::Result<CommitResult> {
-        self.spinner.start(Some("Creating commit"))?;
-
-        // Convert Vec<String> to Option<String> by joining with spaces
-        let additional_context = if commit_group.text.is_empty() {
-            None
-        } else {
-            Some(commit_group.text.join(" "))
-        };
-
-        // Handle the commit command
-        let result = self
-            .api
-            .commit(
-                commit_group.preview,
-                commit_group.max_diff_size,
-                commit_group.diff,
-                additional_context,
-            )
-            .await;
-
-        match result {
-            Ok(result) => {
-                self.spinner.stop(None)?;
-                Ok(result)
-            }
-            Err(e) => {
-                self.spinner.stop(None)?;
-                Err(e)
-            }
-        }
     }
 
     /// Builds an Info structure for agents with their details
@@ -1553,18 +1509,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Shell(ref command) => {
                 self.api.execute_shell_command_raw(command).await?;
             }
-            SlashCommand::Commit { max_diff_size } => {
-                let args = CommitCommandGroup {
-                    preview: true,
-                    max_diff_size: max_diff_size.or(Some(100_000)),
-                    diff: None,
-                    text: Vec::new(),
-                };
-                let result = self.handle_commit_command(args).await?;
-                let flags = if result.has_staged_files { "" } else { " -a" };
-                let commit_command = format!("!git commit{flags} -m '{}'", result.message);
-                self.console.set_buffer(commit_command);
-            }
+
             SlashCommand::Agent => {
                 #[derive(Clone)]
                 struct Agent {

@@ -12,7 +12,7 @@ pub mod dto;
 mod error;
 mod file_tracking;
 mod fmt;
-mod git_app;
+
 mod infra;
 mod init_conversation_metrics;
 mod mcp_executor;
@@ -44,7 +44,6 @@ pub use app::*;
 pub use command_generator::*;
 pub use data_gen::*;
 pub use error::*;
-pub use git_app::*;
 pub use infra::*;
 pub use services::*;
 pub use template_engine::*;
