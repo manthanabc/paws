@@ -2465,6 +2465,7 @@ version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -3214,6 +3215,7 @@ dependencies = [
  "futures",
  "glob",
  "http 1.4.0",
+ "libsqlite3-sys",
  "oauth2",
  "paws_app",
  "paws_common",

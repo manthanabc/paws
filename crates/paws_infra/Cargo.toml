@@ -6,6 +6,10 @@ edition = "2024"
 [dependencies]
 serde_urlencoded = "0.7.1"
 
+[dependencies.libsqlite3-sys]
+version = "0.35.0"
+features = ["bundled"]
+
 [dev-dependencies]
 serial_test = "3.2"
 
