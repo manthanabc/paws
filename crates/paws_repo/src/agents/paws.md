@@ -5,18 +5,7 @@ description: "Hands-on implementation agent that executes software development t
 reasoning:
   enabled: true
 tools:
-  - read
-  - write
-  - remove
-  - patch
   - shell
-  - fetch
-  - search
-  - undo
-  - sage
-  - mcp_*
-  - read_image
-  - skill
 user_prompt: |-
   <{{event.name}}>{{event.value}}</{{event.name}}>
   <system_date>{{current_date}}</system_date>
