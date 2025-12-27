@@ -750,16 +750,24 @@ fn format_display_path(path: &Path, cwd: &Path) -> String {
     }
 }
 
-impl TryFrom<ToolCallFull> for ToolCatalog {
+impl TryFrom<&ToolCallFull> for ToolCatalog {
     type Error = crate::Error;
 
-    fn try_from(value: ToolCallFull) -> Result<Self, Self::Error> {
+    fn try_from(value: &ToolCallFull) -> Result<Self, Self::Error> {
         let mut map = Map::new();
         map.insert("name".into(), value.name.as_str().into());
         map.insert("arguments".into(), value.arguments.parse()?);
 
         serde_json::from_value(serde_json::Value::Object(map))
             .map_err(|error| crate::Error::AgentCallArgument { error })
+    }
+}
+
+impl TryFrom<ToolCallFull> for ToolCatalog {
+    type Error = crate::Error;
+
+    fn try_from(value: ToolCallFull) -> Result<Self, Self::Error> {
+        Self::try_from(&value)
     }
 }
 

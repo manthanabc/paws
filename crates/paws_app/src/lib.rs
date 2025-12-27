@@ -11,7 +11,7 @@ mod data_gen;
 pub mod dto;
 mod error;
 mod file_tracking;
-mod fmt;
+pub mod fmt;
 
 mod infra;
 mod init_conversation_metrics;
