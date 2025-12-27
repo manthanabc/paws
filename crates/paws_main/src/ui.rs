@@ -2792,8 +2792,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             // Show tool calls if any
                             if let Some(calls) = tool_calls {
                                 for call in calls {
-                                    if let Ok(catalog) = ToolCatalog::try_from(call) {
-                                        if let Some(content) =
+                                    if let Ok(catalog) = ToolCatalog::try_from(call)
+                                        && let Some(content) =
                                             catalog.to_content(&self.api.environment())
                                         {
                                             match content {
@@ -2806,7 +2806,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                                 }
                                             }
                                         }
-                                    }
                                 }
                             }
                         }
