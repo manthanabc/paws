@@ -42,6 +42,24 @@ impl ChatResponseContent {
     }
 }
 
+impl std::fmt::Display for ChatResponseContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChatResponseContent::PlainText(text) | ChatResponseContent::Markdown(text) => {
+                write!(f, "{}", text)
+            }
+            ChatResponseContent::Title(title) => {
+                let local_time: chrono::DateTime<Local> = title.timestamp.into();
+                write!(f, "[{}] {}", local_time.format("%H:%M:%S"), title.title)?;
+                if let Some(sub) = &title.sub_title {
+                    write!(f, " {}", sub)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 /// Events that are emitted by the agent for external consumption. This includes
 /// events for all internal state changes.
 #[derive(Debug, Clone)]
