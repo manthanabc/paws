@@ -2795,17 +2795,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                     if let Ok(catalog) = ToolCatalog::try_from(call)
                                         && let Some(content) =
                                             catalog.to_content(&self.api.environment())
-                                        {
-                                            match content {
-                                                ChatResponseContent::Title(title) => {
-                                                    self.writeln_title(title)?;
-                                                }
-                                                ChatResponseContent::PlainText(text)
-                                                | ChatResponseContent::Markdown(text) => {
-                                                    self.writeln(text)?;
-                                                }
+                                    {
+                                        match content {
+                                            ChatResponseContent::Title(title) => {
+                                                self.writeln_title(title)?;
+                                            }
+                                            ChatResponseContent::PlainText(text)
+                                            | ChatResponseContent::Markdown(text) => {
+                                                self.writeln(text)?;
                                             }
                                         }
+                                    }
                                 }
                             }
                         }
