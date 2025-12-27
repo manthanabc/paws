@@ -6,8 +6,6 @@ Do check original ![forge](https://github.com/antimonyhq/forge)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
 
-^ ignowre this
-
 [![asciicast](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP.svg)](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP)
 ---
 <summary>About fork</summary>
