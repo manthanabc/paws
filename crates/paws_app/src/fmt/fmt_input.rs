@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+
 use paws_domain::{ChatResponseContent, Environment, TitleFormat, ToolCatalog};
 
 use crate::fmt::content::FormatContent;

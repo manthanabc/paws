@@ -10,12 +10,12 @@ use convert_case::{Case, Casing};
 use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
-    ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event, ToolCatalog,
-    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
+    ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
+    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, ToolCatalog, UserPrompt,
+    Workflow,
 };
-use paws_app::fmt::content::FormatContent;
-
 use paws_app::ToolResolver;
+use paws_app::fmt::content::FormatContent;
 use paws_app::utils::{format_display_path, truncate_key};
 use paws_common::display::MarkdownWriter;
 use paws_common::fs::PawsFS;
@@ -2792,21 +2792,16 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             // Show tool calls if any
                             if let Some(calls) = tool_calls {
                                 for call in calls {
-
-                                    // Only show tool name, reusing the style (yellow bold label,
-                                    // cyan name)
-                                    // self.writeln(format!(
-                                    //     "{} {}\n",
-                                    // 1. Convert to ToolCatalog
                                     if let Ok(catalog) = ToolCatalog::try_from(call) {
-                                        // 2. Get the formatted content (TitleFormat)
-                                        if let Some(content) = catalog.to_content(&self.api.environment()) {
-                                            // 3. Print with rich formatting using .display()
+                                        if let Some(content) =
+                                            catalog.to_content(&self.api.environment())
+                                        {
                                             match content {
                                                 ChatResponseContent::Title(title) => {
                                                     self.writeln_title(title)?;
                                                 }
-                                                ChatResponseContent::PlainText(text) | ChatResponseContent::Markdown(text) => {
+                                                ChatResponseContent::PlainText(text)
+                                                | ChatResponseContent::Markdown(text) => {
                                                     self.writeln(text)?;
                                                 }
                                             }
