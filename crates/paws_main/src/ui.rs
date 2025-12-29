@@ -2792,18 +2792,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             // Show tool calls if any
                             if let Some(calls) = tool_calls {
                                 for call in calls {
-                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone()) {
-                                        if let Some(content) =
+                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                        && let Some(content) =
                                             catalog.to_content(&self.api.environment())
-                                        {
-                                            match content {
-                                                ChatResponseContent::Title(title) => {
-                                                    self.writeln_title(title)?;
-                                                }
-                                                ChatResponseContent::PlainText(text)
-                                                | ChatResponseContent::Markdown(text) => {
-                                                    self.writeln(text)?;
-                                                }
+                                    {
+                                        match content {
+                                            ChatResponseContent::Title(title) => {
+                                                self.writeln_title(title)?;
+                                            }
+                                            ChatResponseContent::PlainText(text)
+                                            | ChatResponseContent::Markdown(text) => {
+                                                self.writeln(text)?;
                                             }
                                         }
                                     }
