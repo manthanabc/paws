@@ -102,6 +102,7 @@ impl SpinnerManager {
                         if active {
                             term(execute!(
                                 stderr,
+                                cursor::MoveUp(1),
                                 cursor::MoveToColumn(0),
                                 Clear(ClearType::CurrentLine)
                             ));
