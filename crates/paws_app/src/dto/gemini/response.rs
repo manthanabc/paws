@@ -233,11 +233,10 @@ impl TryFrom<Response> for ChatCompletionMessage {
                 }
 
                 // Re-set finish reason if it was overwritten
-                if let Some(ref finish_reason) = candidate.finish_reason {
-                    if !has_tool_calls {
+                if let Some(ref finish_reason) = candidate.finish_reason
+                    && !has_tool_calls {
                         message = message.finish_reason(finish_reason.clone());
                     }
-                }
             }
 
             // Add usage if present
