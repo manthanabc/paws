@@ -17,6 +17,7 @@ use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 
 use crate::provider::anthropic::Anthropic;
+use crate::provider::gemini::GeminiProvider;
 use crate::provider::openai::OpenAIProvider;
 use crate::provider::retry::into_retry;
 
@@ -99,6 +100,31 @@ impl ClientBuilder {
             ProviderResponse::Bedrock => InnerClient::Bedrock(Box::new(
                 crate::provider::bedrock::BedrockProvider::new(provider.clone())?,
             )),
+
+            ProviderResponse::Gemini => {
+                let url = provider.url.clone();
+                let models = provider
+                    .models
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("Provider models configuration is required"))?;
+                let creds = provider
+                    .credential
+                    .context("Gemini provider requires credentials")?
+                    .auth_details;
+                match creds {
+                    paws_domain::AuthDetails::ApiKey(api_key) => {
+                        InnerClient::Gemini(Box::new(GeminiProvider::new(
+                            http.clone(),
+                            api_key.as_str().to_string(),
+                            url,
+                            models,
+                        )))
+                    }
+                    _ => {
+                        anyhow::bail!("Gemini provider requires API key authentication");
+                    }
+                }
+            }
         };
 
         Ok(Client {
@@ -129,6 +155,7 @@ enum InnerClient<T> {
     OpenAICompat(Box<OpenAIProvider<T>>),
     Anthropic(Box<Anthropic<T>>),
     Bedrock(Box<crate::provider::bedrock::BedrockProvider<T>>),
+    Gemini(Box<GeminiProvider<T>>),
 }
 
 impl<T: HttpClientService> Client<T> {
@@ -142,6 +169,7 @@ impl<T: HttpClientService> Client<T> {
             InnerClient::OpenAICompat(provider) => provider.models().await,
             InnerClient::Anthropic(provider) => provider.models().await,
             InnerClient::Bedrock(provider) => provider.models().await,
+            InnerClient::Gemini(provider) => provider.models().await,
         })?;
 
         // Update the cache with all fetched models
@@ -167,6 +195,7 @@ impl<T: HttpClientService> Client<T> {
             InnerClient::OpenAICompat(provider) => provider.chat(model, context).await,
             InnerClient::Anthropic(provider) => provider.chat(model, context).await,
             InnerClient::Bedrock(provider) => provider.chat(model, context).await,
+            InnerClient::Gemini(provider) => provider.chat(model, context).await,
         })?;
 
         let this: Client<T> = self.clone();
