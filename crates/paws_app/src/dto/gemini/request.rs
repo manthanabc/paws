@@ -416,9 +416,10 @@ fn clean_schema_for_gemini(mut schema: Value) -> Value {
 
         // Clean additionalProperties if it's a schema object
         if let Some(additional) = map.get_mut("additionalProperties")
-            && additional.is_object() {
-                *additional = clean_schema_for_gemini(additional.take());
-            }
+            && additional.is_object()
+        {
+            *additional = clean_schema_for_gemini(additional.take());
+        }
     }
 
     schema
