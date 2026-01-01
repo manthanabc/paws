@@ -550,9 +550,6 @@ name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
-dependencies = [
- "serde_core",
-]
 
 [[package]]
 name = "block-buffer"
@@ -968,10 +965,10 @@ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
+ "futures-core",
  "mio",
  "parking_lot",
  "rustix 0.38.44",
- "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -1524,17 +1521,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fd-lock"
-version = "4.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
-dependencies = [
- "cfg-if",
- "rustix 1.1.2",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1767,7 +1753,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
- "strum_macros 0.27.2",
+ "strum_macros",
 ]
 
 [[package]]
@@ -2491,15 +2477,6 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
-
-[[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
 
 [[package]]
 name = "itoa"
@@ -3290,8 +3267,8 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "sha2",
- "strum 0.27.2",
- "strum_macros 0.27.2",
+ "strum",
+ "strum_macros",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -3387,8 +3364,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
- "strum 0.27.2",
- "strum_macros 0.27.2",
+ "strum",
+ "strum_macros",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -3450,8 +3427,10 @@ dependencies = [
  "colored",
  "console 0.16.2",
  "convert_case 0.8.0",
+ "crossterm 0.28.1",
  "derive_setters",
  "fake",
+ "futures",
  "humantime",
  "indexmap",
  "insta",
@@ -3467,14 +3446,13 @@ dependencies = [
  "paws_domain",
  "paws_services",
  "pretty_assertions",
- "reedline",
  "rust-embed",
  "serde",
  "serde_json",
  "serial_test",
  "strip-ansi-escapes",
- "strum 0.27.2",
- "strum_macros 0.27.2",
+ "strum",
+ "strum_macros",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -3513,7 +3491,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "strum 0.27.2",
+ "strum",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -3570,8 +3548,8 @@ dependencies = [
  "serde_urlencoded",
  "serde_yml",
  "strip-ansi-escapes",
- "strum 0.27.2",
- "strum_macros 0.27.2",
+ "strum",
+ "strum_macros",
  "sysinfo 0.36.1",
  "tempfile",
  "thiserror 2.0.17",
@@ -4046,26 +4024,6 @@ dependencies = [
  "getrandom 0.2.16",
  "libredox",
  "thiserror 2.0.17",
-]
-
-[[package]]
-name = "reedline"
-version = "0.42.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f9152b55a7af872d1ea9ac81c619fd02368d3e3b27ff195c56ab3fc300f4fd0"
-dependencies = [
- "chrono",
- "crossterm 0.28.1",
- "fd-lock",
- "itertools",
- "nu-ansi-term",
- "serde",
- "strip-ansi-escapes",
- "strum 0.26.3",
- "strum_macros 0.26.4",
- "thiserror 2.0.17",
- "unicode-segmentation",
- "unicode-width 0.2.2",
 ]
 
 [[package]]
@@ -4843,28 +4801,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"
-version = "0.26.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
-
-[[package]]
-name = "strum"
 version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
-
-[[package]]
-name = "strum_macros"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.111",
-]
 
 [[package]]
 name = "strum_macros"

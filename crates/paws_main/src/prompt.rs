@@ -8,12 +8,10 @@ use derive_setters::Setters;
 use nu_ansi_term::{Color, Style};
 use paws_api::{AgentId, ModelId, Usage};
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-use reedline::{Prompt, PromptHistorySearchStatus};
 
 use crate::display_constants::markers;
 
 // Constants
-const MULTILINE_INDICATOR: &str = ":";
 const VERTICLE_LINE: &str = "┃";
 
 /// Very Specialized Prompt for the Agent Chat
@@ -26,7 +24,13 @@ pub struct PawsPrompt {
     pub model: Option<ModelId>,
 }
 
-impl Prompt for PawsPrompt {
+impl PawsPrompt {
+    pub fn render_prompt(&self) -> String {
+        let left = self.render_prompt_left();
+        let right = self.render_prompt_right();
+        format!("{}", left)
+    }
+
     fn render_prompt_left(&self) -> Cow<'_, str> {
         // Pre-compute styles to avoid repeated style creation
         let mode_style = Style::new().fg(Color::White).bold();
@@ -100,40 +104,6 @@ impl Prompt for PawsPrompt {
                 .to_string(),
         )
     }
-
-    fn render_prompt_indicator(&self, _prompt_mode: reedline::PromptEditMode) -> Cow<'_, str> {
-        Cow::Borrowed("")
-    }
-
-    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
-        Cow::Borrowed(MULTILINE_INDICATOR)
-    }
-
-    fn render_prompt_history_search_indicator(
-        &self,
-        history_search: reedline::PromptHistorySearch,
-    ) -> Cow<'_, str> {
-        let prefix = match history_search.status {
-            PromptHistorySearchStatus::Passing => "",
-            PromptHistorySearchStatus::Failing => "failing ",
-        };
-
-        let mut result = String::with_capacity(32);
-
-        // Handle empty search term more elegantly
-        if history_search.term.is_empty() {
-            write!(result, "({prefix}reverse-search) ").unwrap();
-        } else {
-            write!(
-                result,
-                "({}reverse-search: {}) ",
-                prefix, history_search.term
-            )
-            .unwrap();
-        }
-
-        Cow::Owned(Style::new().fg(Color::White).paint(&result).to_string())
-    }
 }
 
 /// Gets the current git branch name if available
@@ -205,59 +175,6 @@ mod tests {
         let actual = prompt.render_prompt_right();
         assert!(actual.contains(&VERSION.to_string()));
         assert!(actual.contains("0"));
-    }
-
-    #[test]
-    fn test_render_prompt_multiline_indicator() {
-        let prompt = PawsPrompt::default();
-        let actual = prompt.render_prompt_multiline_indicator();
-        let expected = MULTILINE_INDICATOR;
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_render_prompt_history_search_indicator_passing() {
-        let prompt = PawsPrompt::default();
-        let history_search = reedline::PromptHistorySearch {
-            status: PromptHistorySearchStatus::Passing,
-            term: "test".to_string(),
-        };
-        let actual = prompt.render_prompt_history_search_indicator(history_search);
-        let expected = Style::new()
-            .fg(Color::White)
-            .paint("(reverse-search: test) ")
-            .to_string();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_render_prompt_history_search_indicator_failing() {
-        let prompt = PawsPrompt::default();
-        let history_search = reedline::PromptHistorySearch {
-            status: PromptHistorySearchStatus::Failing,
-            term: "test".to_string(),
-        };
-        let actual = prompt.render_prompt_history_search_indicator(history_search);
-        let expected = Style::new()
-            .fg(Color::White)
-            .paint("(failing reverse-search: test) ")
-            .to_string();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_render_prompt_history_search_indicator_empty_term() {
-        let prompt = PawsPrompt::default();
-        let history_search = reedline::PromptHistorySearch {
-            status: PromptHistorySearchStatus::Passing,
-            term: "".to_string(),
-        };
-        let actual = prompt.render_prompt_history_search_indicator(history_search);
-        let expected = Style::new()
-            .fg(Color::White)
-            .paint("(reverse-search) ")
-            .to_string();
-        assert_eq!(actual, expected);
     }
 
     #[test]

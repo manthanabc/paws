@@ -1,9 +1,7 @@
 pub mod banner;
 mod cli;
-mod completer;
 mod conversation_selector;
 mod display_constants;
-mod editor;
 mod info;
 mod input;
 mod model;

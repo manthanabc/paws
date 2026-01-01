@@ -513,6 +513,10 @@ pub enum SlashCommand {
         usage = "Generate AI commit message and commit changes. Format: /commit <max-diff|preview>"
     ))]
     Commit { max_diff_size: Option<usize> },
+
+    /// Internal command to handle resize events
+    #[strum(props(usage = "Internal resize command"))]
+    Resize,
 }
 
 impl SlashCommand {
@@ -544,6 +548,7 @@ impl SlashCommand {
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
+            SlashCommand::Resize => "resize",
         }
     }
 
