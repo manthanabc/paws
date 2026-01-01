@@ -204,14 +204,14 @@ impl SpinnerManager {
             return Ok(());
         }
         let words = [
-            "Thinking",
             "Processing",
-            "Analyzing",
-            "Forging",
-            "Researching",
-            "Synthesizing",
-            "Reasoning",
-            "Contemplating",
+            "Sniffing Code",
+            "Analyzing Bits",
+            "Furging Logic",
+            "Weading Docs",
+            "Synthespawzing",
+            "Weasoning",
+            "Pawndering",
         ];
 
         // Use a random word from the list
