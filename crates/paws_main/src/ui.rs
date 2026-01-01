@@ -246,7 +246,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
-        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), usage, model, agent_id };
+        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), model, agent_id };
         let command = self.console.prompt(paws_prompt).await?;
 
         // Make space

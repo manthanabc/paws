@@ -56,7 +56,7 @@ impl Console {
                                 io::stdout().flush()?;
                                 continue;
                             }
-                            // crossterm::terminal::disable_raw_mode()?;
+                            crossterm::terminal::disable_raw_mode()?;
                             return self.command.parse(trimmed);
                         }
                         KeyCode::Char('c')

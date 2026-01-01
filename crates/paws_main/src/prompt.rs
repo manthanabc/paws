@@ -6,8 +6,7 @@ use std::process::Command;
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
 use nu_ansi_term::{Color, Style};
-use paws_api::{AgentId, ModelId, Usage};
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use paws_api::{AgentId, ModelId};
 
 use crate::display_constants::markers;
 
@@ -19,23 +18,14 @@ const VERTICLE_LINE: &str = "┃";
 #[setters(strip_option, borrow_self)]
 pub struct PawsPrompt {
     pub cwd: PathBuf,
-    pub usage: Option<Usage>,
     pub agent_id: AgentId,
     pub model: Option<ModelId>,
 }
 
 impl PawsPrompt {
     pub fn render_prompt(&self) -> String {
-        let left = self.render_prompt_left();
-        let right = self.render_prompt_right();
-        format!("{}", left)
-    }
-
-    fn render_prompt_left(&self) -> Cow<'_, str> {
-        // Pre-compute styles to avoid repeated style creation
         let mode_style = Style::new().fg(Color::White).bold();
-        let folder_style = Style::new().fg(Color::Cyan);
-        let branch_style = Style::new().fg(Color::LightGreen);
+        let branch_style = Style::new().fg(Color::Cyan);
 
         // Get current directory
         let current_dir = self
@@ -45,39 +35,15 @@ impl PawsPrompt {
             .map(String::from)
             .unwrap_or_else(|| markers::EMPTY.to_string());
 
-        // Get git branch (only if we're in a git repo)
         let branch_opt = get_git_branch();
+        let mut result = String::new();
 
-        // Use a string buffer to reduce allocations
-        let mut result = String::with_capacity(64); // Pre-allocate a reasonable size
-
-        // Build the string step-by-step
         write!(
             result,
-            "{} {}",
+            "{} ",
             mode_style.paint(self.agent_id.as_str().to_case(Case::UpperSnake)),
-            folder_style.paint(&current_dir)
         )
         .unwrap();
-
-        // Only append branch info if present
-        if let Some(branch) = branch_opt
-            && branch != current_dir
-        {
-            write!(result, " {} ", branch_style.paint(branch)).unwrap();
-        }
-
-        write!(result, "\n{} ", mode_style.paint(VERTICLE_LINE)).unwrap();
-
-        Cow::Owned(result)
-    }
-
-    fn render_prompt_right(&self) -> Cow<'_, str> {
-        // Use a string buffer with pre-allocation to reduce allocations
-        let mut result = String::with_capacity(32);
-
-        // Start with bracket and version
-        write!(result, "[{VERSION}").unwrap();
 
         // Append model if available
         if let Some(model) = self.model.as_ref() {
@@ -86,23 +52,19 @@ impl PawsPrompt {
                 .split('/')
                 .next_back()
                 .unwrap_or_else(|| model.as_str());
-            write!(result, "/{formatted_model}").unwrap();
+            write!(result, "[{formatted_model}]").unwrap();
         }
 
-        if let Some(usage) = self.usage.as_ref().map(|usage| &usage.total_tokens) {
-            write!(result, "/{usage}").unwrap();
+        // Only append branch info if present
+        if let Some(branch) = branch_opt
+            && branch != current_dir
+        {
+            write!(result, " Git:{} ", branch_style.paint(branch)).unwrap();
         }
 
-        write!(result, "]").unwrap();
+        write!(result, "\n{} ", mode_style.paint(VERTICLE_LINE)).unwrap();
 
-        // Apply styling once at the end
-        Cow::Owned(
-            Style::new()
-                .bold()
-                .fg(Color::DarkGray)
-                .paint(&result)
-                .to_string(),
-        )
+        result
     }
 }
 
@@ -131,68 +93,5 @@ fn get_git_branch() -> Option<String> {
             .filter(|s| !s.is_empty())
     } else {
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use nu_ansi_term::Style;
-    use pretty_assertions::assert_eq;
-
-    use super::*;
-
-    impl Default for PawsPrompt {
-        fn default() -> Self {
-            PawsPrompt {
-                cwd: PathBuf::from("."),
-                usage: None,
-                agent_id: AgentId::default(),
-                model: None,
-            }
-        }
-    }
-
-    #[test]
-    fn test_render_prompt_right_with_usage() {
-        let usage = Usage {
-            prompt_tokens: paws_api::TokenCount::Actual(10),
-            completion_tokens: paws_api::TokenCount::Actual(20),
-            total_tokens: paws_api::TokenCount::Approx(30),
-            ..Default::default()
-        };
-        let mut prompt = PawsPrompt::default();
-        let _ = prompt.usage(usage);
-
-        let actual = prompt.render_prompt_right();
-        assert!(actual.contains(&VERSION.to_string()));
-        assert!(actual.contains("~30"));
-    }
-
-    #[test]
-    fn test_render_prompt_right_without_usage() {
-        let prompt = PawsPrompt::default();
-        let actual = prompt.render_prompt_right();
-        assert!(actual.contains(&VERSION.to_string()));
-        assert!(actual.contains("0"));
-    }
-
-    #[test]
-    fn test_render_prompt_right_with_model() {
-        let usage = Usage {
-            prompt_tokens: paws_api::TokenCount::Actual(10),
-            completion_tokens: paws_api::TokenCount::Actual(20),
-            total_tokens: paws_api::TokenCount::Actual(30),
-            ..Default::default()
-        };
-        let mut prompt = PawsPrompt::default();
-        let _ = prompt.usage(usage);
-        let _ = prompt.model(ModelId::new("anthropic/claude-3"));
-
-        let actual = prompt.render_prompt_right();
-        assert!(actual.contains("claude-3")); // Only the last part after splitting by '/'
-        assert!(!actual.contains("anthropic/claude-3")); // Should not contain the full model ID
-        assert!(actual.contains(&VERSION.to_string()));
-        assert!(actual.contains("30"));
     }
 }
