@@ -29,8 +29,13 @@ impl Console {
 
 impl Console {
     pub async fn prompt(&self, prompt: PawsPrompt) -> anyhow::Result<SlashCommand> {
+        // Enable raw mode for character-by-character input
+        crossterm::terminal::enable_raw_mode()?;
+
+        // crossterm::terminal::disable_raw_mode()?;
         // Print the prompt string
-        print!("{}", prompt.render_prompt());
+        // We need to use \r\n for newlines in raw mode
+        print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
         io::stdout().flush()?;
 
         let mut buffer = String::new();
@@ -43,24 +48,28 @@ impl Console {
                 Some(Ok(Event::Key(key_event))) => {
                     match key_event.code {
                         KeyCode::Enter => {
-                            println!(); // Move to next line
+                            println!("\r"); // Move to next line with carriage return
                             let trimmed = buffer.trim();
                             if trimmed.is_empty() {
                                 // Reprint prompt and continue
-                                print!("{}", prompt.render_prompt());
+                                print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
                                 io::stdout().flush()?;
                                 continue;
                             }
+                            // crossterm::terminal::disable_raw_mode()?;
                             return self.command.parse(trimmed);
                         }
                         KeyCode::Char('c')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            return Ok(SlashCommand::Exit);
+                            crossterm::terminal::disable_raw_mode()?;
+                            continue;
+                            // return Ok(SlashCommand::Exit);
                         }
                         KeyCode::Char('d')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
+                            crossterm::terminal::disable_raw_mode()?;
                             return Ok(SlashCommand::Exit);
                         }
                         KeyCode::Char(c) => {
@@ -80,14 +89,19 @@ impl Console {
                     }
                 }
                 Some(Ok(Event::Resize(_, _))) => {
+                    crossterm::terminal::disable_raw_mode()?;
                     return Ok(SlashCommand::Resize);
                 }
-                Some(Err(e)) => return Err(e.into()),
+                Some(Err(e)) => {
+                    crossterm::terminal::disable_raw_mode()?;
+                    return Err(e.into());
+                }
                 None => break,
                 _ => {}
             }
         }
 
+        crossterm::terminal::disable_raw_mode()?;
         Ok(SlashCommand::Exit)
     }
 

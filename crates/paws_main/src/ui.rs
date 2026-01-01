@@ -312,7 +312,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         self.on_resize().await?;
                     }
                     _ => {
-                        let result = self.on_command(cmd.clone()).await;
+                        let result = tokio::select! {
+                            _ = tokio::signal::ctrl_c() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            _ = ctrl_c_rx.recv() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            res = self.on_command(cmd.clone()) => res,
+                        };
+
                         match result {
                             Ok(exit) => {
                                 if exit || !is_interactive {
