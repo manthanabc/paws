@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,51 +8,53 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
-use merge::Merge;
-use paws_api::{
+use forge_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
-    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, ToolCatalog, UserPrompt,
-    Workflow,
+    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
 };
-use paws_app::ToolResolver;
-use paws_app::fmt::content::FormatContent;
-use paws_app::utils::{format_display_path, truncate_key};
-use paws_common::display::MarkdownWriter;
-use paws_common::fs::PawsFS;
-use paws_common::select::PawsSelect;
-use paws_common::spinner::SpinnerManager;
-use paws_domain::{
+use forge_app::utils::{format_display_path, truncate_key};
+use forge_app::{CommitResult, ToolResolver};
+use forge_display::MarkdownFormat;
+use forge_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
+use forge_fs::ForgeFS;
+use forge_select::ForgeSelect;
+use forge_spinner::SpinnerManager;
+use forge_tracker::ToolCallPayload;
+use merge::Merge;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
 
-use crate::banner;
 use crate::cli::{
-    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand, TopLevelCommand,
+    Cli, CommitCommandGroup, ConversationCommand, ListCommand, McpCommand, TopLevelCommand,
 };
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
 use crate::info::Info;
 use crate::input::Console;
-use crate::model::{CliModel, CliProvider, PawsCommandManager, SelectItem, SlashCommand};
+use crate::model::{CliModel, CliProvider, ForgeCommandManager, SlashCommand};
 use crate::porcelain::Porcelain;
-use crate::prompt::{PawsPrompt, get_git_branch};
+use crate::prompt::ForgePrompt;
 use crate::state::UIState;
+use crate::sync_display::SyncProgressDisplay;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
 use crate::update::on_update;
+use crate::utils::humanize_time;
+use crate::zsh::ZshRPrompt;
+use crate::{TRACKER, banner, tracker};
 
 // File-specific constants
 const MISSING_AGENT_TITLE: &str = "<missing agent.title>";
 
 /// Formats an MCP server config for display, redacting sensitive information.
 /// Returns the command/URL string only.
-fn format_mcp_server(server: &paws_domain::McpServerConfig) -> String {
+fn format_mcp_server(server: &forge_domain::McpServerConfig) -> String {
     match server {
-        paws_domain::McpServerConfig::Stdio(stdio) => {
+        forge_domain::McpServerConfig::Stdio(stdio) => {
             let mut output = format!("{} ", stdio.command);
             for arg in &stdio.args {
                 output.push_str(&format!("{arg} "));
@@ -61,16 +64,16 @@ fn format_mcp_server(server: &paws_domain::McpServerConfig) -> String {
             }
             output.trim().to_string()
         }
-        paws_domain::McpServerConfig::Http(http) => http.url.clone(),
+        forge_domain::McpServerConfig::Http(http) => http.url.clone(),
     }
 }
 
 /// Formats HTTP headers for display, redacting values.
 /// Returns None if there are no headers.
-fn format_mcp_headers(server: &paws_domain::McpServerConfig) -> Option<String> {
+fn format_mcp_headers(server: &forge_domain::McpServerConfig) -> Option<String> {
     match server {
-        paws_domain::McpServerConfig::Stdio(_) => None,
-        paws_domain::McpServerConfig::Http(http) => {
+        forge_domain::McpServerConfig::Stdio(_) => None,
+        forge_domain::McpServerConfig::Http(http) => {
             if http.headers.is_empty() {
                 None
             } else {
@@ -87,18 +90,16 @@ fn format_mcp_headers(server: &paws_domain::McpServerConfig) -> Option<String> {
 }
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter,
+    markdown: MarkdownFormat,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
     console: Console,
-    command: Arc<PawsCommandManager>,
+    command: Arc<ForgeCommandManager>,
     cli: Cli,
     spinner: SpinnerManager,
-    ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
-    thinking_start: Option<std::time::Instant>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
-    _guard: paws_services::log::Guard,
+    _guard: forge_tracker::Guard,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -154,38 +155,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     /// Displays banner only if user is in interactive mode.
-    async fn display_banner(&self) -> Result<()> {
+    fn display_banner(&self) -> Result<()> {
         if self.cli.is_interactive() {
-            let info = self.get_banner_info().await;
-            banner::display(&info)?;
+            banner::display(false)?;
         }
         Ok(())
-    }
-
-    async fn get_banner_info(&self) -> banner::BannerInfo {
-        let agent = self.api.get_active_agent().await;
-        let model = self.get_agent_model(agent.clone()).await;
-        let provider = self.get_provider(agent).await.ok();
-
-        let model_str = model
-            .map(|m| m.as_str().to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
-        let provider_str = provider
-            .map(|p| p.id.to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        let conversation_id = self
-            .state
-            .conversation_id
-            .map(|id| id.into_string())
-            .unwrap_or_else(|| "New Session".to_string());
-
-        banner::BannerInfo {
-            model: model_str,
-            provider: provider_str,
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            conversation_id,
-        }
     }
 
     // Handle creating a new conversation
@@ -201,10 +175,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
         self.cli.conversation_id = None;
-        self.state.conversation_id = None;
 
-        self.init_conversation().await?;
-        self.display_banner().await?;
+        self.display_banner()?;
         self.trace_user();
         self.hydrate_caches();
         Ok(())
@@ -240,9 +212,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Parse CLI arguments first to get flags
         let api = Arc::new(f());
         let env = api.environment();
-        let command = Arc::new(PawsCommandManager::default());
-        let mut spinner = SpinnerManager::new();
-        let ctrl_c_rx = spinner.init()?;
+        let command = Arc::new(ForgeCommandManager::default());
         Ok(Self {
             state: Default::default(),
             api,
@@ -250,17 +220,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner,
-            ctrl_c_rx,
-            markdown: MarkdownWriter::new(),
-            thinking_start: None,
-            _guard: paws_services::log::init_tracing(env.log_path())?,
+            spinner: SpinnerManager::new(),
+            markdown: MarkdownFormat::new(),
+            _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
 
     async fn prompt(&self) -> Result<SlashCommand> {
         // Get usage from current conversation if available
-        let _usage = if let Some(conversation_id) = &self.state.conversation_id {
+        let usage = if let Some(conversation_id) = &self.state.conversation_id {
             self.api
                 .conversation(conversation_id)
                 .await
@@ -276,17 +244,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
-        let paws_prompt = PawsPrompt {
-            cwd: self.state.cwd.clone(),
-            model,
-            agent_id,
-            git_branch: get_git_branch(),
-        };
-        let command = self.console.prompt(paws_prompt).await?;
-
-        // Make space
-        println!();
-        Ok(command)
+        let forge_prompt = ForgePrompt { cwd: self.state.cwd.clone(), usage, model, agent_id };
+        self.console.prompt(forge_prompt).await
     }
 
     pub async fn run(&mut self) {
@@ -315,109 +274,76 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         // Display the banner in dimmed colors since we're in interactive mode
+        self.display_banner()?;
         self.init_state(true).await?;
 
         self.trace_user();
         self.hydrate_caches();
         self.init_conversation().await?;
-        self.display_banner().await?;
 
         // Check for dispatch flag first
         if let Some(dispatch_json) = self.cli.event.clone() {
             return self.handle_dispatch(dispatch_json).await;
         }
 
-        // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
-        let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
+        // Handle direct prompt or piped input if provided (raw text messages)
+        let input = self.cli.prompt.clone().or(self.cli.piped_input.clone());
+        if let Some(input) = input {
+            self.spinner.start(None)?;
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("User interrupted operation with Ctrl+C");
+                    self.spinner.stop(None)?;
+                    return Ok(());
+                }
+                result = self.on_message(Some(input)) => {
+                    result?;
+                }
+            }
+            return Ok(());
+        }
 
-        // Get initial input from prompt or CLI
-        let mut command =
-            if let Some(prompt) = self.cli.prompt.clone().or(self.cli.piped_input.clone()) {
-                Ok(SlashCommand::Message(prompt))
-            } else {
-                self.prompt().await
-            };
-
-        let is_interactive = self.cli.is_interactive();
+        // Get initial input from prompt
+        let mut command = self.prompt().await;
 
         loop {
             match command {
-                Ok(ref cmd) => match cmd {
-                    SlashCommand::Resize => {
-                        self.on_resize().await?;
-                    }
-                    _ => {
-                        let result = tokio::select! {
-                            _ = tokio::signal::ctrl_c() => {
-                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
-                                Ok(false)
-                            }
-                            _ = ctrl_c_rx.recv() => {
-                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
-                                Ok(false)
-                            }
-                            res = self.on_command(cmd.clone()) => res,
-                        };
-
-                        match result {
-                            Ok(exit) => {
-                                if exit || !is_interactive {
-                                    return Ok(());
-                                }
-                            }
-                            Err(error) => {
-                                tracing::error!(error = ?error);
-                                self.spinner.stop(None)?;
-                                self.writeln_to_stderr(
-                                    TitleFormat::error(format!("{error:?}"))
-                                        .display()
-                                        .to_string(),
-                                )?;
-                                if !is_interactive {
-                                    return Ok(());
-                                }
+                Ok(command) => {
+                    tokio::select! {
+                        _ = tokio::signal::ctrl_c() => {
+                            tracing::info!("User interrupted operation with Ctrl+C");
+                        }
+                        result = self.on_command(command) => {
+                            match result {
+                                Ok(exit) => if exit {return Ok(())},
+                                Err(error) => {
+                                    if let Some(conversation_id) = self.state.conversation_id.as_ref()
+                                        && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
+                                            TRACKER.set_conversation(conversation).await;
+                                        }
+                                    tracker::error(&error);
+                                    tracing::error!(error = ?error);
+                                    self.spinner.stop(None)?;
+                                    self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
+                                },
                             }
                         }
                     }
-                },
-                Err(ref error) => {
+
+                    self.spinner.stop(None)?;
+                }
+                Err(error) => {
+                    tracker::error(&error);
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
                     self.writeln_to_stderr(
                         TitleFormat::error(error.to_string()).display().to_string(),
                     )?;
-                    if !is_interactive {
-                        return Ok(());
-                    }
                 }
             }
-            self.spinner.stop(None)?;
-            if !is_interactive {
-                break;
-            }
-
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
-            self.markdown.reset();
         }
-        Ok(())
-    }
-
-    async fn on_resize(&mut self) -> Result<()> {
-        println!("\x1b[3J\x1b[2J\x1b[H");
-        eprintln!("\x1b[3J\x1b[2J\x1b[H");
-        let conversation_id = self.init_conversation().await?;
-        let conversation = self
-            .api
-            .conversation(&conversation_id)
-            .await
-            .unwrap()
-            .expect("IDK why this happened, do report");
-
-        self.display_banner().await?;
-        self.on_print_conversation(conversation.clone()).await?;
-        self.on_show_conv_info(conversation).await?;
-        Ok(())
     }
 
     // Improve startup time by hydrating caches
@@ -428,10 +354,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         tokio::spawn(async move { api.get_tools().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.get_agents().await });
+        let api = self.api.clone();
+        tokio::spawn(async move {
+            let _ = api.hydrate_channel();
+        });
     }
 
     async fn handle_generate_conversation_id(&mut self) -> Result<()> {
-        let conversation_id = paws_domain::ConversationId::generate();
+        let conversation_id = forge_domain::ConversationId::generate();
         println!("{}", conversation_id.into_string());
         Ok(())
     }
@@ -482,20 +412,35 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 return Ok(());
             }
-            TopLevelCommand::Extension(extension_group) => {
-                match extension_group.command {
-                    ExtensionCommand::Zsh => {
-                        self.on_zsh_prompt().await?;
+            TopLevelCommand::Zsh(terminal_group) => {
+                match terminal_group {
+                    crate::cli::ZshCommandGroup::Plugin => {
+                        self.on_zsh_plugin().await?;
+                    }
+                    crate::cli::ZshCommandGroup::Theme => {
+                        self.on_zsh_theme().await?;
+                    }
+                    crate::cli::ZshCommandGroup::Doctor => {
+                        self.on_zsh_doctor().await?;
+                    }
+                    crate::cli::ZshCommandGroup::Rprompt => {
+                        if let Some(text) = self.handle_zsh_rprompt_command().await {
+                            print!("{}", text)
+                        }
+                        return Ok(());
+                    }
+                    crate::cli::ZshCommandGroup::Setup => {
+                        self.on_zsh_setup().await?;
                     }
                 }
                 return Ok(());
             }
             TopLevelCommand::Mcp(mcp_command) => match mcp_command.command {
                 McpCommand::Import(import_args) => {
-                    let scope: paws_domain::Scope = import_args.scope.into();
+                    let scope: forge_domain::Scope = import_args.scope.into();
 
                     // Parse the incoming MCP configuration
-                    let incoming_config: paws_domain::McpConfig = serde_json::from_str(&import_args.json)
+                    let incoming_config: forge_domain::McpConfig = serde_json::from_str(&import_args.json)
                         .context("Failed to parse MCP configuration JSON. Expected format: {\"mcpServers\": {...}}")?;
 
                     // Read only the scope-specific config (not merged)
@@ -524,8 +469,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.on_show_mcp_servers(mcp_command.porcelain).await?;
                 }
                 McpCommand::Remove(rm) => {
-                    let name = paws_api::ServerName::from(rm.name);
-                    let scope: paws_domain::Scope = rm.scope.into();
+                    let name = forge_api::ServerName::from(rm.name);
+                    let scope: forge_domain::Scope = rm.scope.into();
 
                     // Read only the scope-specific config (not merged)
                     let mut scope_config = self.api.read_mcp_config(Some(&scope)).await?;
@@ -539,7 +484,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln_title(TitleFormat::info(format!("Removed server: {name}")))?;
                 }
                 McpCommand::Show(val) => {
-                    let name = paws_api::ServerName::from(val.name);
+                    let name = forge_api::ServerName::from(val.name);
                     let config = self.api.read_mcp_config(None).await?;
                     let server = config
                         .mcp_servers
@@ -578,8 +523,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 return Ok(());
             }
             TopLevelCommand::Banner => {
-                let info = self.get_banner_info().await;
-                banner::display(&info)?;
+                banner::display(true)?;
                 return Ok(());
             }
             TopLevelCommand::Config(config_group) => {
@@ -633,7 +577,57 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 return Ok(());
             }
+            TopLevelCommand::Workspace(index_group) => {
+                match index_group.command {
+                    crate::cli::WorkspaceCommand::Sync { path, batch_size } => {
+                        self.on_index(path, batch_size).await?;
+                    }
+                    crate::cli::WorkspaceCommand::List { porcelain } => {
+                        self.on_list_workspaces(porcelain).await?;
+                    }
+                    crate::cli::WorkspaceCommand::Query {
+                        query,
+                        path,
+                        limit,
+                        top_k,
+                        use_case,
+                        starts_with,
+                        ends_with,
+                    } => {
+                        let mut params =
+                            forge_domain::SearchParams::new(&query, &use_case).limit(limit);
+                        if let Some(k) = top_k {
+                            params = params.top_k(k);
+                        }
+                        if let Some(prefix) = starts_with {
+                            params = params.starts_with(prefix);
+                        }
+                        if let Some(suffix) = ends_with {
+                            params = params.ends_with(suffix);
+                        }
+                        self.on_query(path, params).await?;
+                    }
 
+                    crate::cli::WorkspaceCommand::Info { path } => {
+                        self.on_workspace_info(path).await?;
+                    }
+                    crate::cli::WorkspaceCommand::Delete { workspace_id } => {
+                        self.on_delete_workspace(workspace_id).await?;
+                    }
+                    crate::cli::WorkspaceCommand::Status { path, porcelain } => {
+                        self.on_workspace_status(path, porcelain).await?;
+                    }
+                }
+                return Ok(());
+            }
+            TopLevelCommand::Commit(commit_group) => {
+                let preview = commit_group.preview;
+                let result = self.handle_commit_command(commit_group).await?;
+                if preview {
+                    self.writeln(&result.message)?;
+                }
+                return Ok(());
+            }
             TopLevelCommand::Data(data_command_group) => {
                 let mut stream = self.api.generate_data(data_command_group.into()).await?;
                 while let Some(data) = stream.next().await {
@@ -697,36 +691,16 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.state.conversation_id = original_id;
             }
             ConversationCommand::Resume { id } => {
-                let conversation_id = match id {
-                    Some(id) => {
-                        self.validate_conversation_exists(&id).await?;
-                        id
-                    }
-                    None => {
-                        let last_conversation =
-                            self.api.last_conversation().await?.ok_or_else(|| {
-                                anyhow::anyhow!("No conversation found to resume")
-                            })?;
-                        last_conversation.id
-                    }
-                };
+                self.validate_conversation_exists(&id).await?;
 
-                self.state.conversation_id = Some(conversation_id);
-                self.writeln_title(TitleFormat::info(format!(
-                    "Resumed conversation: {conversation_id}"
-                )))?;
+                self.state.conversation_id = Some(id);
+                self.writeln_title(TitleFormat::info(format!("Resumed conversation: {id}")))?;
                 // Interactive mode will be handled by the main loop
             }
             ConversationCommand::Show { id } => {
                 let conversation = self.validate_conversation_exists(&id).await?;
 
                 self.on_show_last_message(conversation).await?;
-            }
-            ConversationCommand::Print { id } => {
-                let id = id.unwrap_or_else(|| self.state.conversation_id.unwrap_or_default());
-                let conversation = self.validate_conversation_exists(&id).await?;
-
-                self.on_print_conversation(conversation).await?;
             }
             ConversationCommand::Info { id } => {
                 let conversation = self.validate_conversation_exists(&id).await?;
@@ -807,64 +781,25 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             self.api.get_provider(id).await?
         } else {
             // Fetch all providers for selection
-            let providers = self.api.get_providers().await?;
-
-            let suggested_ids = [
-                "opencode_zen",
-                "antigravity-proxy",
-                "zai_coding",
-                "open_router",
-                "claude_code",
-                "github_copilot",
-            ];
-
-            // Split providers into suggested and others
-            let (suggested, others): (Vec<_>, Vec<_>) = providers
+            let providers = self
+                .api
+                .get_providers()
+                .await?
                 .into_iter()
-                .partition(|p| suggested_ids.contains(&p.id().as_ref().as_ref()));
-
-            // Sort suggested by the order in suggested_ids, then others alphabetically
-            let suggested: Vec<_> = suggested
-                .into_iter()
-                .map(|p| (p.id().as_ref().as_ref().to_string(), p))
-                .collect();
-
-            let suggested: Vec<_> = suggested_ids
-                .iter()
-                .filter_map(|id| {
-                    suggested
-                        .iter()
-                        .find(|(p_id, _)| p_id == id)
-                        .map(|(_, p)| p)
-                })
-                .cloned()
                 .map(CliProvider)
-                .collect();
+                .collect::<Vec<_>>();
 
-            let mut others: Vec<_> = others.into_iter().map(CliProvider).collect();
-            others.sort_by_key(|a| a.to_string());
-
-            // Build selection list with separator after suggested
-            let mut select_items: Vec<SelectItem> = vec![];
-            select_items.extend(
-                suggested
-                    .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p))),
-            );
-            select_items.push(SelectItem::Separator);
-            select_items.extend(
-                others
-                    .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p))),
-            );
+            // Sort the providers by their display names
+            let mut sorted_providers = providers;
+            sorted_providers.sort_by_key(|a| a.to_string());
 
             // Use the centralized select module
-            match PawsSelect::select("Select a provider to login:", select_items)
+            match ForgeSelect::select("Select a provider to login:", sorted_providers)
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
                 .prompt()?
             {
-                Some(SelectItem::Provider(provider)) => provider.0,
-                _ => {
+                Some(provider) => provider.0,
+                None => {
                     self.writeln_title(TitleFormat::info("Cancelled"))?;
                     return Ok(());
                 }
@@ -916,7 +851,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         sorted_providers.sort_by_key(|a| a.to_string());
 
         // Use the centralized select module
-        match PawsSelect::select("Select a provider to logout:", sorted_providers)
+        match ForgeSelect::select("Select a provider to logout:", sorted_providers)
             .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
             .prompt()?
         {
@@ -934,6 +869,42 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         Ok(false)
+    }
+
+    async fn handle_commit_command(
+        &mut self,
+        commit_group: CommitCommandGroup,
+    ) -> anyhow::Result<CommitResult> {
+        self.spinner.start(Some("Creating commit"))?;
+
+        // Convert Vec<String> to Option<String> by joining with spaces
+        let additional_context = if commit_group.text.is_empty() {
+            None
+        } else {
+            Some(commit_group.text.join(" "))
+        };
+
+        // Handle the commit command
+        let result = self
+            .api
+            .commit(
+                commit_group.preview,
+                commit_group.max_diff_size,
+                commit_group.diff,
+                additional_context,
+            )
+            .await;
+
+        match result {
+            Ok(result) => {
+                self.spinner.stop(None)?;
+                Ok(result)
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
     }
 
     /// Builds an Info structure for agents with their details
@@ -1014,7 +985,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn on_show_providers(
         &mut self,
         porcelain: bool,
-        types: Vec<paws_domain::ProviderType>,
+        types: Vec<forge_domain::ProviderType>,
     ) -> anyhow::Result<()> {
         let mut providers = self.api.get_providers().await?;
 
@@ -1117,7 +1088,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Load built-in commands from JSON
         // NOTE: When adding a new command, update built_in_commands.json AND
-        //       shell-plugin/paws.plugin.zsh (case statement around line 745)
+        //       shell-plugin/forge.plugin.zsh (case statement around line 745)
         const COMMANDS_JSON: &str = include_str!("built_in_commands.json");
 
         #[derive(serde::Deserialize)]
@@ -1192,7 +1163,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    /// Lists only custom commands (used by `paws run`)
+    /// Lists only custom commands (used by `forge run`)
     async fn on_show_custom_commands(&mut self, porcelain: bool) -> anyhow::Result<()> {
         let custom_commands = self.api.get_commands().await?;
         let mut info = Info::new();
@@ -1315,8 +1286,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         for (name, server) in mcp_servers.mcp_servers {
             let label = match server {
-                paws_domain::McpServerConfig::Stdio(_) => "Command",
-                paws_domain::McpServerConfig::Http(_) => "URL",
+                forge_domain::McpServerConfig::Stdio(_) => "Command",
+                forge_domain::McpServerConfig::Http(_) => "URL",
             };
 
             info = info
@@ -1458,10 +1429,124 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    async fn on_zsh_prompt(&self) -> anyhow::Result<()> {
-        let plugin = crate::zsh_plugin::generate_zsh_plugin()?;
+    /// Generate ZSH plugin script
+    async fn on_zsh_plugin(&self) -> anyhow::Result<()> {
+        let plugin = crate::zsh::generate_zsh_plugin()?;
         println!("{plugin}");
         Ok(())
+    }
+
+    /// Generate ZSH theme
+    async fn on_zsh_theme(&self) -> anyhow::Result<()> {
+        let theme = crate::zsh::generate_zsh_theme()?;
+        println!("{theme}");
+        Ok(())
+    }
+
+    /// Run ZSH environment diagnostics
+    async fn on_zsh_doctor(&mut self) -> anyhow::Result<()> {
+        // Stop spinner before streaming output to avoid interference
+        self.spinner.stop(None)?;
+
+        // Stream the diagnostic output in real-time
+        crate::zsh::run_zsh_doctor()?;
+
+        Ok(())
+    }
+
+    /// Setup ZSH integration by updating .zshrc
+    async fn on_zsh_setup(&mut self) -> anyhow::Result<()> {
+        // Check nerd font support
+        println!();
+        println!(
+            "{} {} {}",
+            "󱙺".bold(),
+            "FORGE 33.0k".bold(),
+            " tonic-1.0".cyan()
+        );
+
+        let can_see_nerd_fonts =
+            ForgeSelect::confirm("Can you see all the icons clearly without any overlap?")
+                .with_default(true)
+                .prompt()?;
+
+        let disable_nerd_font = match can_see_nerd_fonts {
+            Some(true) => {
+                println!();
+                false
+            }
+            Some(false) => {
+                println!();
+                println!("   {} Nerd Fonts will be disabled", "⚠".yellow());
+                println!();
+                println!("   You can enable them later by:");
+                println!(
+                    "   1. Installing a Nerd Font from: {}",
+                    "https://www.nerdfonts.com/".dimmed()
+                );
+                println!("   2. Configuring your terminal to use a Nerd Font");
+                println!(
+                    "   3. Removing {} from your ~/.zshrc",
+                    "NERD_FONT=0".dimmed()
+                );
+                println!();
+                true
+            }
+            None => {
+                // User interrupted, default to not disabling
+                println!();
+                false
+            }
+        };
+
+        // Ask about editor preference
+        let editor_options = vec![
+            "Use system default ($EDITOR)",
+            "VS Code (code --wait)",
+            "Vim",
+            "Neovim (nvim)",
+            "Nano",
+            "Emacs",
+            "Sublime Text (subl --wait)",
+            "Skip - I'll configure it later",
+        ];
+
+        let selected_editor = ForgeSelect::select(
+            "Which editor would you like to use for editing prompts?",
+            editor_options,
+        )
+        .prompt()?;
+
+        let forge_editor = match selected_editor {
+            Some("Use system default ($EDITOR)") => None,
+            Some("VS Code (code --wait)") => Some("code --wait"),
+            Some("Vim") => Some("vim"),
+            Some("Neovim (nvim)") => Some("nvim"),
+            Some("Nano") => Some("nano"),
+            Some("Emacs") => Some("emacs"),
+            Some("Sublime Text (subl --wait)") => Some("subl --wait"),
+            Some("Skip - I'll configure it later") => None,
+            _ => None,
+        };
+
+        // Setup ZSH integration with nerd font and editor configuration
+        self.spinner.start(Some("Configuring ZSH"))?;
+        let result = crate::zsh::setup_zsh_integration(disable_nerd_font, forge_editor)?;
+        self.spinner.stop(None)?;
+
+        // Log backup creation if one was made
+        if let Some(backup_path) = result.backup_path {
+            self.writeln_title(TitleFormat::debug(format!(
+                "backup created at {}",
+                backup_path.display()
+            )))?;
+        }
+
+        self.writeln_title(TitleFormat::info(result.message))?;
+
+        self.writeln_title(TitleFormat::debug("running forge zsh doctor"))?;
+        println!();
+        self.on_zsh_doctor().await
     }
 
     /// Handle the cmd command - generates shell command from natural language
@@ -1500,8 +1585,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             let conversation_id = conversation.id;
             self.state.conversation_id = Some(conversation_id);
 
-            // Show conversation
-            self.on_print_conversation(conversation).await?;
+            // Show conversation content
+            self.on_show_last_message(conversation).await?;
+
+            // Print log about conversation switching
+            self.writeln_title(TitleFormat::info(format!(
+                "Switched to conversation {}",
+                conversation_id.into_string().bold()
+            )))?;
 
             // Show conversation info
             self.on_info(false, Some(conversation_id)).await?;
@@ -1568,9 +1659,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
-            SlashCommand::Resume => {
-                self.handle_resume_conversation().await?;
-            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1598,7 +1686,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(Some(content.clone())).await?;
             }
-            SlashCommand::Paws => {
+            SlashCommand::Forge => {
                 self.on_agent_change(AgentId::FORGE).await?;
             }
             SlashCommand::Muse => {
@@ -1635,7 +1723,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Shell(ref command) => {
                 self.api.execute_shell_command_raw(command).await?;
             }
-
+            SlashCommand::Commit { max_diff_size } => {
+                let args = CommitCommandGroup {
+                    preview: true,
+                    max_diff_size: max_diff_size.or(Some(100_000)),
+                    diff: None,
+                    text: Vec::new(),
+                };
+                let result = self.handle_commit_command(args).await?;
+                let flags = if result.has_staged_files { "" } else { " -a" };
+                let commit_command = format!("!git commit{flags} -m '{}'", result.message);
+                self.console.set_buffer(commit_command);
+            }
             SlashCommand::Agent => {
                 #[derive(Clone)]
                 struct Agent {
@@ -1684,7 +1783,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
 
                 if let Some(selected_agent) =
-                    PawsSelect::select("Select an agent", display_agents.clone()).prompt()?
+                    ForgeSelect::select("Select an agent", display_agents.clone()).prompt()?
                 {
                     self.on_agent_change(selected_agent.id).await?;
                 }
@@ -1699,6 +1798,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
+            SlashCommand::Index => {
+                let working_dir = self.state.cwd.clone();
+                // Use default batch size of 10 for slash command
+                self.on_index(working_dir, 10).await?;
+            }
             SlashCommand::AgentSwitch(agent_id) => {
                 // Validate that the agent exists by checking against loaded agents
                 let agents = self.api.get_agents().await?;
@@ -1711,10 +1815,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         "Agent '{agent_id}' not found or unavailable"
                     ));
                 }
-            }
-            SlashCommand::Resize => {
-                // Handled in the main loop, but we need to handle it here to satisfy the match
-                return Ok(false);
             }
         }
 
@@ -1735,21 +1835,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn handle_delete_conversation(&mut self) -> anyhow::Result<()> {
         let conversation_id = self.init_conversation().await?;
         self.on_conversation_delete(conversation_id).await?;
-        Ok(())
-    }
-
-    async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
-        let last_conversation = self
-            .api
-            .last_conversation()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
-
-        self.state.conversation_id = Some(last_conversation.id);
-        self.writeln_title(TitleFormat::info(format!(
-            "Resumed conversation: {}",
-            last_conversation.id
-        )))?;
         Ok(())
     }
 
@@ -1791,7 +1876,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .unwrap_or(0);
 
         // Use the centralized select module
-        match PawsSelect::select("Select a model:", models)
+        match ForgeSelect::select("Select a model:", models)
             .with_starting_cursor(starting_cursor)
             .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
             .prompt()?
@@ -1816,7 +1901,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .required_params
             .iter()
             .map(|param| {
-                let mut input = PawsSelect::input(format!("Enter {param}:"));
+                let mut input = ForgeSelect::input(format!("Enter {param}:"));
 
                 // Add default value if it exists in the credential
                 if let Some(params) = existing_url_params
@@ -1835,10 +1920,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         let input = if let Some(default_key) = &request.api_key {
             // ApiKey's Display shows masked version, AsRef<str> gives actual value
-            PawsSelect::input(format!("Enter your {provider_id} API key:"))
+            ForgeSelect::input(format!("Enter your {provider_id} API key:"))
                 .with_default(default_key)
         } else {
-            PawsSelect::input(format!("Enter your {provider_id} API key:"))
+            ForgeSelect::input(format!("Enter your {provider_id} API key:"))
         };
 
         let api_key_str = input.prompt()?.context("API key input cancelled")?;
@@ -1952,7 +2037,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         )))?;
 
         // Prompt user to set as active provider
-        let should_set_active = PawsSelect::confirm(format!(
+        let should_set_active = ForgeSelect::confirm(format!(
             "Would you like to set {provider_id} as the active provider?"
         ))
         .with_default(true)
@@ -1990,7 +2075,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         // Prompt user to paste authorization code
-        let code = PawsSelect::input("Paste the authorization code:")
+        let code = ForgeSelect::input("Paste the authorization code:")
             .prompt()?
             .ok_or_else(|| anyhow::anyhow!("Authorization code input cancelled"))?;
 
@@ -2049,7 +2134,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             })
             .collect();
 
-        match PawsSelect::select("Select authentication method:", method_names.clone())
+        match ForgeSelect::select("Select authentication method:", method_names.clone())
             .with_help_message("Use arrow keys to navigate and Enter to select")
             .prompt()?
         {
@@ -2071,6 +2156,13 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         provider_id: ProviderId,
         auth_methods: Vec<AuthMethod>,
     ) -> Result<Option<Provider<Url>>> {
+        if provider_id == ProviderId::FORGE_SERVICES {
+            let auth = self.api.create_auth_credentials().await?;
+            self.writeln_title(
+                TitleFormat::info("Forge API key created").sub_title(auth.token.as_str()),
+            )?;
+            return Ok(None);
+        }
         // Select auth method (or use the only one available)
         let auth_method = match self
             .select_auth_method(provider_id.clone(), &auth_methods)
@@ -2123,7 +2215,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .await?
             .into_iter()
             .filter(|p| {
-                let filter = paws_domain::ProviderType::Llm;
+                let filter = forge_domain::ProviderType::Llm;
                 match &p {
                     AnyProvider::Url(provider) => provider.provider_type == filter,
                     AnyProvider::Template(provider) => provider.provider_type == filter,
@@ -2147,7 +2239,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .unwrap_or(0);
 
         // Prompt user to select a provider
-        let Some(provider) = PawsSelect::select("Select a provider:", providers)
+        let Some(provider) = ForgeSelect::select("Select a provider:", providers)
             .with_starting_cursor(starting_cursor)
             .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
             .prompt()?
@@ -2290,7 +2382,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             id
         } else if let Some(ref path) = self.cli.conversation {
             let conversation: Conversation =
-                serde_json::from_str(PawsFS::read_utf8(path.as_os_str()).await?.as_str())
+                serde_json::from_str(ForgeFS::read_utf8(path.as_os_str()).await?.as_str())
                     .context("Failed to parse Conversation")?;
             let id = conversation.id;
             self.api.upsert_conversation(conversation).await?;
@@ -2336,6 +2428,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Run the independent initialization tasks in parallel for better performance
         let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
 
+        let _ = self.handle_migrate_credentials().await;
+
         // Ensure we have a model selected before proceeding with initialization
         let active_agent = self.api.get_active_agent().await;
 
@@ -2365,7 +2459,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // only call on_update if this is the first initialization
             on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
             if !workflow.commands.is_empty() {
-                self.writeln_title(TitleFormat::error("paws.yaml commands are deprecated. Use .md files in paws/ (home) or .paws/ (project) instead"))?;
+                self.writeln_title(TitleFormat::error("forge.yaml commands are deprecated. Use .md files in forge/ (home) or .forge/ (project) instead"))?;
             }
         }
 
@@ -2404,6 +2498,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn on_message(&mut self, content: Option<String>) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
 
+        self.install_vscode_extension();
+
         // Track if content was provided to decide whether to use piped input as
         // additional context
         let has_content = content.is_some();
@@ -2414,16 +2510,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             None => Event::empty(),
         };
 
-        // Only use CLI piped_input as additional context if it wasn't already passed as
-        // content This handles cases where piped input is used alongside
-        // explicit prompts
+        // Only use CLI piped_input as additional context when BOTH --prompt and piped
+        // input are provided. This handles the case: `echo "context" | forge -p
+        // "question"` where piped input provides context and --prompt provides
+        // the actual question.
+        //
+        // When only piped input is provided (no --prompt), it's already used as the
+        // main content (passed via the `content` parameter). We must NOT add it again
+        // as additional_context, otherwise the input appears twice in the
+        // conversation. We detect this by checking if cli.prompt exists - if it
+        // does, the content came from --prompt and piped input should be
+        // additional context.
         let piped_input = self.cli.piped_input.clone();
-        if let Some(piped) = piped_input {
-            // Only add as additional context if content is provided separately (e.g., via
-            // --prompt)
-            if has_content {
-                event = event.additional_context(piped);
-            }
+        let has_explicit_prompt = self.cli.prompt.is_some();
+        if let Some(piped) = piped_input
+            && has_content
+            && has_explicit_prompt
+        {
+            event = event.additional_context(piped);
         }
 
         // Create the chat request with the event
@@ -2440,13 +2544,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 Ok(message) => self.handle_chat_response(message).await?,
                 Err(err) => {
                     self.spinner.stop(None)?;
+                    self.spinner.reset();
                     return Err(err);
                 }
             }
         }
 
-        self.markdown.reset();
         self.spinner.stop(None)?;
+        self.spinner.reset();
 
         Ok(())
     }
@@ -2506,28 +2611,29 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         match message {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
-                ChatResponseContent::PlainText(text) => {
-                    let lines: Vec<&str> = text.lines().collect();
-                    let tail = lines.iter().rev().take(5).rev();
-
-                    let formatted = tail
-                        .map(|line| format!("  {}", line))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                        + "\n";
-
-                    self.writeln(formatted.dimmed())?;
-                }
+                ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
-                    self.finish_thinking().await?;
-                    self.markdown.add_chunk(&text, &mut self.spinner)?;
+                    tracing::info!(message = %text, "Agent Response");
+                    self.writeln(self.markdown.render(&text))?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
-                self.markdown.reset();
-                self.finish_thinking().await?;
+                self.spinner.stop(None)?;
             }
-            ChatResponse::ToolCallEnd(_toolcall_result) => {
+            ChatResponse::ToolCallEnd(toolcall_result) => {
+                // Only track toolcall name in case of success else track the error.
+                let payload = if toolcall_result.is_error() {
+                    let mut r = ToolCallPayload::new(toolcall_result.name.to_string());
+                    if let Some(cause) = toolcall_result.output.as_str() {
+                        r = r.with_cause(cause.to_string());
+                    }
+                    r
+                } else {
+                    ToolCallPayload::new(toolcall_result.name.to_string())
+                };
+                tracker::tool_call(payload);
+
+                self.spinner.start(None)?;
                 if !self.cli.verbose {
                     return Ok(());
                 }
@@ -2555,42 +2661,23 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
-                    if self.thinking_start.is_none() {
-                        self.thinking_start = Some(std::time::Instant::now());
-                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
-                        self.markdown.set_max_height(Some(max_h));
-                    }
-                    self.markdown
-                        .add_chunk_dimmed(&content, &mut self.spinner)?;
+                    let rendered_content = self.markdown.render(&content);
+                    self.writeln(rendered_content.dimmed())?;
                 }
             }
             ChatResponse::TaskComplete => {
-                self.finish_thinking().await?;
-                if let Some(conversation_id) = self.state.conversation_id
-                    && let Ok(conversation) =
-                        self.validate_conversation_exists(&conversation_id).await
-                {
-                    self.on_show_conv_info(conversation).await?;
+                if let Some(conversation_id) = self.state.conversation_id {
+                    self.writeln_title(
+                        TitleFormat::debug("Finished").sub_title(conversation_id.into_string()),
+                    )?;
                 }
             }
-        }
-        Ok(())
-    }
-
-    async fn finish_thinking(&mut self) -> Result<()> {
-        if let Some(start) = self.thinking_start.take() {
-            let duration = start.elapsed();
-
-            self.markdown
-                .clear(&mut self.spinner, duration.as_secs_f64());
-
-            self.markdown.set_max_height(None);
         }
         Ok(())
     }
 
     async fn should_continue(&mut self) -> anyhow::Result<()> {
-        let should_continue = PawsSelect::confirm("Do you want to continue anyway?")
+        let should_continue = ForgeSelect::confirm("Do you want to continue anyway?")
             .with_default(true)
             .prompt()?;
 
@@ -2604,10 +2691,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
-        let info = Info::default().extend(&conversation);
 
-        self.spinner.stop(None)?;
+        let info = Info::default().extend(&conversation);
         self.writeln(info)?;
+        self.spinner.stop(None)?;
 
         Ok(())
     }
@@ -2713,7 +2800,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    fn update_model(&mut self, _model: Option<ModelId>) {}
+    fn update_model(&mut self, model: Option<ModelId>) {
+        if let Some(ref model) = model {
+            tracker::set_model(model.to_string());
+        }
+    }
 
     async fn on_custom_event(&mut self, event: Event) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
@@ -2756,7 +2847,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // NOTE: Spawning required so that we don't block the user while querying user
         // info
         tokio::spawn(async move {
-            let _ = api.user_info().await;
+            if let Ok(Some(user_info)) = api.user_info().await {
+                tracker::login(user_info.auth_provider_id.into_string());
+            }
         });
     }
 
@@ -2838,6 +2931,43 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
+    /// Handle prompt command - returns model and conversation stats for shell
+    /// integration
+    async fn handle_zsh_rprompt_command(&mut self) -> Option<String> {
+        let cid = std::env::var("_FORGE_CONVERSATION_ID")
+            .ok()
+            .filter(|text| !text.trim().is_empty())
+            .and_then(|str| ConversationId::from_str(str.as_str()).ok());
+
+        // Make IO calls in parallel
+        let (model_id, conversation) = tokio::join!(self.api.get_default_model(), async {
+            if let Some(cid) = cid {
+                self.api.conversation(&cid).await.ok().flatten()
+            } else {
+                None
+            }
+        });
+
+        // Check if nerd fonts should be used (NERD_FONT or USE_NERD_FONT set to "1")
+        let use_nerd_font = std::env::var("NERD_FONT")
+            .or_else(|_| std::env::var("USE_NERD_FONT"))
+            .map(|val| val == "1")
+            .unwrap_or(true); // Default to true
+
+        let rprompt = ZshRPrompt::default()
+            .agent(
+                std::env::var("_FORGE_ACTIVE_AGENT")
+                    .ok()
+                    .filter(|text| !text.trim().is_empty())
+                    .map(AgentId::new),
+            )
+            .model(model_id)
+            .token_count(conversation.and_then(|conversation| conversation.token_count()))
+            .use_nerd_font(use_nerd_font);
+
+        Some(rprompt.to_string())
+    }
+
     /// Validate model exists
     async fn validate_model(&self, model_str: &str) -> Result<ModelId> {
         let models = self.api.get_models().await?;
@@ -2860,6 +2990,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
     }
 
+    /// Shows the last message from a conversation
+    ///
+    /// # Errors
+    /// - If the conversation doesn't exist
+    /// - If the conversation has no messages
     async fn on_show_last_message(&mut self, conversation: Conversation) -> Result<()> {
         let context = conversation
             .context
@@ -2876,87 +3011,395 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Format and display the message using the message_display module
         if let Some(message) = message {
-            self.markdown.add_chunk(message, &mut self.spinner)?;
+            self.writeln(self.markdown.render(message))?;
         }
 
         Ok(())
     }
 
-    /// Prints the conversation history
-    async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
-        let Some(context) = conversation.context else {
-            return Ok(());
-        };
+    async fn on_index(
+        &mut self,
+        path: std::path::PathBuf,
+        batch_size: usize,
+    ) -> anyhow::Result<()> {
+        use forge_domain::SyncProgress;
+        use forge_spinner::ProgressBarManager;
 
-        // Create new markdown writer, (which will be based on current terminal size)
-        self.markdown = MarkdownWriter::new();
-        for message in &context.messages {
-            match &**message {
-                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
-                    match role {
-                        Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str().to_string())
-                                .unwrap_or_else(|| content.clone());
+        // Check if auth already exists and create if needed
+        if !self.api.is_authenticated().await? {
+            let auth = self.api.create_auth_credentials().await?;
+            self.writeln_title(
+                TitleFormat::info("Forge API key created").sub_title(auth.token.as_str()),
+            )?;
+        }
 
-                            let paws_prompt = PawsPrompt {
-                                cwd: self.state.cwd.clone(),
-                                agent_id: AgentId::default(),
-                                model: model.clone(),
-                                git_branch: None,
-                            };
-                            let full_prompt = paws_prompt.render_prompt();
+        let mut stream = self.api.sync_workspace(path.clone(), batch_size).await?;
+        let mut progress_bar = ProgressBarManager::default();
 
-                            self.writeln("")?;
-                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
-                                self.writeln(header)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}", prefix, line))?;
-                                }
-                            } else {
-                                self.writeln(full_prompt)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
-                                }
-                            }
-                            self.writeln("")?;
-                        }
-                        Role::Assistant => {
-                            if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner)?;
-                                self.markdown.reset();
-                            }
-
-                            // Show tool calls if any
-                            if let Some(calls) = tool_calls {
-                                for call in calls {
-                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone())
-                                        && let Some(content) =
-                                            catalog.to_content(&self.api.environment())
-                                    {
-                                        match content {
-                                            ChatResponseContent::Title(title) => {
-                                                self.writeln_title(title)?;
-                                            }
-                                            ChatResponseContent::PlainText(text)
-                                            | ChatResponseContent::Markdown(text) => {
-                                                self.writeln(text)?;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(ref progress @ SyncProgress::Completed { .. }) => {
+                    progress_bar.set_position(100)?;
+                    progress_bar.stop(None).await?;
+                    if let Some(msg) = progress.message() {
+                        self.writeln_title(TitleFormat::debug(msg))?;
                     }
                 }
-                ContextMessage::Tool(_result) => {}
-                _ => {}
+                Ok(ref progress @ SyncProgress::Syncing { .. }) => {
+                    if !progress_bar.is_active() {
+                        progress_bar.start(100, "Indexing workspace")?;
+                    }
+                    if let Some(msg) = progress.message() {
+                        progress_bar.set_message(&msg)?;
+                    }
+                    if let Some(weight) = progress.weight() {
+                        progress_bar.set_position(weight)?;
+                    }
+                }
+                Ok(ref progress) => {
+                    if let Some(msg) = progress.message() {
+                        self.writeln_title(TitleFormat::debug(msg))?;
+                    }
+                }
+                Err(e) => {
+                    progress_bar.stop(None).await?;
+                    return Err(e);
+                }
             }
         }
 
         Ok(())
     }
+
+    async fn on_query(
+        &mut self,
+        path: PathBuf,
+        params: forge_domain::SearchParams<'_>,
+    ) -> anyhow::Result<()> {
+        self.spinner.start(Some("Searching workspace..."))?;
+
+        let results = match self.api.query_workspace(path.clone(), params).await {
+            Ok(results) => results,
+            Err(e) => {
+                self.spinner.stop(None)?;
+                return Err(e);
+            }
+        };
+
+        self.spinner.stop(None)?;
+
+        let mut info = Info::new().add_title(format!("FILES [{} RESULTS]", results.len()));
+
+        for result in results.iter() {
+            match &result.node {
+                forge_domain::NodeData::FileChunk(chunk) => {
+                    info = info.add_key_value(
+                        "File",
+                        format!(
+                            "{}:{}-{}",
+                            chunk.file_path, chunk.start_line, chunk.end_line
+                        ),
+                    );
+                }
+                forge_domain::NodeData::File(file) => {
+                    info = info.add_key_value("File", format!("{} (full file)", file.file_path));
+                }
+                forge_domain::NodeData::FileRef(file_ref) => {
+                    info =
+                        info.add_key_value("File", format!("{} (reference)", file_ref.file_path));
+                }
+                forge_domain::NodeData::Note(note) => {
+                    info = info.add_key_value("Note", &note.content);
+                }
+                forge_domain::NodeData::Task(task) => {
+                    info = info.add_key_value("Task", &task.task);
+                }
+            }
+        }
+
+        self.writeln(info)?;
+
+        Ok(())
+    }
+
+    /// Helper function to format workspace information consistently
+    fn format_workspace_info(workspace: &forge_domain::WorkspaceInfo, is_active: bool) -> Info {
+        let updated_time = workspace
+            .last_updated
+            .map_or("NEVER".to_string(), humanize_time);
+
+        let mut info = Info::new();
+
+        let title = if is_active {
+            "Workspace [Current]".to_string()
+        } else {
+            "Workspace".to_string()
+        };
+        info = info.add_title(title);
+
+        info.add_key_value("ID", workspace.workspace_id.to_string())
+            .add_key_value("Path", workspace.working_dir.to_string())
+            .add_key_value("Created At", humanize_time(workspace.created_at))
+            .add_key_value("Updated At", updated_time)
+    }
+
+    async fn on_list_workspaces(&mut self, porcelain: bool) -> anyhow::Result<()> {
+        if !porcelain {
+            self.spinner.start(Some("Fetching workspaces..."))?;
+        }
+
+        // Fetch workspaces and current workspace info in parallel
+        let env = self.api.environment();
+        let (workspaces_result, current_workspace_result) = tokio::join!(
+            self.api.list_workspaces(),
+            self.api.get_workspace_info(env.cwd)
+        );
+
+        match workspaces_result {
+            Ok(workspaces) => {
+                if !porcelain {
+                    self.spinner.stop(None)?;
+                }
+
+                // Get active workspace ID if current workspace info is available
+                let current_workspace = current_workspace_result.ok().flatten();
+                let active_workspace_id = current_workspace.as_ref().map(|ws| &ws.workspace_id);
+
+                // Build Info object once
+                let mut info = Info::new();
+
+                for workspace in &workspaces {
+                    let is_active = active_workspace_id == Some(&workspace.workspace_id);
+                    info = info.extend(Self::format_workspace_info(workspace, is_active));
+                }
+
+                // Output based on mode
+                if porcelain {
+                    // Skip header row in porcelain mode (consistent with conversation list)
+                    self.writeln(Porcelain::from(info).skip(1).drop_cols(&[0, 4, 5]))?;
+                } else {
+                    self.writeln(info)?;
+                }
+
+                Ok(())
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Displays workspace information for a given path.
+    async fn on_workspace_info(&mut self, path: std::path::PathBuf) -> anyhow::Result<()> {
+        self.spinner.start(Some("Fetching workspace info..."))?;
+
+        // Fetch workspace info and status in parallel
+        let (workspace, statuses) = tokio::try_join!(
+            self.api.get_workspace_info(path.clone()),
+            self.api.get_workspace_status(path)
+        )?;
+
+        self.spinner.stop(None)?;
+
+        match workspace {
+            Some(workspace) => {
+                // When viewing a specific workspace's info, it's implicitly the active one
+                let mut info = Self::format_workspace_info(&workspace, true);
+
+                // Add sync status summary if available
+
+                use forge_domain::SyncStatus;
+
+                let in_sync = statuses
+                    .iter()
+                    .filter(|s| s.status == SyncStatus::InSync)
+                    .count();
+                let modified = statuses
+                    .iter()
+                    .filter(|s| s.status == SyncStatus::Modified)
+                    .count();
+                let added = statuses
+                    .iter()
+                    .filter(|s| s.status == SyncStatus::New)
+                    .count();
+                let deleted = statuses
+                    .iter()
+                    .filter(|s| s.status == SyncStatus::Deleted)
+                    .count();
+
+                // Add sync status section
+                info = info.add_title("Sync Status");
+                info = info.add_key_value("Total Files", statuses.len().to_string());
+                if in_sync > 0 {
+                    info = info.add_key_value("In Sync", in_sync.to_string());
+                }
+                if modified > 0 {
+                    info = info.add_key_value("Modified", modified.to_string());
+                }
+                if added > 0 {
+                    info = info.add_key_value("Added", added.to_string());
+                }
+                if deleted > 0 {
+                    info = info.add_key_value("Deleted", deleted.to_string());
+                }
+
+                self.writeln(info)
+            }
+            None => self.writeln_to_stderr(
+                TitleFormat::error("No workspace found")
+                    .display()
+                    .to_string(),
+            ),
+        }
+    }
+
+    async fn on_delete_workspace(&mut self, workspace_id: String) -> anyhow::Result<()> {
+        // Parse workspace ID
+        let workspace_id = forge_domain::WorkspaceId::from_string(&workspace_id)
+            .context("Invalid workspace ID format")?;
+
+        self.spinner.start(Some("Deleting workspace..."))?;
+
+        match self.api.delete_workspace(workspace_id.clone()).await {
+            Ok(()) => {
+                self.spinner.stop(None)?;
+                self.writeln_title(TitleFormat::debug(format!(
+                    "Successfully deleted workspace {}",
+                    workspace_id
+                )))?;
+                Ok(())
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                Err(e)
+            }
+        }
+    }
+
+    /// Displays sync status for all files in the workspace.
+    async fn on_workspace_status(
+        &mut self,
+        path: std::path::PathBuf,
+        porcelain: bool,
+    ) -> anyhow::Result<()> {
+        use forge_domain::SyncStatus;
+
+        if !porcelain {
+            self.spinner.start(Some("Checking file status..."))?;
+        }
+
+        let mut statuses = self.api.get_workspace_status(path.clone()).await?;
+        statuses.sort_by(|a, b| a.status.cmp(&b.status));
+
+        if !porcelain {
+            self.spinner.stop(None)?;
+        }
+
+        // Calculate out of sync count
+        let out_of_sync = statuses
+            .iter()
+            .filter(|s| {
+                s.status == SyncStatus::Modified
+                    || s.status == SyncStatus::New
+                    || s.status == SyncStatus::Deleted
+            })
+            .count();
+
+        // When all files are in sync, show a simple log message
+        if out_of_sync == 0 {
+            if porcelain {
+                // In porcelain mode, output empty result
+                self.writeln(
+                    Porcelain::from(Info::new())
+                        .into_long()
+                        .set_headers(["STATUS", "FILE"])
+                        .uppercase_headers(),
+                )?;
+            } else {
+                // Show log info message when all files are in sync
+                self.writeln_title(TitleFormat::info(format!(
+                    "All {} files are in sync",
+                    statuses.len()
+                )))?;
+            }
+            return Ok(());
+        }
+
+        // Build file list info only when there are files out of sync
+        let mut info = Info::new().add_title(format!("File Status [{} out of sync]", out_of_sync));
+
+        // Add file list (skip in-sync files)
+        for (status, label) in statuses.iter().filter_map(|status| match status.status {
+            SyncStatus::InSync => None,
+            SyncStatus::Modified => Some((status, "modified")),
+            SyncStatus::New => Some((status, "added")),
+            SyncStatus::Deleted => Some((status, "deleted")),
+        }) {
+            info = info.add_key_value(&status.path, label);
+        }
+
+        // Output based on mode
+        if porcelain {
+            self.writeln(
+                Porcelain::from(info)
+                    .into_long()
+                    .drop_col(0)
+                    .swap_cols(0, 1)
+                    .set_headers(["STATUS", "FILE"])
+                    .sort_by(&[0])
+                    .uppercase_headers(),
+            )?;
+        } else {
+            self.writeln(info)?;
+        }
+
+        Ok(())
+    }
+
+    /// Handle credential migration
+    async fn handle_migrate_credentials(&mut self) -> Result<()> {
+        // Perform the migration
+        self.spinner.start(Some("Migrating credentials"))?;
+        let result = self.api.migrate_env_credentials().await?;
+        self.spinner.stop(None)?;
+
+        // Display results based on whether migration occurred
+        if let Some(result) = result {
+            self.writeln_title(
+                TitleFormat::warning("Forge no longer reads API keys from environment variables.")
+                    .sub_title("Learn more: https://forgecode.dev/docs/custom-providers/"),
+            )?;
+
+            let count = result.migrated_providers.len();
+            let message = if count == 1 {
+                "Migrated 1 provider from environment variables".to_string()
+            } else {
+                format!("Migrated {count} providers from environment variables")
+            };
+            self.writeln_title(TitleFormat::info(message))?;
+        }
+        Ok(())
+    }
+
+    /// Silently install VS Code extension if in VS Code and extension not
+    /// installed.
+    /// NOTE: This is a non-cancellable and a slow task. We should only run this
+    /// if the user has provided a prompt because that is guaranteed to run for
+    /// at least a few seconds.
+    fn install_vscode_extension(&self) {
+        tokio::task::spawn_blocking(|| {
+            if crate::vscode::should_install_extension() {
+                let _ = crate::vscode::install_extension();
+            }
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Note: Tests for confirm_delete_conversation are disabled because
+    // ForgeSelect::confirm is not easily mockable in the current
+    // architecture. The functionality is tested through integration tests
+    // instead.
 }
