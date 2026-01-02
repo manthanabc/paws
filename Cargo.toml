@@ -14,11 +14,8 @@ async-recursion = "1.1.1"
 async-trait = "0.1.89"
 aws-config = { version = "1.8.12", features = ["behavior-version-latest"], default-features = false }
 aws-sdk-bedrockruntime = { version = "1.120.0", features = ["behavior-version-latest"], default-features = false }
-aws-credential-types = "1.2"
 aws-smithy-types = "1.3"
-aws-smithy-runtime-api = "1.9"
 aws-smithy-async = { version = "1.2", features = ["rt-tokio"] }
-aws-smithy-runtime = { version = "1.9", features = ["connector-hyper-0-14-x", "tls-rustls"] }
 base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = { version = "0.4.39", features = ["serde"] }
@@ -27,12 +24,9 @@ colored = "3.0.0"
 console = "0.16.0"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 convert_case = "0.8.0"
-
-crossterm = "0.28.1"
 derive_more = { version = "2.0.1", features = ["from", "display", "debug", "deref", "as_ref"] }
 derive_setters = "0.1.6"
 dirs = "6.0.0"
-dissimilar = "1.0.9"
 dotenvy = "0.15.7"
 futures = "0.3.31"
 gh-workflow = "0.8.1"
@@ -55,15 +49,14 @@ nu-ansi-term = "0.50.1"
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0"
 quote = "1.0"
-reedline = "0.42.0"
 regex = "1.11.2"
+reedline = "0.38.0"
 reqwest = { version = "0.12.23", features = [
     "json",
     "rustls-tls",
     "hickory-dns",
     "http2",
 ], default-features = false }
-rustls = { version = "0.23", features = ["ring"], default-features = false }
 reqwest-eventsource = "0.6.0"
 rust-embed = "8.5.0"
 schemars = "0.8.21"
@@ -71,7 +64,6 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.143"
 serde_yml = "0.0.12"
 sha2 = "0.10"
-similar = { version = "2.4", features = ["inline"] }
 strip-ansi-escapes = "0.2.1"
 strum = "0.27.1"
 strum_macros = "0.27.1"
@@ -79,8 +71,6 @@ syn = { version = "2.0.106", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
 tempfile = "3.21.0"
 termimad = "0.33.0"
-minimad = "0.14"
-syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-onig"] }
 thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = [
     "macros",
@@ -94,14 +84,12 @@ tokio = { version = "1.47.1", features = [
     "test-util",
 ] }
 tokio-stream = "0.1.17"
-tokio-util = "0.7"
 tonic = { version = "0.14.2", features = ["tls-webpki-roots"] }
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 url = { version = "2.5.4", features = ["serde"] }
 backon = "1.5.2"
-eserde = "0.1.7"
 uuid = { version = "1.18.0", features = [
     "v4",
     "fast-rng",
@@ -126,13 +114,10 @@ dashmap = "7.0.0-rc2"
 # Internal crates
 paws_api = { path = "crates/paws_api" }
 paws_app = { path = "crates/paws_app" }
-paws_ci = { path = "crates/paws_ci" }
 paws_common = { path = "crates/paws_common" }
 paws_domain = { path = "crates/paws_domain" }
 paws_infra = { path = "crates/paws_infra" }
 paws_repo = { path = "crates/paws_repo" }
-paws_inte = { path = "crates/paws_inte" }
-paws_main = { path = "crates/paws_main" }
 paws_services = { path = "crates/paws_services" }
 paws_tool_macros = { path = "crates/paws_tool_macros" }
 

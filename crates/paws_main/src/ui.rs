@@ -231,7 +231,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn prompt(&self) -> Result<SlashCommand> {
         // Get usage from current conversation if available
-        let usage = if let Some(conversation_id) = &self.state.conversation_id {
+        let _usage = if let Some(conversation_id) = &self.state.conversation_id {
             self.api
                 .conversation(conversation_id)
                 .await
@@ -247,7 +247,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
-        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), usage, model, agent_id };
+        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), model, agent_id };
         let command = self.console.prompt(paws_prompt).await?;
 
         // Make space
@@ -308,31 +308,45 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         loop {
             match command {
-                Ok(command) => {
-                    tokio::select! {
-                        _ = tokio::signal::ctrl_c() => {
-                            tracing::info!("User interrupted operation with Ctrl+C");
-                        }
-                        _ = ctrl_c_rx.recv() => {
-                            tracing::info!("User interrupted operation with Ctrl+C (spinner)");
-                            println!("{} {}", "❌".red().bold(), "User interrupted.".bold());
-                        }
-                        result = self.on_command(command) => {
-                            match result {
-                                Ok(exit) => {
-                                    if exit || !is_interactive { return Ok(()) }
-                                },
-                                Err(error) => {
-                                    tracing::error!(error = ?error);
-                                    self.spinner.stop(None)?;
-                                    self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
-                                    if !is_interactive { return Ok(()) }
+                Ok(ref cmd) => match cmd {
+                    SlashCommand::Resize => {
+                        self.on_resize().await?;
+                    }
+                    _ => {
+                        let result = tokio::select! {
+                            _ = tokio::signal::ctrl_c() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            _ = ctrl_c_rx.recv() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            res = self.on_command(cmd.clone()) => res,
+                        };
+
+                        match result {
+                            Ok(exit) => {
+                                if exit || !is_interactive {
+                                    return Ok(());
+                                }
+                            }
+                            Err(error) => {
+                                tracing::error!(error = ?error);
+                                self.spinner.stop(None)?;
+                                self.writeln_to_stderr(
+                                    TitleFormat::error(format!("{error:?}"))
+                                        .display()
+                                        .to_string(),
+                                )?;
+                                if !is_interactive {
+                                    return Ok(());
                                 }
                             }
                         }
                     }
-                }
-                Err(error) => {
+                },
+                Err(ref error) => {
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
                     self.writeln_to_stderr(
@@ -347,9 +361,26 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             if !is_interactive {
                 break;
             }
+
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
         }
+        Ok(())
+    }
+
+    async fn on_resize(&mut self) -> Result<()> {
+        println!("\x1b[3J\x1b[2J\x1b[H");
+        eprintln!("\x1b[3J\x1b[2J\x1b[H");
+        let conversation = self
+            .api
+            .conversation(&self.state.conversation_id.expect("SHOULD HAVE ONE"))
+            .await
+            .unwrap()
+            .expect("IDK why this happened, do report");
+
+        self.display_banner()?;
+        self.on_print_conversation(conversation.clone()).await?;
+        self.on_show_conv_info(conversation).await?;
         Ok(())
     }
 
@@ -1587,6 +1618,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         "Agent '{agent_id}' not found or unavailable"
                     ));
                 }
+            }
+            SlashCommand::Resize => {
+                // Handled in the main loop, but we need to handle it here to satisfy the match
+                return Ok(false);
             }
         }
 

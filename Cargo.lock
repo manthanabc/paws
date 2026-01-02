@@ -858,6 +858,7 @@ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags",
  "crossterm_winapi",
+ "futures-core",
  "mio",
  "parking_lot",
  "rustix 0.38.44",
@@ -2371,9 +2372,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
-version = "0.13.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -3249,11 +3250,14 @@ dependencies = [
  "colored",
  "console 0.16.2",
  "convert_case 0.8.0",
+ "crossterm 0.28.1",
  "derive_setters",
  "fake",
+ "futures",
  "humantime",
  "indexmap",
  "insta",
+ "lazy_static",
  "merge",
  "nu-ansi-term",
  "nucleo",
@@ -3804,9 +3808,9 @@ dependencies = [
 
 [[package]]
 name = "reedline"
-version = "0.42.0"
+version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f9152b55a7af872d1ea9ac81c619fd02368d3e3b27ff195c56ab3fc300f4fd0"
+checksum = "9bfa8cb0ad84c396c936d8abb814703d7042a433d2da75a0c7060cbdc89109f3"
 dependencies = [
  "chrono",
  "crossterm 0.28.1",
@@ -3817,9 +3821,9 @@ dependencies = [
  "strip-ansi-escapes",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 2.0.17",
+ "thiserror 1.0.69",
  "unicode-segmentation",
- "unicode-width 0.2.2",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]

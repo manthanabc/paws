@@ -9,6 +9,8 @@ edition = "2024"
 
 [dependencies]
 atty = "0.2"
+crossterm = { version = "0.28", features = ["event-stream"] }
+futures.workspace = true
 paws_services.workspace = true
 
 [dev-dependencies]
@@ -46,6 +48,9 @@ workspace = true
 workspace = true
 
 [dependencies.derive_setters]
+workspace = true
+
+[dependencies.lazy_static]
 workspace = true
 
 [dependencies.reedline]

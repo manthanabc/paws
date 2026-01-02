@@ -496,6 +496,10 @@ pub enum SlashCommand {
     /// Switch directly to a specific agent by ID
     #[strum(props(usage = "Switch directly to a specific agent"))]
     AgentSwitch(String),
+
+    /// Internal resize event
+    #[strum(props(usage = "Internal resize event"))]
+    Resize,
 }
 
 impl SlashCommand {
@@ -527,6 +531,7 @@ impl SlashCommand {
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
+            SlashCommand::Resize => "resize",
         }
     }
 
