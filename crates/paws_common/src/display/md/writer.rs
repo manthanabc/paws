@@ -100,7 +100,7 @@ impl MarkdownWriter {
         let mut skip = 0;
 
         // +1 to consider the spinner
-        let up_base = lines_prev.len().saturating_sub(common) + 1;
+        let up_base = lines_prev.len().saturating_sub(common);
         if up_base > lines_to_update {
             skip = up_base - lines_to_update;
         }

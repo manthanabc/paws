@@ -11,10 +11,12 @@ use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
-    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
+    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, ToolCatalog, UserPrompt,
+    Workflow,
 };
+use paws_app::ToolResolver;
+use paws_app::fmt::content::FormatContent;
 use paws_app::utils::{format_display_path, truncate_key};
-use paws_app::{CommitResult, ToolResolver};
 use paws_common::display::MarkdownWriter;
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
@@ -28,8 +30,7 @@ use url::Url;
 
 use crate::banner;
 use crate::cli::{
-    Cli, CommitCommandGroup, ConversationCommand, ExtensionCommand, ListCommand, McpCommand,
-    TopLevelCommand,
+    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand, TopLevelCommand,
 };
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
@@ -230,7 +231,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn prompt(&self) -> Result<SlashCommand> {
         // Get usage from current conversation if available
-        let usage = if let Some(conversation_id) = &self.state.conversation_id {
+        let _usage = if let Some(conversation_id) = &self.state.conversation_id {
             self.api
                 .conversation(conversation_id)
                 .await
@@ -595,14 +596,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 return Ok(());
             }
-            TopLevelCommand::Commit(commit_group) => {
-                let preview = commit_group.preview;
-                let result = self.handle_commit_command(commit_group).await?;
-                if preview {
-                    self.writeln(&result.message)?;
-                }
-                return Ok(());
-            }
+
             TopLevelCommand::Data(data_command_group) => {
                 let mut stream = self.api.generate_data(data_command_group.into()).await?;
                 while let Some(data) = stream.next().await {
@@ -850,42 +844,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         Ok(false)
-    }
-
-    async fn handle_commit_command(
-        &mut self,
-        commit_group: CommitCommandGroup,
-    ) -> anyhow::Result<CommitResult> {
-        self.spinner.start(Some("Creating commit"))?;
-
-        // Convert Vec<String> to Option<String> by joining with spaces
-        let additional_context = if commit_group.text.is_empty() {
-            None
-        } else {
-            Some(commit_group.text.join(" "))
-        };
-
-        // Handle the commit command
-        let result = self
-            .api
-            .commit(
-                commit_group.preview,
-                commit_group.max_diff_size,
-                commit_group.diff,
-                additional_context,
-            )
-            .await;
-
-        match result {
-            Ok(result) => {
-                self.spinner.stop(None)?;
-                Ok(result)
-            }
-            Err(e) => {
-                self.spinner.stop(None)?;
-                Err(e)
-            }
-        }
     }
 
     /// Builds an Info structure for agents with their details
@@ -1584,18 +1542,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Shell(ref command) => {
                 self.api.execute_shell_command_raw(command).await?;
             }
-            SlashCommand::Commit { max_diff_size } => {
-                let args = CommitCommandGroup {
-                    preview: true,
-                    max_diff_size: max_diff_size.or(Some(100_000)),
-                    diff: None,
-                    text: Vec::new(),
-                };
-                let result = self.handle_commit_command(args).await?;
-                let flags = if result.has_staged_files { "" } else { " -a" };
-                let commit_command = format!("!git commit{flags} -m '{}'", result.message);
-                self.console.set_buffer(commit_command);
-            }
+
             SlashCommand::Agent => {
                 #[derive(Clone)]
                 struct Agent {
@@ -2880,14 +2827,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             // Show tool calls if any
                             if let Some(calls) = tool_calls {
                                 for call in calls {
-                                    let name = &call.name;
-                                    // Only show tool name, reusing the style (yellow bold label,
-                                    // cyan name)
-                                    self.writeln(format!(
-                                        "{} {}\n",
-                                        "⏺".cyan(),
-                                        name.to_string().dimmed(),
-                                    ))?;
+                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                        && let Some(content) =
+                                            catalog.to_content(&self.api.environment())
+                                    {
+                                        match content {
+                                            ChatResponseContent::Title(title) => {
+                                                self.writeln_title(title)?;
+                                            }
+                                            ChatResponseContent::PlainText(text)
+                                            | ChatResponseContent::Markdown(text) => {
+                                                self.writeln(text)?;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -102,6 +102,7 @@ impl SpinnerManager {
                         if active {
                             term(execute!(
                                 stderr,
+                                cursor::MoveUp(1),
                                 cursor::MoveToColumn(0),
                                 Clear(ClearType::CurrentLine)
                             ));
@@ -203,14 +204,14 @@ impl SpinnerManager {
             return Ok(());
         }
         let words = [
-            "Thinking",
             "Processing",
-            "Analyzing",
-            "Forging",
-            "Researching",
-            "Synthesizing",
-            "Reasoning",
-            "Contemplating",
+            "Sniffing Code",
+            "Analyzing Bits",
+            "Furging Logic",
+            "Weading Docs",
+            "Synthespawzing",
+            "Weasoning",
+            "Pawndering",
         ];
 
         // Use a random word from the list

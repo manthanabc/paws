@@ -6,8 +6,6 @@ Do check original ![forge](https://github.com/antimonyhq/forge)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
 
-^ ignowre this
-
 [![asciicast](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP.svg)](https://asciinema.org/a/wXPYyyqHUdxXO56XkVrJyiQLP)
 ---
 <summary>About fork</summary>
@@ -16,8 +14,13 @@ Difference so far-
  - [X] Streaming tokens
  - [X] Persistent spinner
  - [X] Fixed thinking buffer
- - [X] Hide thinking text after thinking over
+ - [X] changes to UI to maximize information density
+      [X] thinking only shown during thinking in a finite preview window
+      [X] Erase summary after next prompt
  - [X] Switching conversation shows full history 
+ - [X] Rename paws to .paws
+ - [WIP] Full screen refresh on resize
+ - [WIP] Async input
 
 Planned - 
  - [o] Undo/ Redo controll
@@ -25,21 +28,22 @@ Planned -
  - [o] Always visible prompt and enque pending tasks
  - [e] Parallel tasks
  - [o] WebUI -> conversation history management
- - [e] Hybrid agent flows
  - [e] Reduce instructions, remove tools -> simplify
- - [o] Optimize information density on UI
- - [o] Rename paws to .paws
+ - [o] Optimize information density on UI more
 
 Updates -
  Additional provideres
- - [ ] Xiomi (free mimo v2-flash)
- - [ ] AI studio (free all models from google under free tier limit)
- - [ ] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
+ - [X] Xiomi (free mimo v2-flash)
+ - [X] AI studio (free all models from google under free tier limit)
+ - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
+ - [X] Copilot (free to use gpt 5 mini, claude haiku 4.5, grok code fast 1) 
+ - [WIP] Gemini (Everything in AI studio but in native format)
+ - [WIP] Antigravity (via oauth) (free to use gemini 3 pro (high), gemini flash latest, claude opus 4.5, claude sonnet 4.5, Gpt oss 120B)
 
 Dropeed stuff-
-- [ ] posthog tracking
-- [ ] codebase indexing
-- [ ] VS code extension 
+- [X] posthog tracking
+- [X] codebase indexing
+- [X] VS code extension 
 
 
  ## About Forge

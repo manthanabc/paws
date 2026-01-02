@@ -70,19 +70,10 @@ features = [ "serde",]
 version = "2.2.12"
 features = [ "sqlite", "r2d2", "chrono",]
 
-[dependencies.thiserror]
-workspace = true
-
 [dependencies.derive_more]
 workspace = true
 
 [dependencies.gray_matter]
-workspace = true
-
-[dependencies.dirs]
-workspace = true
-
-[dependencies.tonic]
 workspace = true
 
 [dependencies.paws_common]

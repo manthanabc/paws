@@ -8,12 +8,6 @@ use paws_api::Environment;
 use crate::model::{PawsCommandManager, SlashCommand};
 use crate::prompt::PawsPrompt;
 
-pub enum ReadResult {
-    Success(String),
-    Resize,
-    Exit,
-}
-
 /// Console implementation for handling user input via command line.
 #[derive(Clone)]
 pub struct Console {
@@ -105,10 +99,5 @@ impl Console {
 
         crossterm::terminal::disable_raw_mode()?;
         Ok(SlashCommand::Exit)
-    }
-
-    /// Sets the buffer content for the next prompt
-    pub fn set_buffer(&self, _content: String) {
-        // Not implemented for simple async console yet
     }
 }

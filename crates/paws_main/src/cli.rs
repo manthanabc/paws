@@ -121,9 +121,6 @@ pub enum TopLevelCommand {
     #[command(alias = "session")]
     Conversation(ConversationCommandGroup),
 
-    /// Generate and optionally commit changes with AI-generated message
-    Commit(CommitCommandGroup),
-
     /// Manage Model Context Protocol servers.
     Mcp(McpCommandGroup),
 
@@ -525,37 +522,6 @@ pub enum ProviderCommand {
     },
 }
 
-/// Group of Commit-related commands
-#[derive(Parser, Debug, Clone)]
-pub struct CommitCommandGroup {
-    /// Preview the commit message without committing
-    #[arg(long)]
-    pub preview: bool,
-
-    /// Maximum git diff size in bytes (default: 100k)
-    ///
-    /// Limits the size of the git diff sent to the AI model. Large diffs are
-    /// truncated to save tokens and reduce API costs. Minimum value is 5000
-    /// bytes.
-    #[arg(long = "max-diff", default_value = "100000", value_parser = clap::builder::RangedI64ValueParser::<usize>::new().range(5000..))]
-    pub max_diff_size: Option<usize>,
-
-    /// Git diff content (used internally for piped input)
-    ///
-    /// This field is populated when diff content is piped to the commit
-    /// command. Users typically don't set this directly; instead, they pipe
-    /// diff content: `git diff | paws commit --preview`
-    #[arg(skip)]
-    pub diff: Option<String>,
-
-    /// Additional text to customize the commit message
-    ///
-    /// Provide additional context or instructions for the AI to use when
-    /// generating the commit message. Multiple words can be provided without
-    /// quotes: `paws commit fix typo in readme`
-    pub text: Vec<String>,
-}
-
 /// Group of Data-related commands
 #[derive(Parser, Debug, Clone)]
 pub struct DataCommandGroup {
@@ -618,28 +584,6 @@ mod tests {
             user_prompt: None,
             concurrency: 5,
         };
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_commit_default_max_diff_size() {
-        let fixture = Cli::parse_from(["paws", "commit", "--preview"]);
-        let actual = match fixture.subcommands {
-            Some(TopLevelCommand::Commit(commit)) => commit.max_diff_size,
-            _ => panic!("Expected Commit command"),
-        };
-        let expected = Some(100000);
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_commit_custom_max_diff_size() {
-        let fixture = Cli::parse_from(["paws", "commit", "--preview", "--max-diff", "50000"]);
-        let actual = match fixture.subcommands {
-            Some(TopLevelCommand::Commit(commit)) => commit.max_diff_size,
-            _ => panic!("Expected Commit command"),
-        };
-        let expected = Some(50000);
         assert_eq!(actual, expected);
     }
 
@@ -1272,59 +1216,6 @@ mod tests {
         let fixture = Cli::parse_from(["paws"]);
         let actual = fixture.is_interactive();
         let expected = true;
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_commit_with_custom_text() {
-        let fixture = Cli::parse_from(["paws", "commit", "fix", "typo", "in", "readme"]);
-        let actual = match fixture.subcommands {
-            Some(TopLevelCommand::Commit(commit)) => commit.text,
-            _ => panic!("Expected Commit command"),
-        };
-        let expected = ["fix", "typo", "in", "readme"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_commit_without_custom_text() {
-        let fixture = Cli::parse_from(["paws", "commit", "--preview"]);
-        let actual = match fixture.subcommands {
-            Some(TopLevelCommand::Commit(commit)) => commit.text,
-            _ => panic!("Expected Commit command"),
-        };
-        let expected: Vec<String> = vec![];
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_commit_with_text_and_flags() {
-        let fixture = Cli::parse_from([
-            "paws",
-            "commit",
-            "--preview",
-            "--max-diff",
-            "50000",
-            "update",
-            "docs",
-        ]);
-        let actual = match fixture.subcommands {
-            Some(TopLevelCommand::Commit(commit)) => {
-                (commit.preview, commit.max_diff_size, commit.text)
-            }
-            _ => panic!("Expected Commit command"),
-        };
-        let expected = (
-            true,
-            Some(50000),
-            ["update", "docs"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>(),
-        );
         assert_eq!(actual, expected);
     }
 

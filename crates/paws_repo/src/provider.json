@@ -692,5 +692,16 @@
     "auth_methods": [
       "api_key"
     ]
+  },
+  {
+    "id": "gemini",
+    "api_key_vars": "GEMINI_API_KEY",
+    "url_param_vars": [],
+    "response_type": "Gemini",
+    "url": "https://generativelanguage.googleapis.com",
+    "models": "https://generativelanguage.googleapis.com/v1beta/models",
+    "auth_methods": [
+      "api_key"
+    ]
   }
 ]

@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use paws_main::TopLevelCommand;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -104,17 +104,5 @@ mod tests {
         assert_eq!(cli_with_flags.prompt, None);
         assert_eq!(cli_with_flags.verbose, true);
         assert_eq!(cli_with_flags.restricted, true);
-    }
-
-    #[test]
-    fn test_commit_command_diff_field_initially_none() {
-        // Test that the diff field in CommitCommandGroup starts as None
-        let cli = Cli::parse_from(["paws", "commit", "--preview"]);
-        if let Some(TopLevelCommand::Commit(commit_group)) = cli.subcommands {
-            assert_eq!(commit_group.preview, true);
-            assert_eq!(commit_group.diff, None);
-        } else {
-            panic!("Expected Commit command");
-        }
     }
 }

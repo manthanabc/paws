@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::process::Command;
