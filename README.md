@@ -18,6 +18,9 @@ Difference so far-
       [X] thinking only shown during thinking in a finite preview window
       [X] Erase summary after next prompt
  - [X] Switching conversation shows full history 
+ - [X] Rename paws to .paws
+ - [WIP] Full screen refresh on resize
+ - [WIP] Async input
 
 Planned - 
  - [o] Undo/ Redo controll
@@ -26,8 +29,7 @@ Planned -
  - [e] Parallel tasks
  - [o] WebUI -> conversation history management
  - [e] Reduce instructions, remove tools -> simplify
- - [o] Optimize information density on UI
- - [o] Rename paws to .paws
+ - [o] Optimize information density on UI more
 
 Updates -
  Additional provideres
