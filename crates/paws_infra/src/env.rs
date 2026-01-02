@@ -67,8 +67,8 @@ impl PawsEnvironmentInfra {
             cwd,
             shell: self.get_shell_path(),
             base_path: dirs::home_dir()
-                .map(|a| a.join("paws"))
-                .unwrap_or(PathBuf::from(".").join("paws")),
+                .map(|a| a.join(".paws"))
+                .unwrap_or(PathBuf::from(".").join(".paws")),
             home: dirs::home_dir(),
             retry_config,
             max_search_lines: 200,
