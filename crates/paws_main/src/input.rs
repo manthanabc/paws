@@ -62,9 +62,11 @@ impl Console {
                         KeyCode::Char('c')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            crossterm::terminal::disable_raw_mode()?;
+                            buffer.clear();
+                            println!("\r");
+                            print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
+                            io::stdout().flush()?;
                             continue;
-                            // return Ok(SlashCommand::Exit);
                         }
                         KeyCode::Char('d')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
