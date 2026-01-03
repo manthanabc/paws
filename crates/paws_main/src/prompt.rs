@@ -6,6 +6,7 @@ use convert_case::{Case, Casing};
 use derive_setters::Setters;
 use nu_ansi_term::{Color, Style};
 use paws_api::{AgentId, ModelId};
+use colored::Colorize;
 
 use crate::display_constants::markers;
 
@@ -19,6 +20,7 @@ pub struct PawsPrompt {
     pub cwd: PathBuf,
     pub agent_id: AgentId,
     pub model: Option<ModelId>,
+    pub git_branch: Option<String>,
 }
 
 impl PawsPrompt {
@@ -34,7 +36,6 @@ impl PawsPrompt {
             .map(String::from)
             .unwrap_or_else(|| markers::EMPTY.to_string());
 
-        let branch_opt = get_git_branch();
         let mut result = String::new();
 
         write!(
@@ -51,14 +52,14 @@ impl PawsPrompt {
                 .split('/')
                 .next_back()
                 .unwrap_or_else(|| model.as_str());
-            write!(result, "[{formatted_model}]").unwrap();
+            write!(result, "[{}]", formatted_model.dimmed()).unwrap();
         }
 
         // Only append branch info if present
-        if let Some(branch) = branch_opt
-            && branch != current_dir
+        if let Some(branch) = &self.git_branch
+            && branch != &current_dir
         {
-            write!(result, " Git:{} ", branch_style.paint(branch)).unwrap();
+            write!(result, " {} ", branch_style.paint(branch)).unwrap();
         }
 
         write!(result, "\n{} ", mode_style.paint(VERTICLE_LINE)).unwrap();
@@ -68,7 +69,7 @@ impl PawsPrompt {
 }
 
 /// Gets the current git branch name if available
-fn get_git_branch() -> Option<String> {
+pub fn get_git_branch() -> Option<String> {
     // First check if we're in a git repository
     let git_check = Command::new("git")
         .args(["rev-parse", "--is-inside-work-tree"])

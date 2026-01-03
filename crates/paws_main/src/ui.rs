@@ -38,7 +38,7 @@ use crate::info::Info;
 use crate::input::Console;
 use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
 use crate::porcelain::Porcelain;
-use crate::prompt::PawsPrompt;
+use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
@@ -276,7 +276,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
-        let paws_prompt = PawsPrompt { cwd: self.state.cwd.clone(), model, agent_id };
+        let paws_prompt = PawsPrompt {
+            cwd: self.state.cwd.clone(),
+            model,
+            agent_id,
+            git_branch: get_git_branch(),
+        };
         let command = self.console.prompt(paws_prompt).await?;
 
         // Make space
@@ -2798,8 +2803,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
         let active_agent = self.api.get_active_agent().await;
-        let default_model = self.get_agent_model(active_agent).await;
-        let mut last_seen_model: Option<String> = default_model.map(|m| m.to_string());
+        let default_model = self.get_agent_model(active_agent.clone()).await;
+        let mut last_seen_model: Option<String> = default_model.as_ref().map(|m| m.to_string());
+        let git_branch = get_git_branch();
 
         // If no default model, try to find one in the conversation history
         if last_seen_model.is_none() {
@@ -2824,33 +2830,40 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 .map(|p| p.as_str().to_string())
                                 .unwrap_or_else(|| content.clone());
 
+                            let agent_id = active_agent.clone().unwrap_or_default();
+                            let paws_prompt = PawsPrompt {
+                                cwd: self.state.cwd.clone(),
+                                agent_id,
+                                model: model.clone().or(default_model.clone()),
+                                git_branch: git_branch.clone(),
+                            };
+                            let full_prompt = paws_prompt.render_prompt();
+
                             self.writeln("")?;
-                            for line in content_to_show.lines() {
-                                self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+                                self.writeln(header)?;
+                                for line in content_to_show.lines() {
+                                    self.writeln(format!("{}{}\n", prefix, line))?;
+                                }
+                            } else {
+                                self.writeln(full_prompt)?;
+                                for line in content_to_show.lines() {
+                                    self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                                }
                             }
                         }
                         Role::Assistant => {
                             // Show model name above the response (dimmed)
                             // Use current message model or fallback to last seen model
-                            let model_to_show = model
-                                .as_ref()
-                                .map(|m| m.to_string())
-                                .or(last_seen_model.clone());
+                            // let model_to_show = model
+                            //     .as_ref()
+                            //     .map(|m| m.to_string())
+                            //     .or(last_seen_model.clone());
 
-                            let model_str = if let Some(model_str) = model_to_show {
-                                let formatted_model = model_str
-                                    .split('/')
-                                    .next_back()
-                                    .map(|s| s.to_string())
-                                    .unwrap_or(model_str);
-                                format!("[{}]\n", formatted_model.dimmed())
-                            } else {
-                                String::new()
-                            };
 
                             if !content.is_empty() {
                                 self.markdown
-                                    .add_chunk(&(model_str + content), &mut self.spinner);
+                                    .add_chunk(content, &mut self.spinner);
                                 self.markdown.reset();
                             }
 
