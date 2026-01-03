@@ -154,11 +154,38 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     /// Displays banner only if user is in interactive mode.
-    fn display_banner(&self) -> Result<()> {
+    async fn display_banner(&self) -> Result<()> {
         if self.cli.is_interactive() {
-            banner::display(false)?;
+            let info = self.get_banner_info().await;
+            banner::display(&info)?;
         }
         Ok(())
+    }
+
+    async fn get_banner_info(&self) -> banner::BannerInfo {
+        let agent = self.api.get_active_agent().await;
+        let model = self.get_agent_model(agent.clone()).await;
+        let provider = self.get_provider(agent).await.ok();
+
+        let model_str = model
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+        let provider_str = provider
+            .map(|p| p.id.to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let conversation_id = self
+            .state
+            .conversation_id
+            .map(|id| id.into_string())
+            .unwrap_or_else(|| "New Session".to_string());
+
+        banner::BannerInfo {
+            model: model_str,
+            provider: provider_str,
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            conversation_id,
+        }
     }
 
     // Handle creating a new conversation
@@ -174,8 +201,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
         self.cli.conversation_id = None;
+        self.state.conversation_id = None;
 
-        self.display_banner()?;
+        self.init_conversation().await?;
+        self.display_banner().await?;
         self.trace_user();
         self.hydrate_caches();
         Ok(())
@@ -281,12 +310,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         // Display the banner in dimmed colors since we're in interactive mode
-        self.display_banner()?;
         self.init_state(true).await?;
 
         self.trace_user();
         self.hydrate_caches();
         self.init_conversation().await?;
+        self.display_banner().await?;
 
         // Check for dispatch flag first
         if let Some(dispatch_json) = self.cli.event.clone() {
@@ -378,7 +407,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .unwrap()
             .expect("IDK why this happened, do report");
 
-        self.display_banner()?;
+        self.display_banner().await?;
         self.on_print_conversation(conversation.clone()).await?;
         self.on_show_conv_info(conversation).await?;
         Ok(())
@@ -542,7 +571,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 return Ok(());
             }
             TopLevelCommand::Banner => {
-                banner::display(true)?;
+                let info = self.get_banner_info().await;
+                banner::display(&info)?;
                 return Ok(());
             }
             TopLevelCommand::Config(config_group) => {
