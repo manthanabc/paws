@@ -512,7 +512,9 @@ impl fmt::Display for Info {
         for (i, section) in self.sections.iter().enumerate() {
             match section {
                 Section::Title(title) => {
-                    writeln!(f)?;
+                    if i > 0 {
+                        writeln!(f)?;
+                    }
                     writeln!(f, "{}", title.bold().dimmed())?;
 
                     // Calculate max key width for items under this title
