@@ -114,11 +114,7 @@ fn print_row(
     let space_len = if value_len > 0 { 1 } else { 0 };
     let total_len = label_len + space_len + value_len;
 
-    let padding = if total_len < content_width {
-        content_width - total_len
-    } else {
-        0
-    };
+    let padding = content_width.saturating_sub(total_len);
 
     print!(
         "│ {:<width$} │ {}{}",
