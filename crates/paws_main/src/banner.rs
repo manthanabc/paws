@@ -1,71 +1,141 @@
 use std::io;
 
 use colored::Colorize;
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const BANNER: &str = include_str!("banner");
+const BANNER_LOGO: &str = include_str!("banner");
 
-/// Displays the banner with version and command tips.
-///
-/// # Arguments
-///
-/// * `cli_mode` - If true, shows CLI-relevant commands with `:` prefix. If
-///   false, shows all interactive commands with `/` prefix.
-///
-/// # Environment Variables
-///
-/// * `PAWS_BANNER` - Optional custom banner text to display instead of the
-///   default
-pub fn display(cli_mode: bool) -> io::Result<()> {
-    // Check for custom banner via environment variable
-    let mut banner = std::env::var("PAWS_BANNER")
-        .ok()
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| BANNER.to_string());
+pub struct BannerInfo {
+    pub model: String,
+    pub provider: String,
+    pub version: String,
+    pub conversation_id: String,
+}
 
-    // Always show version
-    let version_label = ("Version:", VERSION);
+pub fn display(info: &BannerInfo) -> io::Result<()> {
+    let logo_lines: Vec<&str> = BANNER_LOGO.lines().collect();
+    // The logo is 11 chars wide
+    let logo_width = 11;
+    let content_width = 60;
 
-    // Build tips based on mode
-    let tips: Vec<(&str, &str)> = if cli_mode {
-        // CLI mode: only show relevant commands
-        vec![
-            ("New conversation:", ":new"),
-            ("Get started:", ":info, :conversation"),
-            ("Switch model:", ":model"),
-            ("Switch provider:", ":provider"),
-            ("Switch agent:", ":<agent_name> e.g. :paws or :muse"),
-        ]
+    // Header
+    println!(
+        "╭{}┬{}╮",
+        "─".repeat(logo_width + 2),
+        "─".repeat(content_width + 2)
+    );
+
+    // Row 0: Logo | Session
+    print_row(
+        0,
+        &logo_lines,
+        " ● Session: ",
+        &info.conversation_id,
+        "green",
+        logo_width,
+        content_width,
+    );
+
+    // Row 1: Logo | Model
+    let model_display = truncate(&info.model, 25);
+    print_row(
+        1,
+        &logo_lines,
+        " ● Model:   ",
+        &model_display,
+        "blue",
+        logo_width,
+        content_width,
+    );
+
+    // Row 2: Logo | Provider
+    let provider_display = truncate(&info.provider, 25);
+    print_row(
+        2,
+        &logo_lines,
+        " ● Provider:",
+        &provider_display,
+        "magenta",
+        logo_width,
+        content_width,
+    );
+
+    // Row 3: Suggestion
+    print_row(
+        3,
+        &logo_lines,
+        "",
+        "Type /help for commands",
+        "yellow",
+        logo_width,
+        content_width,
+    );
+
+    // Bottom
+    println!(
+        "╰{}┴{}╯",
+        "─".repeat(logo_width + 2),
+        "─".repeat(content_width + 2)
+    );
+    println!();
+
+    Ok(())
+}
+
+fn print_row(
+    row_idx: usize,
+    logo_lines: &[&str],
+    label: &str,
+    value: &str,
+    color: &str,
+    logo_width: usize,
+    content_width: usize,
+) {
+    let logo_line = logo_lines.get(row_idx).unwrap_or(&"");
+
+    // Style logo: first 3 lines blue, last line white bold
+    let logo_styled = if row_idx < 3 {
+        logo_line.blue()
     } else {
-        // Interactive mode: show all commands
-        vec![
-            ("New conversation:", "/new"),
-            ("Get started:", "/info, /usage, /help, /conversation"),
-            ("Switch model:", "/model"),
-            ("Switch agent:", "/paws or /muse or /agent"),
-            ("Update:", "/update"),
-            ("Quit:", "/exit or <CTRL+D>"),
-        ]
+        logo_line.white().bold()
     };
 
-    // Build labels array with version and tips
-    let labels: Vec<(&str, &str)> = std::iter::once(version_label).chain(tips).collect();
+    // Style value
+    let value_styled = match color {
+        "green" => value.green(),
+        "blue" => value.blue(),
+        "magenta" => value.magenta(),
+        "yellow" => value.yellow(),
+        _ => value.normal(),
+    };
 
-    // Calculate the width of the longest label key for alignment
-    let max_width = labels.iter().map(|(key, _)| key.len()).max().unwrap_or(0);
+    // Calculate visible length for padding
+    let label_len = label.chars().count();
+    let value_len = value.chars().count();
+    let space_len = if value_len > 0 { 1 } else { 0 };
+    let total_len = label_len + space_len + value_len;
 
-    // Add all lines with right-aligned label keys and their values
-    for (key, value) in &labels {
-        banner.push_str(
-            format!(
-                "\n{}{}",
-                format!("{key:>max_width$} ").dimmed(),
-                value.blue()
-            )
-            .as_str(),
-        );
+    let padding = content_width.saturating_sub(total_len);
+
+    print!(
+        "│ {:<width$} │ {}{}",
+        logo_styled,
+        label,
+        if value_len > 0 { " " } else { "" },
+        width = logo_width
+    );
+    print!("{}", value_styled);
+    if padding > 0 {
+        print!("{}", " ".repeat(padding));
     }
+    println!(" │");
+}
 
-    println!("{banner}\n");
-    Ok(())
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.chars().count() > max_len {
+        let mut chars: String = s.chars().take(max_len - 3).collect();
+        chars.push_str("...");
+        chars
+    } else {
+        s.to_string()
+    }
 }
