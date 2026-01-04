@@ -38,7 +38,7 @@ version = "0.17"
 version = "2.4"
 
 [dependencies.lazy-regex]
-version = "3.1"
+version = "3.5"
 
 [dependencies.derive_setters]
 workspace = true
