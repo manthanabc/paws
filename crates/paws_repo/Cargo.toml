@@ -67,7 +67,7 @@ version = "0.4"
 features = [ "serde",]
 
 [dependencies.diesel]
-version = "2.2.12"
+version = "2.3.5"
 features = [ "sqlite", "r2d2", "chrono",]
 
 [dependencies.derive_more]

@@ -19,12 +19,12 @@ aws-smithy-async = { version = "1.2", features = ["rt-tokio"] }
 base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = { version = "0.4.39", features = ["serde"] }
-clap = { version = "4.5.45", features = ["derive"] }
+clap = { version = "4.5.54", features = ["derive"] }
 colored = "3.0.0"
 console = "0.16.0"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 convert_case = "0.8.0"
-derive_more = { version = "2.0.1", features = ["from", "display", "debug", "deref", "as_ref"] }
+derive_more = { version = "2.1.1", features = ["from", "display", "debug", "deref", "as_ref"] }
 derive_setters = "0.1.6"
 dirs = "6.0.0"
 dotenvy = "0.15.7"
@@ -61,13 +61,13 @@ reqwest-eventsource = "0.6.0"
 rust-embed = "8.5.0"
 schemars = "0.8.21"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.143"
+serde_json = "1.0.148"
 serde_yml = "0.0.12"
 sha2 = "0.10"
 strip-ansi-escapes = "0.2.1"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-syn = { version = "2.0.106", features = ["derive", "parsing"] }
+syn = { version = "2.0.113", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
 tempfile = "3.21.0"
 termimad = "0.33.0"
@@ -83,9 +83,9 @@ tokio = { version = "1.47.1", features = [
     "io-util",
     "test-util",
 ] }
-tokio-stream = "0.1.17"
+tokio-stream = "0.1.18"
 tonic = { version = "0.14.2", features = ["tls-webpki-roots"] }
-tracing = "0.1.41"
+tracing = "0.1.44"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 url = { version = "2.5.4", features = ["serde"] }
