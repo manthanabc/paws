@@ -29,7 +29,20 @@ impl FormatContent for ToolOperation {
             )),
             ToolOperation::FsUndo { input: _, output: _ } => None,
             ToolOperation::NetFetch { input: _, output: _ } => None,
-            ToolOperation::Shell { output: _ } => None,
+            ToolOperation::Shell { output } => {
+                let mut text = output.output.stdout.clone();
+                if !output.output.stderr.is_empty() {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(&output.output.stderr);
+                }
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(ChatResponseContent::PlainText(text))
+                }
+            }
             ToolOperation::FollowUp { output: _ } => None,
             ToolOperation::PlanCreate { input: _, output } => Some({
                 let title = TitleFormat::debug(format!(

@@ -2427,7 +2427,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         match message {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
-                ChatResponseContent::PlainText(text) => self.writeln(text)?,
+                ChatResponseContent::PlainText(text) => {
+                    self.spinner.stop(None);
+                    let mut text = text
+                        .lines()
+                        .map(|line| format!("  {}", line))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    text = text + "\n";
+                    self.writeln(text)?;
+                    self.spinner.start(None);
+                }
                 ChatResponseContent::Markdown(text) => {
                     self.finish_thinking().await?;
                     self.markdown.add_chunk(&text, &mut self.spinner);
