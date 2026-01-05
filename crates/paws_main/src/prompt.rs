@@ -2,11 +2,11 @@ use std::fmt::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
+use colored::Colorize;
 use convert_case::{Case, Casing};
 use derive_setters::Setters;
 use nu_ansi_term::{Color, Style};
 use paws_api::{AgentId, ModelId};
-use colored::Colorize;
 
 use crate::display_constants::markers;
 

@@ -2835,10 +2835,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             }
                         }
                         Role::Assistant => {
-
                             if !content.is_empty() {
-                                self.markdown
-                                    .add_chunk(content, &mut self.spinner);
+                                self.markdown.add_chunk(content, &mut self.spinner);
                                 self.markdown.reset();
                             }
 
@@ -2865,9 +2863,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         _ => {}
                     }
                 }
-                ContextMessage::Tool(_result) => {
-
-                }
+                ContextMessage::Tool(_result) => {}
                 _ => {}
             }
         }
