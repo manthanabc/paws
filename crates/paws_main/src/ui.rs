@@ -2436,7 +2436,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     let formatted = tail
                         .map(|line| format!("  {}", line))
                         .collect::<Vec<_>>()
-                        .join("\n") + "\n";
+                        .join("\n")
+                        + "\n";
 
                     self.writeln(formatted.dimmed())?;
                     self.spinner.start(None)?;
