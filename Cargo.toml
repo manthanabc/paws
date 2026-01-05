@@ -33,13 +33,13 @@ gh-workflow = "0.8.1"
 glob = "0.3.3"
 grep-searcher = "0.1.14"
 grep-regex = "0.1.13"
-handlebars = { version = "6.2.0", features = ["rust-embed"] }
+handlebars = { version = "6.4.0", features = ["rust-embed"] }
 html2md = "0.2.15"
 http = "1.2.0"
 ignore = "0.4.23"
 is_ci = "1.2.0"
 indexmap = "2.11.0"
-insta = { version = "1.42.0", features = ["json", "yaml"] }
+insta = { version = "1.46.0", features = ["json", "yaml"] }
 lazy_static = "1.4.0"
 machineid-rs = "1.2.4"
 mockito = "1.6.1"
@@ -69,10 +69,10 @@ strum = "0.27.1"
 strum_macros = "0.27.1"
 syn = { version = "2.0.113", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
-tempfile = "3.21.0"
+tempfile = "3.24.0"
 termimad = "0.33.0"
 thiserror = "2.0.16"
-tokio = { version = "1.47.1", features = [
+tokio = { version = "1.49.0", features = [
     "macros",
     "rt-multi-thread",
     "sync",
