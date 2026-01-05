@@ -2802,6 +2802,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
+        self.markdown = MarkdownWriter::new();
         for message in &context.messages {
             match &**message {
                 ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
