@@ -2428,15 +2428,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => {
-                    self.spinner.stop(None);
-                    let mut text = text
-                        .lines()
+                    self.spinner.stop(None)?;
+
+                    let lines: Vec<&str> = text.lines().collect();
+                    let tail = lines.iter().rev().take(5).rev();
+
+                    let formatted = tail
                         .map(|line| format!("  {}", line))
                         .collect::<Vec<_>>()
-                        .join("\n");
-                    text = text + "\n";
-                    self.writeln(text)?;
-                    self.spinner.start(None);
+                        .join("\n") + "\n";
+
+                    self.writeln(formatted.dimmed())?;
+                    self.spinner.start(None)?;
                 }
                 ChatResponseContent::Markdown(text) => {
                     self.finish_thinking().await?;
