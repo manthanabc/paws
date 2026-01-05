@@ -126,6 +126,7 @@ impl<S: Services> PawsApp<S> {
             agent.clone(),
             chat.event.clone(),
             current_time,
+            environment.cwd.clone(),
         )
         .add_user_prompt(conversation)
         .await?;

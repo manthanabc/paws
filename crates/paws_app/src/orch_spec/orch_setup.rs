@@ -16,6 +16,7 @@ use crate::orch_spec::orch_runner::Runner;
 const USER_PROMPT: &str = r#"
   <{{event.name}}>{{event.value}}</{{event.name}}>
   <system_date>{{current_date}}</system_date>
+  <cwd>{{cwd}}</cwd>
 "#;
 
 #[derive(Setters)]

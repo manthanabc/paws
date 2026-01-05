@@ -90,6 +90,7 @@ pub struct EventContext {
     suggestions: Vec<String>,
     variables: HashMap<String, Value>,
     current_date: String,
+    cwd: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, Setters)]
@@ -111,6 +112,7 @@ impl EventContext {
             suggestions: Default::default(),
             variables: Default::default(),
             current_date: chrono::Local::now().format("%Y-%m-%d").to_string(),
+            cwd: String::new(),
         }
     }
 

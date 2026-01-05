@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use paws_domain::{Agent, *};
@@ -14,6 +15,7 @@ pub struct UserPromptGenerator<S> {
     agent: Agent,
     event: Event,
     current_time: chrono::DateTime<chrono::Local>,
+    cwd: PathBuf,
 }
 
 impl<S: AttachmentService> UserPromptGenerator<S> {
@@ -23,8 +25,9 @@ impl<S: AttachmentService> UserPromptGenerator<S> {
         agent: Agent,
         event: Event,
         current_time: chrono::DateTime<chrono::Local>,
+        cwd: PathBuf,
     ) -> Self {
-        Self { services: service, agent, event, current_time }
+        Self { services: service, agent, event, current_time, cwd }
     }
 
     /// Sets the user prompt in the context based on agent configuration and
@@ -87,7 +90,8 @@ impl<S: AttachmentService> UserPromptGenerator<S> {
                     .and_then(|v| v.as_user_prompt().map(|u| u.as_str().to_string()))
                     .unwrap_or_default();
                 let mut event_context = EventContext::new(EventContextValue::new(user_input))
-                    .current_date(self.current_time.format("%Y-%m-%d").to_string());
+                    .current_date(self.current_time.format("%Y-%m-%d").to_string())
+                    .cwd(self.cwd.to_string_lossy().to_string());
 
                 // Check if context already contains user messages to determine if it's feedback
                 let has_user_messages = context.messages.iter().any(|msg| msg.has_role(Role::User));
@@ -187,7 +191,13 @@ mod tests {
     }
 
     fn fixture_generator(agent: Agent, event: Event) -> UserPromptGenerator<MockService> {
-        UserPromptGenerator::new(Arc::new(MockService), agent, event, chrono::Local::now())
+        UserPromptGenerator::new(
+            Arc::new(MockService),
+            agent,
+            event,
+            chrono::Local::now(),
+            PathBuf::from("/test/cwd"),
+        )
     }
 
     #[tokio::test]
