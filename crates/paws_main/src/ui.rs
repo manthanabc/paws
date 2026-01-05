@@ -2802,24 +2802,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
 
-        let active_agent = self.api.get_active_agent().await;
-        let default_model = self.get_agent_model(active_agent.clone()).await;
-        let mut last_seen_model: Option<String> = default_model.as_ref().map(|m| m.to_string());
-        let git_branch = get_git_branch();
-
-        // If no default model, try to find one in the conversation history
-        if last_seen_model.is_none() {
-            last_seen_model = context.messages.iter().find_map(|msg| {
-                if let ContextMessage::Text(text_msg) = &**msg {
-                    text_msg.model.as_ref().map(|m| m.to_string())
-                } else {
-                    None
-                }
-            });
-        }
-
         for message in &context.messages {
-            // in sync
             match &**message {
                 ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
                     match role {
@@ -2830,12 +2813,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 .map(|p| p.as_str().to_string())
                                 .unwrap_or_else(|| content.clone());
 
-                            let agent_id = active_agent.clone().unwrap_or_default();
                             let paws_prompt = PawsPrompt {
                                 cwd: self.state.cwd.clone(),
-                                agent_id,
-                                model: model.clone().or(default_model.clone()),
-                                git_branch: git_branch.clone(),
+                                agent_id: AgentId::default(),
+                                model: model.clone(),
+                                git_branch: None,
                             };
                             let full_prompt = paws_prompt.render_prompt();
 
@@ -2853,13 +2835,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             }
                         }
                         Role::Assistant => {
-                            // Show model name above the response (dimmed)
-                            // Use current message model or fallback to last seen model
-                            // let model_to_show = model
-                            //     .as_ref()
-                            //     .map(|m| m.to_string())
-                            //     .or(last_seen_model.clone());
-
 
                             if !content.is_empty() {
                                 self.markdown
@@ -2890,20 +2865,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         _ => {}
                     }
                 }
-                ContextMessage::Tool(result) => {
-                    let _name = &result.name;
-                    let _output = result
-                        .output
-                        .values
-                        .iter()
-                        .map(|v| match v {
-                            paws_domain::ToolValue::Text(t) => t.clone(),
-                            paws_domain::ToolValue::AI { value, .. } => value.clone(),
-                            paws_domain::ToolValue::Image(_) => "[Image]".to_string(),
-                            paws_domain::ToolValue::Empty => "".to_string(),
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
+                ContextMessage::Tool(_result) => {
+
                 }
                 _ => {}
             }
@@ -2911,12 +2874,4 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // Note: Tests for confirm_delete_conversation are disabled because
-    // PawsSelect::confirm is not easily mockable in the current
-    // architecture. The functionality is tested through integration tests
-    // instead.
 }
