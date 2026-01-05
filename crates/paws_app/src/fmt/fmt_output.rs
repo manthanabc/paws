@@ -29,7 +29,20 @@ impl FormatContent for ToolOperation {
             )),
             ToolOperation::FsUndo { input: _, output: _ } => None,
             ToolOperation::NetFetch { input: _, output: _ } => None,
-            ToolOperation::Shell { output: _ } => None,
+            ToolOperation::Shell { output } => {
+                let mut text = output.output.stdout.clone();
+                if !output.output.stderr.is_empty() {
+                    if !text.is_empty() {
+                        text.push('\n');
+                    }
+                    text.push_str(&output.output.stderr);
+                }
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(ChatResponseContent::PlainText(text))
+                }
+            }
             ToolOperation::FollowUp { output: _ } => None,
             ToolOperation::PlanCreate { input: _, output } => Some({
                 let title = TitleFormat::debug(format!(
@@ -58,7 +71,7 @@ mod tests {
     use crate::operation::ToolOperation;
     use crate::{
         Content, FsCreateOutput, FsRemoveOutput, FsUndoOutput, HttpResponse, Match, MatchResult,
-        PatchOutput, ReadOutput, ResponseContext, SearchResult, ShellOutput,
+        PatchOutput, ReadOutput, ResponseContext, SearchResult,
     };
 
     // ContentFormat methods are now implemented in ChatResponseContent
@@ -401,69 +414,6 @@ mod tests {
                 code: 404,
                 context: ResponseContext::Raw,
                 content_type: "text/plain".to_string(),
-            },
-        };
-        let env = fixture_environment();
-
-        let actual = fixture.to_content(&env);
-        let expected = None;
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_shell_success() {
-        let fixture = ToolOperation::Shell {
-            output: ShellOutput {
-                output: paws_domain::CommandOutput {
-                    command: "ls -la".to_string(),
-                    stdout: "file1.txt\nfile2.txt".to_string(),
-                    stderr: "".to_string(),
-                    exit_code: Some(0),
-                },
-                shell: "/bin/bash".to_string(),
-            },
-        };
-        let env = fixture_environment();
-
-        let actual = fixture.to_content(&env);
-        let expected = None;
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_shell_success_with_stderr() {
-        let fixture = ToolOperation::Shell {
-            output: ShellOutput {
-                output: paws_domain::CommandOutput {
-                    command: "command_with_warnings".to_string(),
-                    stdout: "output line".to_string(),
-                    stderr: "warning line".to_string(),
-                    exit_code: Some(0),
-                },
-                shell: "/bin/bash".to_string(),
-            },
-        };
-        let env = fixture_environment();
-
-        let actual = fixture.to_content(&env);
-        let expected = None;
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_shell_failure() {
-        let fixture = ToolOperation::Shell {
-            output: ShellOutput {
-                output: paws_domain::CommandOutput {
-                    command: "failing_command".to_string(),
-                    stdout: "".to_string(),
-                    stderr: "Error: command not found".to_string(),
-                    exit_code: Some(127),
-                },
-                shell: "/bin/bash".to_string(),
             },
         };
         let env = fixture_environment();

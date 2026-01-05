@@ -157,7 +157,7 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
         working_dir: PathBuf,
     ) -> anyhow::Result<CommandOutput> {
         self.infra
-            .execute_command(command.to_string(), working_dir, false, None)
+            .execute_command(command.to_string(), working_dir, true, None)
             .await
     }
     async fn read_mcp_config(&self, scope: Option<&Scope>) -> Result<McpConfig> {
