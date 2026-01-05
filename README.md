@@ -19,7 +19,7 @@ Difference so far-
       [X] Erase summary after next prompt
  - [X] Switching conversation shows full history 
  - [X] Rename paws to .paws
- - [WIP] Full screen refresh on resize
+ - [X] Full screen refresh on resize
  - [WIP] Async input
 
 Planned - 
@@ -30,7 +30,8 @@ Planned -
  - [o] WebUI -> conversation history management
  - [e] Reduce instructions, remove tools -> simplify
  - [o] Optimize information density on UI more
-
+ - [o] Transcript mode
+ 
 Updates -
  Additional provideres
  - [X] Xiomi (free mimo v2-flash)
