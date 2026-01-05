@@ -56,7 +56,7 @@ async fn test_rendered_user_message() {
     assert!(user_message.is_some(), "Should have user message");
 
     let content = format!(
-        "\n  <task>Hi</task>\n  <system_date>{}</system_date>\n",
+        "\n  <task>Hi</task>\n  <system_date>{}</system_date>\n  <cwd>/Users/tushar</cwd>\n",
         current_time.format("%Y-%m-%d")
     );
     assert_eq!(user_message.unwrap().content().unwrap(), content)
