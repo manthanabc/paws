@@ -149,6 +149,134 @@
     ]
   },
   {
+    "id": "antigravity-proxy",
+    "url_param_vars": ["ANTIGRAVITY_PROXY_PORT"],
+    "response_type": "Anthropic",
+    "url": "http://localhost:{{ANTIGRAVITY_PROXY_PORT}}/v1/messages",
+    "models": [
+      {
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "description": "Gemini 2.5 Flash",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "gpt-oss-120b-medium",
+        "name": "GPT-OSS 120B (Medium)",
+        "description": "GPT-OSS 120B (Medium)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "gemini-3-pro-low",
+        "name": "Gemini 3 Pro (Low)",
+        "description": "Gemini 3 Pro (Low)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "gemini-2.5-flash-thinking",
+        "name": "Gemini 2.5 Flash (Thinking)",
+        "description": "Gemini 2.5 Flash (Thinking)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": true
+      },
+      {
+        "id": "gemini-2.5-flash-lite",
+        "name": "Gemini 2.5 Flash Lite",
+        "description": "Gemini 2.5 Flash Lite",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "claude-sonnet-4-5-thinking",
+        "name": "Claude Sonnet 4.5 (Thinking)",
+        "description": "Claude Sonnet 4.5 (Thinking)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": true
+      },
+      {
+        "id": "gemini-3-flash",
+        "name": "Gemini 3 Flash",
+        "description": "Gemini 3 Flash",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "description": "Claude Sonnet 4.5",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "gemini-3-pro-image",
+        "name": "Gemini 3 Pro Image",
+        "description": "Gemini 3 Pro Image",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "rev19-uic3-1p",
+        "name": "rev19-uic3-1p",
+        "description": "rev19-uic3-1p",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "claude-opus-4-5-thinking",
+        "name": "Claude Opus 4.5 (Thinking)",
+        "description": "Claude Opus 4.5 (Thinking)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": true
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "description": "Gemini 2.5 Pro",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      },
+      {
+        "id": "gemini-3-pro-high",
+        "name": "Gemini 3 Pro (High)",
+        "description": "Gemini 3 Pro (High)",
+        "context_length": 200000,
+        "tools_supported": true,
+        "supports_parallel_tool_calls": true,
+        "supports_reasoning": false
+      }
+    ],
+    "auth_methods": [
+       "api_key" 
+    ]
+  },
+  {
     "id": "claude_code",
     "api_key_vars": "CLAUDE_API_KEY",
     "url_param_vars": [],
