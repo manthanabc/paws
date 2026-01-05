@@ -405,9 +405,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn on_resize(&mut self) -> Result<()> {
         println!("\x1b[3J\x1b[2J\x1b[H");
         eprintln!("\x1b[3J\x1b[2J\x1b[H");
+        let conversation_id = self.init_conversation().await?;
         let conversation = self
             .api
-            .conversation(&self.state.conversation_id.expect("SHOULD HAVE ONE"))
+            .conversation(&conversation_id)
             .await
             .unwrap()
             .expect("IDK why this happened, do report");
@@ -2811,11 +2812,11 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
-        let context = conversation
-            .context
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Conversation has no context"))?;
+        let Some(context) = conversation.context else {
+            return Ok(());
+        };
 
+        // Create new markdown writer, (which will be based on current terminal size)
         self.markdown = MarkdownWriter::new();
         for message in &context.messages {
             match &**message {
@@ -2851,7 +2852,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                         Role::Assistant => {
                             if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner);
+                                self.markdown.add_chunk(&content, &mut self.spinner);
                                 self.markdown.reset();
                             }
 
