@@ -2429,8 +2429,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => {
-                    self.spinner.stop(None)?;
-
                     let lines: Vec<&str> = text.lines().collect();
                     let tail = lines.iter().rev().take(5).rev();
 
@@ -2441,7 +2439,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         + "\n";
 
                     self.writeln(formatted.dimmed())?;
-                    self.spinner.start(None)?;
                 }
                 ChatResponseContent::Markdown(text) => {
                     self.finish_thinking().await?;
@@ -2449,14 +2446,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
             },
             ChatResponse::ToolCallStart(_) => {
-                // Hide spinner while tool call
-                let _ = self.spinner.hide();
+                self.markdown.reset();
+                self.finish_thinking().await?;
             }
             ChatResponse::ToolCallEnd(_toolcall_result) => {
-                self.finish_thinking().await?;
-                // Resume the spinner as tool call is over
-                let _ = self.spinner.show();
-
                 if !self.cli.verbose {
                     return Ok(());
                 }

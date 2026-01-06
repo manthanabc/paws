@@ -109,7 +109,7 @@ impl MarkdownWriter {
         // Build ANSI sequence to write
         let mut out = String::new();
         if up_lines > 0 {
-            out.push_str(&format!("\x1b[{}A", up_lines)); // move up
+            out.push_str(&format!("\x1b[{}A", up_lines+1)); // move up
         }
         out.push_str("\x1b[0J"); // clear from cursor down
         for line in lines_new.iter().skip(common + skip) {
