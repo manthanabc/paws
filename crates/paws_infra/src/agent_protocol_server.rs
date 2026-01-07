@@ -13,16 +13,17 @@ pub struct AgentProtocolServer {
 
 impl AgentProtocolServer {
     pub fn new() -> Self {
-        Self {
-            service: Arc::new(AgentProtocolService::new()),
-        }
+        Self { service: Arc::new(AgentProtocolService::new()) }
     }
 
     pub async fn serve(&self, host: &str, port: u16) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/agent/tasks", post(create_task).get(list_tasks))
             .route("/agent/tasks/:task_id", get(get_task))
-            .route("/agent/tasks/:task_id/steps", post(execute_step).get(list_steps))
+            .route(
+                "/agent/tasks/:task_id/steps",
+                post(execute_step).get(list_steps),
+            )
             .route("/agent/tasks/:task_id/steps/:step_id", get(get_step))
             .layer(CorsLayer::permissive())
             .with_state(self.service.clone());
