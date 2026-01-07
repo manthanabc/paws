@@ -50,7 +50,7 @@ async fn run_test_one_chunk() -> anyhow::Result<()> {
     for chunk in chunks {
         ty += chunk;
     }
-    writer.add_chunk(&ty, &mut spinner)?;
+    writer.add_chunk_dimmed(&ty, &mut spinner)?;
     spinner.stop(Some("Done".to_string()))?;
 
     Ok(())
@@ -86,6 +86,7 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
         thread::sleep(Duration::from_millis(200));
         writer.add_chunk(chunk, &mut spinner)?;
     }
+    spinner.write_ln("add chunk end")?;
 
     thread::sleep(Duration::from_secs(1));
 
