@@ -100,6 +100,13 @@ workspace = true
 [dependencies.paws_common]
 workspace = true
 
+[dependencies.axum]
+workspace = true
+
+[dependencies.tower-http]
+workspace = true
+features = ["cors", "trace"]
+
 [dev-dependencies.tokio]
 workspace = true
 features = [ "macros", "rt", "time", "test-util",]

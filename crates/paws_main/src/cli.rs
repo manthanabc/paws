@@ -133,6 +133,17 @@ pub enum TopLevelCommand {
     /// Manage API provider authentication.
     Provider(ProviderCommandGroup),
 
+    /// Start Agent Protocol server.
+    Serve {
+        /// Port to listen on.
+        #[arg(long, short = 'p', default_value = "8000")]
+        port: u16,
+
+        /// Host to bind to.
+        #[arg(long, short = 'H', default_value = "127.0.0.1")]
+        host: String,
+    },
+
     /// Run or list custom commands.
     Cmd(CmdCommandGroup),
 
@@ -1265,6 +1276,28 @@ mod tests {
         };
         let expected = true;
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_serve_command_args() {
+        let fixture = Cli::parse_from(["paws", "serve", "--port", "9000", "--host", "0.0.0.0"]);
+        let (port, host) = match fixture.subcommands {
+            Some(TopLevelCommand::Serve { port, host }) => (port, host),
+            _ => panic!("Expected TopLevelCommand::Serve"),
+        };
+        assert_eq!(port, 9000);
+        assert_eq!(host, "0.0.0.0");
+    }
+
+    #[test]
+    fn test_serve_command_defaults() {
+        let fixture = Cli::parse_from(["paws", "serve"]);
+        let (port, host) = match fixture.subcommands {
+            Some(TopLevelCommand::Serve { port, host }) => (port, host),
+            _ => panic!("Expected TopLevelCommand::Serve"),
+        };
+        assert_eq!(port, 8000);
+        assert_eq!(host, "127.0.0.1");
     }
 
     #[test]

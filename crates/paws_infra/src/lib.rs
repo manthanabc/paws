@@ -1,5 +1,6 @@
 pub mod executor;
 
+pub mod agent_protocol_server;
 mod auth;
 mod env;
 mod error;

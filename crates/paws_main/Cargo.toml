@@ -110,6 +110,9 @@ workspace = true
 [dependencies.async-recursion]
 workspace = true
 
+[dependencies.paws_infra]
+workspace = true
+
 [dependencies.paws_common]
 workspace = true
 
