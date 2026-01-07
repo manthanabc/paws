@@ -398,6 +398,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
+            self.markdown.reset();
         }
         Ok(())
     }
@@ -2442,7 +2443,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 ChatResponseContent::Markdown(text) => {
                     self.finish_thinking().await?;
-                    self.markdown.add_chunk(&text, &mut self.spinner);
+                    self.markdown.add_chunk(&text, &mut self.spinner)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
@@ -2482,7 +2483,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         let max_h = (self.markdown.height() as f64 * 0.4) as usize;
                         self.markdown.set_max_height(Some(max_h));
                     }
-                    self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
+                    self.markdown
+                        .add_chunk_dimmed(&content, &mut self.spinner)?;
                 }
             }
             ChatResponse::TaskComplete => {
@@ -2797,7 +2799,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Format and display the message using the message_display module
         if let Some(message) = message {
-            self.markdown.add_chunk(message, &mut self.spinner);
+            self.markdown.add_chunk(message, &mut self.spinner)?;
         }
 
         Ok(())
@@ -2845,7 +2847,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                         Role::Assistant => {
                             if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner);
+                                self.markdown.add_chunk(content, &mut self.spinner)?;
                                 self.markdown.reset();
                             }
 

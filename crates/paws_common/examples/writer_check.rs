@@ -1,5 +1,6 @@
 use std::thread;
 use std::time::Duration;
+
 use paws_common::display::md::MarkdownWriter;
 use paws_common::spinner::SpinnerManager;
 
@@ -16,12 +17,48 @@ async fn main() -> anyhow::Result<()> {
     println!("\n=== Test 3: MarkdownWriter with Spinner Active (Height Limit = 5) ===");
     run_test(true, Some(5)).await?;
 
+    // Expected result
+    println!("\n=== Test 4: Control ===");
+    run_test_one_chunk().await?;
+    Ok(())
+}
+
+async fn run_test_one_chunk() -> anyhow::Result<()> {
+    let mut spinner = SpinnerManager::new();
+    spinner.init()?;
+
+    let mut writer = MarkdownWriter::new();
+
+    spinner.start(Some("Processing..."))?;
+    spinner.write_ln("normal text");
+    spinner.write_ln("normal text 2");
+    let chunks = [
+        "# Header\n",
+        "This is a paragraph\n",
+        "built from chunks.\n",
+        "- List item 1\n",
+        "- List item 2\n",
+        "- List item 3\n",
+        "- List item 4\n",
+        "- List item 5\n",
+        "- List item 6\n",
+        "End of stream.",
+    ];
+
+    let mut ty = String::new();
+
+    for chunk in chunks {
+        ty += chunk;
+    }
+    writer.add_chunk(&ty, &mut spinner);
+    spinner.stop(Some("Done".to_string()))?;
+
     Ok(())
 }
 
 async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Result<()> {
     let mut spinner = SpinnerManager::new();
-    let _rx = spinner.init()?;
+    spinner.init()?;
 
     let mut writer = MarkdownWriter::new();
     writer.set_max_height(max_height);
@@ -29,17 +66,18 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
     if use_spinner {
         spinner.start(Some("Processing..."))?;
     }
-
+    spinner.write_ln("normal text");
+    spinner.write_ln("normal text 2");
     let chunks = [
-        "# Header",
+        "# Header\n",
         "This is a paragraph\n",
-        "built from chunks.",
-        "- List item 1",
-        "- List item 2",
+        "built from chunks.\n",
+        "- List item 1\n",
+        "- List item 2\n",
         "- List item 3\n",
-        "- List item 4",
-        "- List item 5",
-        "- List item 6",
+        "- List item 4\n",
+        "- List item 5\n",
+        "- List item 6\n",
         "End of stream.",
     ];
 

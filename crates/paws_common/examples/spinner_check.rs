@@ -1,5 +1,6 @@
 use std::thread;
 use std::time::Duration;
+
 use paws_common::spinner::SpinnerManager;
 
 #[tokio::main]

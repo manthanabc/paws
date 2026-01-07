@@ -41,18 +41,29 @@ impl MarkdownWriter {
         self.previous_rendered.clear();
     }
 
-    pub fn add_chunk(&mut self, chunk: &str, spn: &mut SpinnerManager) {
+    pub fn add_chunk(&mut self, chunk: &str, spn: &mut SpinnerManager) -> anyhow::Result<()> {
         if self.last_was_dimmed {
             self.reset();
+        }
+        if self.buffer.is_empty() {
+            spn.write_ln("").expect("Failed to write");
         }
         self.buffer.push_str(chunk);
         self.stream(&self.renderer.render(&self.buffer, None), spn);
         self.last_was_dimmed = false;
+        Ok(())
     }
 
-    pub fn add_chunk_dimmed(&mut self, chunk: &str, spn: &mut SpinnerManager) {
+    pub fn add_chunk_dimmed(
+        &mut self,
+        chunk: &str,
+        spn: &mut SpinnerManager,
+    ) -> anyhow::Result<()> {
         if !self.last_was_dimmed {
             self.reset();
+        }
+        if self.buffer.is_empty() {
+            spn.write_ln("").expect("Failed to write");
         }
         self.buffer.push_str(chunk);
         self.stream(
@@ -60,6 +71,7 @@ impl MarkdownWriter {
             spn,
         );
         self.last_was_dimmed = true;
+        Ok(())
     }
 
     pub fn clear(&mut self, spn: &mut SpinnerManager, dur: f64) {
@@ -104,12 +116,12 @@ impl MarkdownWriter {
         if up_base > lines_to_update {
             skip = up_base - lines_to_update;
         }
-        let up_lines = up_base.saturating_sub(skip);
+        let up_lines = up_base.saturating_sub(skip) + 1;
 
         // Build ANSI sequence to write
         let mut out = String::new();
         if up_lines > 0 {
-            out.push_str(&format!("\x1b[{}A", up_lines+1)); // move up
+            out.push_str(&format!("\x1b[{}A", up_lines)); // move up
         }
         out.push_str("\x1b[0J"); // clear from cursor down
         for line in lines_new.iter().skip(common + skip) {
