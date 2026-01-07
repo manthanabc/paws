@@ -214,7 +214,7 @@ And some more text after the code block."#;
         // Split into chunks and add with spaces
         let chunks = long_text.split_whitespace().collect::<Vec<_>>();
         for chunk in chunks {
-            fixture.add_chunk(&format!("{} ", chunk), &mut spn);
+            fixture.add_chunk(&format!("{} ", chunk), &mut spn).expect("EEE");
         }
 
         assert!(fixture.buffer.contains("Header"));

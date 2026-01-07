@@ -30,8 +30,8 @@ async fn run_test_one_chunk() -> anyhow::Result<()> {
     let mut writer = MarkdownWriter::new();
 
     spinner.start(Some("Processing..."))?;
-    spinner.write_ln("normal text");
-    spinner.write_ln("normal text 2");
+    spinner.write_ln("normal text")?;
+    spinner.write_ln("normal text 2")?;
     let chunks = [
         "# Header\n",
         "This is a paragraph\n",
@@ -50,7 +50,7 @@ async fn run_test_one_chunk() -> anyhow::Result<()> {
     for chunk in chunks {
         ty += chunk;
     }
-    writer.add_chunk(&ty, &mut spinner);
+    writer.add_chunk(&ty, &mut spinner)?;
     spinner.stop(Some("Done".to_string()))?;
 
     Ok(())
@@ -66,8 +66,8 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
     if use_spinner {
         spinner.start(Some("Processing..."))?;
     }
-    spinner.write_ln("normal text");
-    spinner.write_ln("normal text 2");
+    spinner.write_ln("normal text")?;
+    spinner.write_ln("normal text 2")?;
     let chunks = [
         "# Header\n",
         "This is a paragraph\n",
@@ -84,7 +84,7 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
     for chunk in chunks {
         // Simulate streaming delay
         thread::sleep(Duration::from_millis(200));
-        writer.add_chunk(chunk, &mut spinner);
+        writer.add_chunk(chunk, &mut spinner)?;
     }
 
     thread::sleep(Duration::from_secs(1));
