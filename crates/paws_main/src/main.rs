@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 use paws_api::PawsAPI;
 use paws_domain::TitleFormat;
-use paws_main::{Cli, Sandbox, TitleDisplayExt, UI};
+use paws_main::{Cli, Sandbox, TitleDisplayExt, TopLevelCommand, UI, run_acp_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
             "Unexpected error occurred".to_string()
         };
 
-        println!("{}", TitleFormat::error(message.to_string()).display());
+        eprintln!("{}", TitleFormat::error(message.to_string()).display());
 
         std::process::exit(1);
     }));
@@ -28,8 +28,11 @@ async fn main() -> Result<()> {
     // Initialize and run the UI
     let mut cli = Cli::parse();
 
+    // ACP uses stdin/stdout as transport and must not consume stdin as piped input.
+    let is_acp_mode = matches!(&cli.subcommands, Some(TopLevelCommand::Acp));
+
     // Check if there's piped input
-    if !atty::is(atty::Stream::Stdin) {
+    if !is_acp_mode && !atty::is(atty::Stream::Stdin) {
         let mut stdin_content = String::new();
         std::io::stdin().read_to_string(&mut stdin_content)?;
         let trimmed_content = stdin_content.trim();
@@ -55,6 +58,15 @@ async fn main() -> Result<()> {
 
     // Initialize the PawsAPI with the restricted mode if specified
     let restricted = cli.restricted;
+
+    // Handle ACP mode separately
+    if is_acp_mode {
+        let api = std::sync::Arc::new(PawsAPI::init(restricted, cwd.clone()));
+        let env = api.environment();
+        let _guard = paws_services::log::init_tracing(env.log_path())?;
+        return run_acp_server(api).await;
+    }
+
     let mut ui = UI::init(cli, move || PawsAPI::init(restricted, cwd.clone()))?;
     ui.run().await;
 

@@ -110,6 +110,8 @@ gray_matter = "0.3.2"
 num-format = "0.4"
 humantime = "2.1.0"
 dashmap = "7.0.0-rc2"
+agent-client-protocol = "0.9.2"
+tokio-util = { version = "0.7", features = ["compat"] }
 
 # Internal crates
 paws_api = { path = "crates/paws_api" }

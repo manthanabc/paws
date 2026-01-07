@@ -639,6 +639,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln(data?)?;
                 }
             }
+
+            TopLevelCommand::Acp => {
+                // For ACP mode, we need to hand off control to the ACP server
+                // This should never return in normal operation
+                return Err(anyhow::anyhow!(
+                    "ACP mode should be handled at the main entry point"
+                ));
+            }
         }
         Ok(())
     }

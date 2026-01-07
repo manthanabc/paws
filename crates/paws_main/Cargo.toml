@@ -12,6 +12,9 @@ atty = "0.2"
 crossterm = { version = "0.28", features = ["event-stream"] }
 futures.workspace = true
 paws_services.workspace = true
+agent-client-protocol.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 serial_test = "3.2"

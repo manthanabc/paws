@@ -138,6 +138,9 @@ pub enum TopLevelCommand {
 
     /// Process JSONL data through LLM with schema-constrained tools.
     Data(DataCommandGroup),
+
+    /// Start Agent Client Protocol server mode.
+    Acp,
 }
 
 /// Command group for custom command management.

@@ -18,6 +18,9 @@ mod zsh_plugin;
 
 mod update;
 
+pub mod acp_agent;
+
+pub use acp_agent::run_acp_server;
 pub use cli::{Cli, TopLevelCommand};
 pub use sandbox::Sandbox;
 pub use title_display::*;
