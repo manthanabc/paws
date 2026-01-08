@@ -500,6 +500,10 @@ pub enum SlashCommand {
     /// Internal resize event
     #[strum(props(usage = "Internal resize event"))]
     Resize,
+
+    /// Transcript Mode
+    #[strum(props(usage = "Switch to transcript mode"))]
+    Transcript
 }
 
 impl SlashCommand {
@@ -532,6 +536,7 @@ impl SlashCommand {
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
             SlashCommand::Resize => "resize",
+            SlashCommand::Transcript => "transcript"
         }
     }
 

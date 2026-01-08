@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
+use crossterm::event::{EventStream, KeyCode, KeyModifiers};
+use crossterm::{execute, terminal};
 use convert_case::{Case, Casing};
 use merge::Merge;
 use paws_api::{
@@ -1659,6 +1661,39 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Resize => {
                 // Handled in the main loop, but we need to handle it here to satisfy the match
                 return Ok(false);
+            }
+            SlashCommand::Transcript => {
+                // Enter alternate screen
+                execute!(std::io::stdout(), terminal::EnterAlternateScreen)?;
+
+                // print conversation full version
+                if let Some(conversation_id) = self.state.conversation_id {
+                    if let Some(conversation) = self.api.conversation(&conversation_id).await? {
+                        self.on_print_conversation(conversation).await?;
+                    }
+                }
+
+                // wait for ctrl o or esc  to return to normal mode
+                // terminal::enable_raw_mode()?;
+                let mut reader = EventStream::new();
+                loop {
+                    let event = reader.next().await;
+                    match event {
+                        Some(Ok(crossterm::event::Event::Key(key_event))) => {
+                            if key_event.code == KeyCode::Esc
+                                || (key_event.code == KeyCode::Char('o')
+                                    && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                                || (key_event.code == KeyCode::Char('c')
+                                    && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                            {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // terminal::disable_raw_mode()?;
+                execute!(std::io::stdout(), terminal::LeaveAlternateScreen)?;
             }
         }
 
