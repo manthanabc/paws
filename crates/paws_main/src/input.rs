@@ -51,11 +51,10 @@ impl Console {
         }
 
         // Don't add if it's same as last entry
-        if let Some(last) = self.load_history().last() {
-            if last == line {
+        if let Some(last) = self.load_history().last()
+            && last == line {
                 return;
             }
-        }
 
         let history_path = self.env.history_path();
         if let Some(parent) = history_path.parent() {
