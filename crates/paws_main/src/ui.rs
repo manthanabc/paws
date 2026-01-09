@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use crossterm::event::{EventStream, KeyCode, KeyModifiers};
-use crossterm::{execute, terminal};
+use crossterm::event::{
+    DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers, MouseEventKind,
+};
+use crossterm::{cursor, execute, terminal};
 use convert_case::{Case, Casing};
 use merge::Merge;
 use paws_api::{
@@ -24,7 +27,7 @@ use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
 use paws_domain::{
-    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, ToolValue, UserCommand,
 };
 use tokio_stream::StreamExt;
 use tracing::debug;
@@ -1663,37 +1666,145 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 return Ok(false);
             }
             SlashCommand::Transcript => {
-                // Enter alternate screen
-                execute!(std::io::stdout(), terminal::EnterAlternateScreen)?;
+                // Enter alternate screen and enable mouse capture
+                execute!(
+                    std::io::stdout(),
+                    terminal::EnterAlternateScreen,
+                    EnableMouseCapture
+                )?;
 
-                // print conversation full version
+                // print conversation transcript version
                 if let Some(conversation_id) = self.state.conversation_id {
                     if let Some(conversation) = self.api.conversation(&conversation_id).await? {
-                        self.on_print_conversation(conversation).await?;
-                    }
-                }
+                        let mut lines = self.render_transcript(conversation.clone()).await?;
+                        let mut scroll_offset = 0;
+                        let (_width, mut height) = terminal::size()?;
 
-                // wait for ctrl o or esc  to return to normal mode
-                // terminal::enable_raw_mode()?;
-                let mut reader = EventStream::new();
-                loop {
-                    let event = reader.next().await;
-                    match event {
-                        Some(Ok(crossterm::event::Event::Key(key_event))) => {
-                            if key_event.code == KeyCode::Esc
-                                || (key_event.code == KeyCode::Char('o')
-                                    && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                                || (key_event.code == KeyCode::Char('c')
-                                    && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                            {
-                                break;
+                        // Initial draw
+                        self.draw_transcript_viewport(&lines, scroll_offset, height as usize)?;
+
+                        let mut reader = EventStream::new();
+                        loop {
+                            let event = reader.next().await;
+                            match event {
+                                Some(Ok(crossterm::event::Event::Key(key_event))) => {
+                                    if key_event.code == KeyCode::Esc
+                                        || (key_event.code == KeyCode::Char('o')
+                                            && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                                        || (key_event.code == KeyCode::Char('c')
+                                            && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                                    {
+                                        break;
+                                    }
+
+                                    match key_event.code {
+                                        KeyCode::Up => {
+                                            if scroll_offset > 0 {
+                                                scroll_offset -= 1;
+                                                self.draw_transcript_viewport(
+                                                    &lines,
+                                                    scroll_offset,
+                                                    height as usize,
+                                                )?;
+                                            }
+                                        }
+                                        KeyCode::Down => {
+                                            if scroll_offset + (height as usize) < lines.len() {
+                                                scroll_offset += 1;
+                                                self.draw_transcript_viewport(
+                                                    &lines,
+                                                    scroll_offset,
+                                                    height as usize,
+                                                )?;
+                                            }
+                                        }
+                                        KeyCode::PageUp => {
+                                            scroll_offset =
+                                                scroll_offset.saturating_sub(height as usize);
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                        KeyCode::PageDown => {
+                                            scroll_offset = (scroll_offset + (height as usize))
+                                                .min(lines.len().saturating_sub(height as usize));
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                        KeyCode::Home => {
+                                            scroll_offset = 0;
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                        KeyCode::End => {
+                                            scroll_offset =
+                                                lines.len().saturating_sub(height as usize);
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Some(Ok(crossterm::event::Event::Mouse(mouse_event))) => {
+                                    match mouse_event.kind {
+                                        MouseEventKind::ScrollUp => {
+                                            if scroll_offset > 0 {
+                                                scroll_offset = scroll_offset.saturating_sub(3);
+                                                self.draw_transcript_viewport(
+                                                    &lines,
+                                                    scroll_offset,
+                                                    height as usize,
+                                                )?;
+                                            }
+                                        }
+                                        MouseEventKind::ScrollDown => {
+                                            if scroll_offset + (height as usize) < lines.len() {
+                                                scroll_offset = (scroll_offset + 3).min(
+                                                    lines.len().saturating_sub(height as usize),
+                                                );
+                                                self.draw_transcript_viewport(
+                                                    &lines,
+                                                    scroll_offset,
+                                                    height as usize,
+                                                )?;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Some(Ok(crossterm::event::Event::Resize(_w, h))) => {
+                                    height = h;
+                                    // Re-render because wrapping depends on width
+                                    lines = self.render_transcript(conversation.clone()).await?;
+                                    scroll_offset = scroll_offset
+                                        .min(lines.len().saturating_sub(height as usize));
+                                    self.draw_transcript_viewport(
+                                        &lines,
+                                        scroll_offset,
+                                        height as usize,
+                                    )?;
+                                }
+                                _ => {}
                             }
                         }
-                        _ => {}
                     }
                 }
-                // terminal::disable_raw_mode()?;
-                execute!(std::io::stdout(), terminal::LeaveAlternateScreen)?;
+                execute!(
+                    std::io::stdout(),
+                    DisableMouseCapture,
+                    terminal::LeaveAlternateScreen
+                )?;
             }
         }
 
@@ -2914,6 +3025,147 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
         }
 
+        Ok(())
+    }
+
+    /// Renders the transcript of the conversation to a list of lines
+    async fn render_transcript(&self, conversation: Conversation) -> Result<Vec<String>> {
+        let mut lines = Vec::new();
+        let Some(context) = conversation.context else {
+            return Ok(lines);
+        };
+
+        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
+        use crossterm::style::Attribute;
+        let renderer = MarkdownRenderer::default();
+
+        for message in &context.messages {
+            match &**message {
+                ContextMessage::Text(TextMessage {
+                    content,
+                    role,
+                    tool_calls,
+                    model,
+                    reasoning_details,
+                    ..
+                }) => match role {
+                    Role::User => {
+                        let content_to_show = message
+                            .as_value()
+                            .and_then(|v| v.as_user_prompt())
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_else(|| content.clone());
+
+                        let paws_prompt = PawsPrompt {
+                            cwd: self.state.cwd.clone(),
+                            agent_id: AgentId::default(),
+                            model: model.clone(),
+                            git_branch: None,
+                        };
+                        let full_prompt = paws_prompt.render_prompt();
+
+                        lines.push("".to_string());
+                        if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+                            lines.push(header.to_string());
+                            for line in content_to_show.lines() {
+                                lines.push(format!("{}{}", prefix, line));
+                            }
+                        } else {
+                            lines.push(full_prompt);
+                            for line in content_to_show.lines() {
+                                lines.push(format!("{} {}", "┃".white().bold(), line));
+                            }
+                        }
+                    }
+                    Role::Assistant => {
+                        // Show full thinking/reasoning
+                        if let Some(reasoning) = reasoning_details {
+                            for detail in reasoning {
+                                if let Some(text) = &detail.text {
+                                    let rendered = renderer.render(text, Some(Attribute::Dim));
+                                    for line in rendered.lines() {
+                                        lines.push(line.to_string());
+                                    }
+                                }
+                            }
+                        }
+
+                        if !content.is_empty() {
+                            let rendered = renderer.render(content, None);
+                            for line in rendered.lines() {
+                                lines.push(line.to_string());
+                            }
+                        }
+
+                        // Show full tool calls
+                        if let Some(calls) = tool_calls {
+                            for call in calls {
+                                let title = format!("🛠️ Tool Call: {}", call.name);
+                                lines.push(TitleFormat::action(title).display().to_string());
+                                let args = serde_json::to_string_pretty(&call.arguments)?;
+                                let rendered =
+                                    renderer.render(&format!("```json\n{}\n```", args), None);
+                                for line in rendered.lines() {
+                                    lines.push(line.to_string());
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                ContextMessage::Tool(result) => {
+                    let title = format!("✅ Tool Result: {}", result.name);
+                    lines.push(TitleFormat::action(title).display().to_string());
+                    for value in &result.output.values {
+                        match value {
+                            ToolValue::Text(text) => {
+                                for line in text.lines() {
+                                    lines.push(line.to_string());
+                                }
+                            }
+                            ToolValue::AI { value, .. } => {
+                                for line in value.lines() {
+                                    lines.push(line.to_string());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(lines)
+    }
+
+    fn draw_transcript_viewport(
+        &self,
+        lines: &[String],
+        offset: usize,
+        height: usize,
+    ) -> Result<()> {
+        let mut stdout = std::io::stdout();
+        execute!(
+            stdout,
+            terminal::Clear(terminal::ClearType::All),
+            cursor::MoveTo(0, 0)
+        )?;
+
+        let end = (offset + height).min(lines.len());
+        for i in offset..end {
+            write!(stdout, "{}\r\n", lines[i])?;
+        }
+        stdout.flush()?;
+        Ok(())
+    }
+
+    /// Prints the transcript version of the conversation
+    pub async fn on_print_transcript(&mut self, conversation: Conversation) -> Result<()> {
+        let lines = self.render_transcript(conversation).await?;
+        for line in lines {
+            self.writeln(line)?;
+        }
         Ok(())
     }
 }
