@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 use colored::Colorize;
-use paws_api::{Agent, AnyProvider, Model, ProviderId, Template};
-use paws_domain::UserCommand;
+use forge_api::{Agent, AnyProvider, Model, ProviderId, Template};
+use forge_domain::UserCommand;
 use strum::{EnumProperty, IntoEnumIterator};
 use strum_macros::{EnumIter, EnumProperty};
 
@@ -56,29 +56,6 @@ impl Display for CliModel {
 /// the application, showing provider ID with domain information.
 #[derive(Clone)]
 pub struct CliProvider(pub AnyProvider);
-
-/// Item for provider selection with optional section separators
-#[derive(Clone)]
-#[allow(dead_code)]
-pub enum SelectItem {
-    /// Empty line separator
-    Separator,
-    /// Provider option
-    Provider(Box<CliProvider>),
-}
-
-impl Display for SelectItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SelectItem::Separator => {
-                write!(f, "")
-            }
-            SelectItem::Provider(provider) => {
-                write!(f, "{provider}")
-            }
-        }
-    }
-}
 
 impl Display for CliProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -145,25 +122,25 @@ impl From<&[Model]> for Info {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PawsCommand {
+pub struct ForgeCommand {
     pub name: String,
     pub description: String,
     pub value: Option<String>,
 }
 
 #[derive(Debug)]
-pub struct PawsCommandManager {
-    commands: Arc<Mutex<Vec<PawsCommand>>>,
+pub struct ForgeCommandManager {
+    commands: Arc<Mutex<Vec<ForgeCommand>>>,
 }
 
-impl Default for PawsCommandManager {
+impl Default for ForgeCommandManager {
     fn default() -> Self {
         let commands = Self::default_commands();
-        PawsCommandManager { commands: Arc::new(Mutex::new(commands)) }
+        ForgeCommandManager { commands: Arc::new(Mutex::new(commands)) }
     }
 }
 
-impl PawsCommandManager {
+impl ForgeCommandManager {
     /// Sanitizes agent ID to create a valid command name
     /// Replaces spaces and special characters with hyphens
     fn sanitize_agent_id(agent_id: &str) -> String {
@@ -183,7 +160,7 @@ impl PawsCommandManager {
         matches!(
             name,
             "agent"
-                | "paws"
+                | "forge"
                 | "muse"
                 | "sage"
                 | "help"
@@ -201,16 +178,17 @@ impl PawsCommandManager {
                 | "retry"
                 | "conversations"
                 | "list"
+                | "commit"
         )
     }
 
-    fn default_commands() -> Vec<PawsCommand> {
+    fn default_commands() -> Vec<ForgeCommand> {
         SlashCommand::iter()
             .filter(|command| !matches!(command, SlashCommand::Message(_)))
             .filter(|command| !matches!(command, SlashCommand::Custom(_)))
             .filter(|command| !matches!(command, SlashCommand::Shell(_)))
             .filter(|command| !matches!(command, SlashCommand::AgentSwitch(_)))
-            .map(|command| PawsCommand {
+            .map(|command| ForgeCommand {
                 name: command.name().to_string(),
                 description: command.usage().to_string(),
                 value: None,
@@ -219,7 +197,7 @@ impl PawsCommandManager {
     }
 
     /// Registers workflow commands from the API.
-    pub fn register_all(&self, commands: Vec<paws_domain::Command>) {
+    pub fn register_all(&self, commands: Vec<forge_domain::Command>) {
         let mut guard = self.commands.lock().unwrap();
 
         // Remove existing workflow commands (those with ⚙ prefix in description)
@@ -231,7 +209,7 @@ impl PawsCommandManager {
             let description = format!("⚙ {}", cmd.description);
             let value = cmd.prompt.clone();
 
-            PawsCommand { name, description, value }
+            ForgeCommand { name, description, value }
         });
 
         guard.extend(new_commands);
@@ -266,7 +244,7 @@ impl PawsCommandManager {
             let title = agent.title.as_ref().unwrap_or(&default_title);
             let description = format!("🤖 Switch to {title} agent");
 
-            guard.push(PawsCommand {
+            guard.push(ForgeCommand {
                 name: command_name,
                 description,
                 value: Some(agent_id_str.to_string()),
@@ -282,7 +260,7 @@ impl PawsCommandManager {
     }
 
     /// Finds a command by name.
-    fn find(&self, command: &str) -> Option<PawsCommand> {
+    fn find(&self, command: &str) -> Option<ForgeCommand> {
         self.commands
             .lock()
             .unwrap()
@@ -292,7 +270,7 @@ impl PawsCommandManager {
     }
 
     /// Lists all registered commands.
-    pub fn list(&self) -> Vec<PawsCommand> {
+    pub fn list(&self) -> Vec<ForgeCommand> {
         self.commands.lock().unwrap().clone()
     }
 
@@ -304,7 +282,7 @@ impl PawsCommandManager {
     ///
     /// # Returns
     /// * `Option<String>` - The extracted value, if any
-    fn extract_command_value(&self, command: &PawsCommand, parts: &[&str]) -> Option<String> {
+    fn extract_command_value(&self, command: &ForgeCommand, parts: &[&str]) -> Option<String> {
         // Unit tests implemented in the test module below
 
         // Try to get value provided in the command
@@ -365,7 +343,7 @@ impl PawsCommandManager {
                 let html = !parameters.is_empty() && parameters[0] == "html";
                 Ok(SlashCommand::Dump { html })
             }
-            "/act" | "/paws" => Ok(SlashCommand::Paws),
+            "/act" | "/forge" => Ok(SlashCommand::Forge),
             "/plan" | "/muse" => Ok(SlashCommand::Muse),
             "/sage" => Ok(SlashCommand::Sage),
             "/help" => Ok(SlashCommand::Help),
@@ -376,9 +354,15 @@ impl PawsCommandManager {
             "/login" => Ok(SlashCommand::Login),
             "/logout" => Ok(SlashCommand::Logout),
             "/retry" => Ok(SlashCommand::Retry),
-            "/resume" => Ok(SlashCommand::Resume),
             "/conversation" | "/conversations" => Ok(SlashCommand::Conversations),
-
+            "/commit" => {
+                // Support flexible syntax:
+                // /commit              -> commit with AI message
+                // /commit 5000         -> commit with max-diff of 5000 bytes
+                let max_diff_size = parameters.iter().find_map(|&p| p.parse::<usize>().ok());
+                Ok(SlashCommand::Commit { max_diff_size })
+            }
+            "/index" => Ok(SlashCommand::Index),
             text => {
                 let parts = text.split_ascii_whitespace().collect::<Vec<&str>>();
 
@@ -451,13 +435,13 @@ pub enum SlashCommand {
     /// Exit the application without any further action.
     #[strum(props(usage = "Exit the application"))]
     Exit,
-    /// Updates the paws version
-    #[strum(props(usage = "Updates to the latest compatible version of paws"))]
+    /// Updates the forge version
+    #[strum(props(usage = "Updates to the latest compatible version of forge"))]
     Update,
-    /// Switch to "paws" agent.
-    /// This can be triggered with the '/paws' command.
+    /// Switch to "forge" agent.
+    /// This can be triggered with the '/forge' command.
     #[strum(props(usage = "Enable implementation mode with code changes"))]
-    Paws,
+    Forge,
     /// Switch to "muse" agent.
     /// This can be triggered with the '/must' command.
     #[strum(props(usage = "Enable planning mode without code changes"))]
@@ -509,9 +493,6 @@ pub enum SlashCommand {
     /// Retry without modifying model context
     #[strum(props(usage = "Retry the last command"))]
     Retry,
-    /// Resume the last conversation or a specific conversation
-    #[strum(props(usage = "Resume the last conversation or a specific conversation"))]
-    Resume,
     /// List all conversations for the active workspace
     #[strum(props(usage = "List all conversations for the active workspace"))]
     Conversations,
@@ -524,9 +505,19 @@ pub enum SlashCommand {
     #[strum(props(usage = "Switch directly to a specific agent"))]
     AgentSwitch(String),
 
-    /// Internal resize event
-    #[strum(props(usage = "Internal resize event"))]
-    Resize,
+    /// Generate and optionally commit changes with AI-generated message
+    ///
+    /// Examples:
+    /// - `/commit` - Generate message and commit
+    /// - `/commit 5000` - Commit with max diff of 5000 bytes
+    #[strum(props(
+        usage = "Generate AI commit message and commit changes. Format: /commit <max-diff|preview>"
+    ))]
+    Commit { max_diff_size: Option<usize> },
+
+    /// Index the current workspace for semantic code search
+    #[strum(props(usage = "Index the current workspace for semantic search"))]
+    Index,
 }
 
 impl SlashCommand {
@@ -540,11 +531,11 @@ impl SlashCommand {
             SlashCommand::Env => "env",
             SlashCommand::Usage => "usage",
             SlashCommand::Exit => "exit",
-            SlashCommand::Paws => "paws",
+            SlashCommand::Forge => "forge",
             SlashCommand::Muse => "muse",
             SlashCommand::Sage => "sage",
             SlashCommand::Help => "help",
-
+            SlashCommand::Commit { .. } => "commit",
             SlashCommand::Dump { .. } => "dump",
             SlashCommand::Model => "model",
             SlashCommand::Provider => "provider",
@@ -555,11 +546,10 @@ impl SlashCommand {
             SlashCommand::Login => "login",
             SlashCommand::Logout => "logout",
             SlashCommand::Retry => "retry",
-            SlashCommand::Resume => "resume",
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
-            SlashCommand::Resize => "resize",
+            SlashCommand::Index => "index",
         }
     }
 
@@ -572,8 +562,8 @@ impl SlashCommand {
 #[cfg(test)]
 mod tests {
     use console::strip_ansi_codes;
-    use paws_api::{ModelId, ModelSource, ProviderId, ProviderResponse};
-    use paws_domain::{AnyProvider, Provider};
+    use forge_api::{InputModality, ModelId, ModelSource, ProviderId, ProviderResponse};
+    use forge_domain::{AnyProvider, Provider};
     use pretty_assertions::assert_eq;
     use url::Url;
 
@@ -582,8 +572,8 @@ mod tests {
     #[test]
     fn test_extract_command_value_with_provided_value() {
         // Setup
-        let cmd_manager = PawsCommandManager::default();
-        let command = PawsCommand {
+        let cmd_manager = ForgeCommandManager::default();
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -600,14 +590,14 @@ mod tests {
     #[test]
     fn test_extract_command_value_with_empty_parts_default_value() {
         // Setup
-        let cmd_manager = PawsCommandManager {
-            commands: Arc::new(Mutex::new(vec![PawsCommand {
+        let cmd_manager = ForgeCommandManager {
+            commands: Arc::new(Mutex::new(vec![ForgeCommand {
                 name: String::from("/test"),
                 description: String::from("Test command"),
                 value: Some(String::from("default_value")),
             }])),
         };
-        let command = PawsCommand {
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -624,14 +614,14 @@ mod tests {
     #[test]
     fn test_extract_command_value_with_empty_string_parts() {
         // Setup
-        let cmd_manager = PawsCommandManager {
-            commands: Arc::new(Mutex::new(vec![PawsCommand {
+        let cmd_manager = ForgeCommandManager {
+            commands: Arc::new(Mutex::new(vec![ForgeCommand {
                 name: String::from("/test"),
                 description: String::from("Test command"),
                 value: Some(String::from("default_value")),
             }])),
         };
-        let command = PawsCommand {
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -648,14 +638,14 @@ mod tests {
     #[test]
     fn test_extract_command_value_with_whitespace_parts() {
         // Setup
-        let cmd_manager = PawsCommandManager {
-            commands: Arc::new(Mutex::new(vec![PawsCommand {
+        let cmd_manager = ForgeCommandManager {
+            commands: Arc::new(Mutex::new(vec![ForgeCommand {
                 name: String::from("/test"),
                 description: String::from("Test command"),
                 value: Some(String::from("default_value")),
             }])),
         };
-        let command = PawsCommand {
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -672,14 +662,14 @@ mod tests {
     #[test]
     fn test_extract_command_value_no_default_no_provided() {
         // Setup
-        let cmd_manager = PawsCommandManager {
-            commands: Arc::new(Mutex::new(vec![PawsCommand {
+        let cmd_manager = ForgeCommandManager {
+            commands: Arc::new(Mutex::new(vec![ForgeCommand {
                 name: String::from("/test"),
                 description: String::from("Test command"),
                 value: None,
             }])),
         };
-        let command = PawsCommand {
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -696,14 +686,14 @@ mod tests {
     #[test]
     fn test_extract_command_value_provided_overrides_default() {
         // Setup
-        let cmd_manager = PawsCommandManager {
-            commands: Arc::new(Mutex::new(vec![PawsCommand {
+        let cmd_manager = ForgeCommandManager {
+            commands: Arc::new(Mutex::new(vec![ForgeCommand {
                 name: String::from("/test"),
                 description: String::from("Test command"),
                 value: Some(String::from("default_value")),
             }])),
         };
-        let command = PawsCommand {
+        let command = ForgeCommand {
             name: String::from("/test"),
             description: String::from("Test command"),
             value: None,
@@ -719,7 +709,7 @@ mod tests {
     #[test]
     fn test_parse_shell_command() {
         // Setup
-        let cmd_manager = PawsCommandManager::default();
+        let cmd_manager = ForgeCommandManager::default();
 
         // Execute
         let result = cmd_manager.parse("!ls -la").unwrap();
@@ -734,7 +724,7 @@ mod tests {
     #[test]
     fn test_parse_shell_command_empty() {
         // Setup
-        let cmd_manager = PawsCommandManager::default();
+        let cmd_manager = ForgeCommandManager::default();
 
         // Execute
         let result = cmd_manager.parse("!").unwrap();
@@ -749,7 +739,7 @@ mod tests {
     #[test]
     fn test_parse_shell_command_with_whitespace() {
         // Setup
-        let cmd_manager = PawsCommandManager::default();
+        let cmd_manager = ForgeCommandManager::default();
 
         // Execute
         let result = cmd_manager.parse("!   echo 'test'   ").unwrap();
@@ -764,7 +754,7 @@ mod tests {
     #[test]
     fn test_shell_command_not_in_default_commands() {
         // Setup
-        let manager = PawsCommandManager::default();
+        let manager = ForgeCommandManager::default();
         let commands = manager.list();
 
         // The shell command should not be included
@@ -777,7 +767,7 @@ mod tests {
     #[test]
     fn test_parse_list_command() {
         // Setup
-        let cmd_manager = PawsCommandManager::default();
+        let cmd_manager = ForgeCommandManager::default();
 
         // Execute
         let result = cmd_manager.parse("/conversation").unwrap();
@@ -792,10 +782,24 @@ mod tests {
     }
 
     #[test]
+    fn test_list_command_in_default_commands() {
+        // Setup
+        let manager = ForgeCommandManager::default();
+        let commands = manager.list();
+
+        // The list command should be included
+        let contains_list = commands.iter().any(|cmd| cmd.name == "conversation");
+        assert!(
+            contains_list,
+            "Conversations command should be in default commands"
+        );
+    }
+
+    #[test]
     fn test_sanitize_agent_id_basic() {
         // Test basic sanitization
         let fixture = "test-agent";
-        let actual = PawsCommandManager::sanitize_agent_id(fixture);
+        let actual = ForgeCommandManager::sanitize_agent_id(fixture);
         let expected = "test-agent";
         assert_eq!(actual, expected);
     }
@@ -804,7 +808,7 @@ mod tests {
     fn test_sanitize_agent_id_with_spaces() {
         // Test space replacement
         let fixture = "test agent name";
-        let actual = PawsCommandManager::sanitize_agent_id(fixture);
+        let actual = ForgeCommandManager::sanitize_agent_id(fixture);
         let expected = "test-agent-name";
         assert_eq!(actual, expected);
     }
@@ -813,7 +817,7 @@ mod tests {
     fn test_sanitize_agent_id_with_special_chars() {
         // Test special character replacement
         let fixture = "test@agent#name!";
-        let actual = PawsCommandManager::sanitize_agent_id(fixture);
+        let actual = ForgeCommandManager::sanitize_agent_id(fixture);
         let expected = "test-agent-name";
         assert_eq!(actual, expected);
     }
@@ -822,7 +826,7 @@ mod tests {
     fn test_sanitize_agent_id_uppercase() {
         // Test uppercase conversion
         let fixture = "TestAgent";
-        let actual = PawsCommandManager::sanitize_agent_id(fixture);
+        let actual = ForgeCommandManager::sanitize_agent_id(fixture);
         let expected = "testagent";
         assert_eq!(actual, expected);
     }
@@ -830,20 +834,20 @@ mod tests {
     #[test]
     fn test_is_reserved_command() {
         // Test reserved commands
-        assert!(PawsCommandManager::is_reserved_command("agent"));
-        assert!(PawsCommandManager::is_reserved_command("paws"));
-        assert!(PawsCommandManager::is_reserved_command("muse"));
-        assert!(!PawsCommandManager::is_reserved_command("agent-custom"));
-        assert!(!PawsCommandManager::is_reserved_command("custom"));
+        assert!(ForgeCommandManager::is_reserved_command("agent"));
+        assert!(ForgeCommandManager::is_reserved_command("forge"));
+        assert!(ForgeCommandManager::is_reserved_command("muse"));
+        assert!(!ForgeCommandManager::is_reserved_command("agent-custom"));
+        assert!(!ForgeCommandManager::is_reserved_command("custom"));
     }
 
     #[test]
     fn test_register_agent_commands() {
-        use paws_api::Agent;
-        use paws_domain::{ModelId, ProviderId};
+        use forge_api::Agent;
+        use forge_domain::{ModelId, ProviderId};
 
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
         let agents = vec![
             Agent::new(
                 "test-agent",
@@ -884,11 +888,11 @@ mod tests {
 
     #[test]
     fn test_parse_agent_switch_command() {
-        use paws_api::Agent;
-        use paws_domain::{ModelId, ProviderId};
+        use forge_api::Agent;
+        use forge_domain::{ModelId, ProviderId};
 
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
         let agents = vec![
             Agent::new(
                 "test-agent",
@@ -922,7 +926,7 @@ mod tests {
             tools_supported,
             supports_parallel_tool_calls: None,
             supports_reasoning: None,
-            input_modalities: vec![],
+            input_modalities: vec![InputModality::Text],
         }
     }
 
@@ -1029,10 +1033,10 @@ mod tests {
     fn test_cli_provider_display_minimal() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::OPENAI,
-            provider_type: paws_domain::ProviderType::Llm,
+            provider_type: forge_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("https://api.openai.com/v1/chat/completions").unwrap(),
-            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
+            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1049,10 +1053,10 @@ mod tests {
     fn test_cli_provider_display_with_subdomain() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::OPEN_ROUTER,
-            provider_type: paws_domain::ProviderType::Llm,
+            provider_type: forge_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("https://openrouter.ai/api/v1/chat/completions").unwrap(),
-            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
+            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1069,10 +1073,10 @@ mod tests {
     fn test_cli_provider_display_no_domain() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::FORGE,
-            provider_type: paws_domain::ProviderType::Llm,
+            provider_type: forge_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("http://localhost:8080/chat/completions").unwrap(),
-            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
+            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1081,7 +1085,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = "✓ Paws                [localhost]";
+        let expected = "✓ Forge               [localhost]";
         assert_eq!(actual, expected);
     }
 
@@ -1092,7 +1096,7 @@ mod tests {
             provider_type: Default::default(),
             response: Some(ProviderResponse::Anthropic),
             url: Template::new("https://api.anthropic.com/v1/messages"),
-            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
+            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(Template::new(
@@ -1109,10 +1113,10 @@ mod tests {
     fn test_cli_provider_display_ip_address() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::FORGE,
-            provider_type: paws_domain::ProviderType::Llm,
+            provider_type: forge_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("http://192.168.1.1:8080/chat/completions").unwrap(),
-            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
+            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1121,14 +1125,73 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = format!("✓ Paws                {}", markers::EMPTY);
+        let expected = format!("✓ Forge               {}", markers::EMPTY);
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_parse_commit_command() {
+        let fixture = ForgeCommandManager::default();
+        let actual = fixture.parse("/commit").unwrap();
+        match actual {
+            SlashCommand::Commit { max_diff_size } => {
+                assert_eq!(max_diff_size, None);
+            }
+            _ => panic!("Expected Commit command, got {actual:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_commit_command_with_preview() {
+        let fixture = ForgeCommandManager::default();
+        let actual = fixture.parse("/commit preview").unwrap();
+        match actual {
+            SlashCommand::Commit { max_diff_size } => {
+                assert_eq!(max_diff_size, None);
+            }
+            _ => panic!("Expected Commit command with preview, got {actual:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_commit_command_with_max_diff() {
+        let fixture = ForgeCommandManager::default();
+        let actual = fixture.parse("/commit 5000").unwrap();
+        match actual {
+            SlashCommand::Commit { max_diff_size } => {
+                assert_eq!(max_diff_size, Some(5000));
+            }
+            _ => panic!("Expected Commit command with max_diff_size, got {actual:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_commit_command_with_all_flags() {
+        let fixture = ForgeCommandManager::default();
+        let actual = fixture.parse("/commit preview 10000").unwrap();
+        match actual {
+            SlashCommand::Commit { max_diff_size } => {
+                assert_eq!(max_diff_size, Some(10000));
+            }
+            _ => panic!("Expected Commit command with all flags, got {actual:?}"),
+        }
+    }
+
+    #[test]
+    fn test_commit_command_in_default_commands() {
+        let manager = ForgeCommandManager::default();
+        let commands = manager.list();
+        let contains_commit = commands.iter().any(|cmd| cmd.name == "commit");
+        assert!(
+            contains_commit,
+            "Commit command should be in default commands"
+        );
     }
 
     #[test]
     fn test_parse_invalid_agent_command() {
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
 
         // Execute
         let result = fixture.parse("/agent-nonexistent");
@@ -1146,7 +1209,7 @@ mod tests {
     #[test]
     fn test_parse_tool_command() {
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
 
         // Execute
         let result = fixture.parse("/tools").unwrap();
@@ -1163,7 +1226,7 @@ mod tests {
     #[test]
     fn test_parse_dump_command_json() {
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
 
         // Execute
         let actual = fixture.parse("/dump").unwrap();
@@ -1176,7 +1239,7 @@ mod tests {
     #[test]
     fn test_parse_dump_command_html_without_dashes() {
         // Setup
-        let fixture = PawsCommandManager::default();
+        let fixture = ForgeCommandManager::default();
 
         // Execute
         let actual = fixture.parse("/dump html").unwrap();

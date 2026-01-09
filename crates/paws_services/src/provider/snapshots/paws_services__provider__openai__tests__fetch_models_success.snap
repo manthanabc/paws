@@ -1,5 +1,5 @@
 ---
-source: crates/paws_services/src/provider/openai.rs
+source: crates/forge_repo/src/provider/openai.rs
 expression: actual
 ---
 [
@@ -11,7 +11,9 @@ expression: actual
     "tools_supported": true,
     "supports_parallel_tool_calls": true,
     "supports_reasoning": false,
-    "input_modalities": []
+    "input_modalities": [
+      "text"
+    ]
   },
   {
     "id": "model-2",
@@ -21,6 +23,8 @@ expression: actual
     "tools_supported": true,
     "supports_parallel_tool_calls": false,
     "supports_reasoning": false,
-    "input_modalities": []
+    "input_modalities": [
+      "text"
+    ]
   }
 ]

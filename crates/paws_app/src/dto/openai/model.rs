@@ -1,4 +1,4 @@
-use paws_domain::ModelId;
+use forge_domain::ModelId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -47,6 +47,8 @@ pub struct Architecture {
     pub modality: String,
     pub tokenizer: String,
     pub instruct_type: Option<String>,
+    pub input_modalities: Option<Vec<String>>,
+    pub output_modalities: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -88,7 +90,7 @@ pub struct ListModelResponse {
     pub data: Vec<Model>,
 }
 
-impl From<Model> for paws_domain::Model {
+impl From<Model> for forge_domain::Model {
     fn from(value: Model) -> Self {
         let has_param = |name: &str| {
             value
@@ -97,11 +99,24 @@ impl From<Model> for paws_domain::Model {
                 .map(|params| params.iter().any(|p| p == name))
         };
 
+        // Parse input modalities from OpenRouter's input_modalities field
+        let input_modalities = value
+            .architecture
+            .as_ref()
+            .and_then(|arch| arch.input_modalities.as_ref())
+            .map(|modalities| {
+                modalities
+                    .iter()
+                    .filter_map(|s| s.parse::<forge_domain::InputModality>().ok())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| vec![forge_domain::InputModality::Text]);
+
         let tools_supported = has_param("tools");
         let supports_parallel_tool_calls = has_param("supports_parallel_tool_calls");
         let supports_reasoning = has_param("reasoning");
 
-        paws_domain::Model {
+        forge_domain::Model {
             id: value.id,
             name: value.name,
             description: value.description,
@@ -109,7 +124,7 @@ impl From<Model> for paws_domain::Model {
             tools_supported,
             supports_parallel_tool_calls,
             supports_reasoning,
-            input_modalities: vec![],
+            input_modalities,
         }
     }
 }
@@ -264,7 +279,7 @@ mod tests {
             supported_parameters: None, // No supported_parameters field
         };
 
-        let domain_model: paws_domain::Model = model.into();
+        let domain_model: forge_domain::Model = model.into();
 
         // When supported_parameters is None, capabilities should be None (unknown)
         assert_eq!(domain_model.tools_supported, None);
@@ -291,7 +306,7 @@ mod tests {
             ]),
         };
 
-        let domain_model: paws_domain::Model = model.into();
+        let domain_model: forge_domain::Model = model.into();
 
         // Should reflect what's actually in supported_parameters
         assert_eq!(domain_model.tools_supported, Some(true));

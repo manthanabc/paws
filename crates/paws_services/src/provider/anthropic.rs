@@ -1,35 +1,40 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use paws_app::HttpClientService;
-use paws_app::domain::{ChatCompletionMessage, Context, Model, ModelId, ResultStream, Transformer};
-use paws_app::dto::anthropic::{
-    AuthSystemMessage, DropInvalidToolUse, EventData, ListModelResponse, ReasoningTransform,
-    Request, SetCache,
+use derive_setters::Setters;
+use forge_app::HttpInfra;
+use forge_app::domain::{
+    ChatCompletionMessage, Context, Model, ModelId, ResultStream, RetryConfig, Transformer,
 };
+use forge_app::dto::anthropic::{
+    AuthSystemMessage, CapitalizeToolNames, DropInvalidToolUse, EventData, ListModelResponse,
+    ReasoningTransform, Request, SetCache,
+};
+use forge_domain::{ChatRepository, Provider};
 use reqwest::Url;
+use tokio_stream::StreamExt;
 use tracing::debug;
 
-use crate::provider::client::create_headers;
 use crate::provider::event::into_chat_completion_message;
-use crate::provider::utils::format_http_context;
+use crate::provider::retry::into_retry;
+use crate::provider::utils::{create_headers, format_http_context};
 
 #[derive(Clone)]
-pub struct Anthropic<T> {
+struct Anthropic<T> {
     http: Arc<T>,
     api_key: String,
     chat_url: Url,
-    models: paws_domain::ModelSource<Url>,
+    models: forge_domain::ModelSource<Url>,
     anthropic_version: String,
     use_oauth: bool,
 }
 
-impl<H: HttpClientService> Anthropic<H> {
+impl<H: HttpInfra> Anthropic<H> {
     pub fn new(
         http: Arc<H>,
         api_key: String,
         chat_url: Url,
-        models: paws_domain::ModelSource<Url>,
+        models: forge_domain::ModelSource<Url>,
         version: String,
         use_oauth: bool,
     ) -> Self {
@@ -58,7 +63,7 @@ impl<H: HttpClientService> Anthropic<H> {
             // OAuth requires multiple beta flags
             headers.push((
                 "anthropic-beta".to_string(),
-                "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14".to_string(),
+                "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14".to_string(),
             ));
         } else {
             headers.push(("x-api-key".to_string(), self.api_key.clone()));
@@ -68,7 +73,7 @@ impl<H: HttpClientService> Anthropic<H> {
     }
 }
 
-impl<T: HttpClientService> Anthropic<T> {
+impl<T: HttpInfra> Anthropic<T> {
     pub async fn chat(
         &self,
         model: &ModelId,
@@ -84,6 +89,7 @@ impl<T: HttpClientService> Anthropic<T> {
 
         let request = AuthSystemMessage::default()
             .when(|_| self.use_oauth)
+            .pipe(CapitalizeToolNames)
             .pipe(DropInvalidToolUse)
             .pipe(SetCache)
             .transform(request);
@@ -95,7 +101,7 @@ impl<T: HttpClientService> Anthropic<T> {
 
         let source = self
             .http
-            .eventsource(
+            .http_eventsource(
                 url,
                 Some(create_headers(self.get_headers())),
                 json_bytes.into(),
@@ -110,12 +116,12 @@ impl<T: HttpClientService> Anthropic<T> {
 
     pub async fn models(&self) -> anyhow::Result<Vec<Model>> {
         match &self.models {
-            paws_domain::ModelSource::Url(url) => {
+            forge_domain::ModelSource::Url(url) => {
                 debug!(url = %url, "Fetching models");
 
                 let response = self
                     .http
-                    .get(url, Some(create_headers(self.get_headers())))
+                    .http_get(url, Some(create_headers(self.get_headers())))
                     .await
                     .with_context(|| format_http_context(None, "GET", url))
                     .with_context(|| "Failed to fetch models")?;
@@ -140,7 +146,7 @@ impl<T: HttpClientService> Anthropic<T> {
                         .with_context(|| "Failed to fetch the models")
                 }
             }
-            paws_domain::ModelSource::Hardcoded(models) => {
+            forge_domain::ModelSource::Hardcoded(models) => {
                 debug!("Using hardcoded models");
                 Ok(models.clone())
             }
@@ -152,8 +158,8 @@ impl<T: HttpClientService> Anthropic<T> {
 mod tests {
 
     use bytes::Bytes;
-    use paws_app::HttpClientService;
-    use paws_app::domain::{
+    use forge_app::HttpInfra;
+    use forge_app::domain::{
         Context, ContextMessage, ToolCallFull, ToolCallId, ToolChoice, ToolName, ToolOutput,
         ToolResult,
     };
@@ -163,7 +169,7 @@ mod tests {
     use super::*;
     use crate::provider::mock_server::{MockServer, normalize_ports};
 
-    // Mock implementation of HttpClientService for testing
+    // Mock implementation of HttpInfra for testing
     #[derive(Clone)]
     struct MockHttpClient {
         client: reqwest::Client,
@@ -176,10 +182,10 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl HttpClientService for MockHttpClient {
-        async fn get(
+    impl HttpInfra for MockHttpClient {
+        async fn http_get(
             &self,
-            url: &reqwest::Url,
+            url: &Url,
             headers: Option<HeaderMap>,
         ) -> anyhow::Result<reqwest::Response> {
             let mut request = self.client.get(url.clone());
@@ -189,15 +195,15 @@ mod tests {
             Ok(request.send().await?)
         }
 
-        async fn post(&self, _url: &Url, _body: Bytes) -> anyhow::Result<reqwest::Response> {
+        async fn http_post(&self, _url: &Url, _body: Bytes) -> anyhow::Result<reqwest::Response> {
             unimplemented!()
         }
 
-        async fn delete(&self, _url: &Url) -> anyhow::Result<reqwest::Response> {
+        async fn http_delete(&self, _url: &Url) -> anyhow::Result<reqwest::Response> {
             unimplemented!()
         }
 
-        async fn eventsource(
+        async fn http_eventsource(
             &self,
             _url: &Url,
             _headers: Option<HeaderMap>,
@@ -215,7 +221,7 @@ mod tests {
             Arc::new(MockHttpClient::new()),
             "sk-test-key".to_string(),
             chat_url,
-            paws_domain::ModelSource::Url(model_url),
+            forge_domain::ModelSource::Url(model_url),
             "2023-06-01".to_string(),
             false,
         ))
@@ -266,12 +272,12 @@ mod tests {
             Arc::new(MockHttpClient::new()),
             "sk-some-key".to_string(),
             chat_url,
-            paws_domain::ModelSource::Url(model_url.clone()),
+            forge_domain::ModelSource::Url(model_url.clone()),
             "v1".to_string(),
             false,
         );
         match &anthropic.models {
-            paws_domain::ModelSource::Url(url) => {
+            forge_domain::ModelSource::Url(url) => {
                 assert_eq!(url.as_str(), "https://api.anthropic.com/v1/models");
             }
             _ => panic!("Expected Models::Url variant"),
@@ -377,5 +383,86 @@ mod tests {
         mock.assert_async().await;
         assert!(actual.is_empty());
         Ok(())
+    }
+}
+
+/// Repository for Anthropic provider responses
+#[derive(Setters)]
+#[setters(strip_option, into)]
+pub struct AnthropicResponseRepository<F> {
+    infra: Arc<F>,
+    retry_config: Arc<RetryConfig>,
+}
+
+impl<F> AnthropicResponseRepository<F> {
+    pub fn new(infra: Arc<F>) -> Self {
+        Self { infra, retry_config: Arc::new(RetryConfig::default()) }
+    }
+}
+
+impl<F: HttpInfra> AnthropicResponseRepository<F> {
+    /// Creates an Anthropic client from a provider configuration
+    fn create_client(&self, provider: &Provider<Url>) -> anyhow::Result<Anthropic<F>> {
+        let chat_url = provider.url.clone();
+        let models = provider
+            .models
+            .clone()
+            .context("Anthropic requires models configuration")?;
+        let creds = provider
+            .credential
+            .as_ref()
+            .context("Anthropic provider requires credentials")?
+            .auth_details
+            .clone();
+
+        let (key, is_oauth) = match creds {
+            forge_domain::AuthDetails::ApiKey(api_key) => (api_key.as_str().to_string(), false),
+            forge_domain::AuthDetails::OAuth { tokens, .. } => {
+                (tokens.access_token.as_str().to_string(), true)
+            }
+            _ => anyhow::bail!("Unsupported authentication method for Anthropic provider"),
+        };
+
+        Ok(Anthropic::new(
+            self.infra.clone(),
+            key,
+            chat_url,
+            models,
+            "2023-06-01".to_string(),
+            is_oauth,
+        ))
+    }
+}
+
+#[async_trait::async_trait]
+impl<F: HttpInfra + 'static> ChatRepository for AnthropicResponseRepository<F> {
+    async fn chat(
+        &self,
+        model_id: &ModelId,
+        context: Context,
+        provider: Provider<Url>,
+    ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
+        let retry_config = self.retry_config.clone();
+        let provider_client = self.create_client(&provider)?;
+
+        let stream = provider_client
+            .chat(model_id, context)
+            .await
+            .map_err(|e| into_retry(e, &retry_config))?;
+
+        Ok(Box::pin(stream.map(move |item| {
+            item.map_err(|e| into_retry(e, &retry_config))
+        })))
+    }
+
+    async fn models(&self, provider: Provider<Url>) -> anyhow::Result<Vec<Model>> {
+        let retry_config = self.retry_config.clone();
+        let provider_client = self.create_client(&provider)?;
+
+        provider_client
+            .models()
+            .await
+            .map_err(|e| into_retry(e, &retry_config))
+            .context("Failed to fetch models from Anthropic provider")
     }
 }
