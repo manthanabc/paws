@@ -3,20 +3,24 @@ use std::time::Duration;
 
 use anyhow::Context;
 use console::style;
-use futures::future::join_all;
-use paws_domain::{
-    Agent, AgentId, AgentInput, ChatResponse, ChatResponseContent, ToolCallContext, ToolCallFull,
-    ToolCatalog, ToolDefinition, ToolName, ToolOutput, ToolResult,
+use forge_domain::{
+    Agent, AgentId, AgentInput, ChatResponse, ChatResponseContent, Environment, SystemContext,
+    ToolCallContext, ToolCallFull, ToolCatalog, ToolDefinition, ToolName, ToolOutput, ToolResult,
 };
+use forge_template::Element;
+use futures::future::join_all;
 use strum::IntoEnumIterator;
 use tokio::time::timeout;
 
 use crate::agent_executor::AgentExecutor;
 use crate::dto::ToolsOverview;
 use crate::error::Error;
+use crate::fmt::content::FormatContent;
 use crate::mcp_executor::McpExecutor;
 use crate::tool_executor::ToolExecutor;
-use crate::{EnvironmentService, McpService, Services, ToolResolver};
+use crate::{
+    EnvironmentService, McpService, PolicyService, Services, ToolResolver, WorkspaceService,
+};
 
 pub struct ToolRegistry<S> {
     tool_executor: ToolExecutor<S>,
@@ -54,6 +58,36 @@ impl<S: Services> ToolRegistry<S> {
             })?
     }
 
+    /// Check if a tool operation is allowed based on the workflow policies
+    async fn check_tool_permission(
+        &self,
+        tool_input: &ToolCatalog,
+        context: &ToolCallContext,
+    ) -> anyhow::Result<bool> {
+        let cwd = self.services.get_environment().cwd;
+        let operation = tool_input.to_policy_operation(cwd.clone());
+        if let Some(operation) = operation {
+            let decision = self.services.check_operation_permission(&operation).await?;
+
+            // Send custom policy message to the user when a policy file was created
+            if let Some(policy_path) = decision.path {
+                use forge_domain::TitleFormat;
+
+                use crate::utils::format_display_path;
+                context
+                    .send_title(
+                        TitleFormat::debug("Permissions Update")
+                            .sub_title(format_display_path(policy_path.as_path(), &cwd)),
+                    )
+                    .await?;
+            }
+            if !decision.allowed {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     async fn call_inner(
         &self,
         agent: &Agent,
@@ -65,10 +99,34 @@ impl<S: Services> ToolRegistry<S> {
         tracing::info!(tool_name = %input.name, arguments = %input.arguments.clone().into_string(), "Executing tool call");
         let tool_name = input.name.clone();
 
-        // First, try to call a Paws tool
+        // First, try to call a Forge tool
         if ToolCatalog::contains(&input.name) {
-            self.call_with_timeout(&tool_name, || self.tool_executor.execute(input, context))
-                .await
+            let tool_input: ToolCatalog = ToolCatalog::try_from(input)?;
+            let env = self.services.get_environment();
+            if let Some(content) = tool_input.to_content(&env) {
+                context.send(content).await?;
+            }
+
+            // Check permissions before executing the tool (only in restricted mode)
+            // This is done BEFORE the timeout to ensure permissions are never timed out
+            if self.services.is_restricted()
+                && self.check_tool_permission(&tool_input, context).await?
+            {
+                // Send formatted output message for policy denial
+                context
+                    .send(forge_domain::TitleFormat::error("Permission Denied"))
+                    .await?;
+
+                return Ok(ToolOutput::text(
+                    Element::new("permission_denied")
+                        .cdata("User has denied the permission to execute this tool"),
+                ));
+            }
+
+            self.call_with_timeout(&tool_name, || {
+                self.tool_executor.execute(tool_input, context)
+            })
+            .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
             // Handle agent delegation tool calls
             let agent_input = AgentInput::try_from(&input)?;
@@ -128,18 +186,52 @@ impl<S: Services> ToolRegistry<S> {
     pub async fn tools_overview(&self) -> anyhow::Result<ToolsOverview> {
         let mcp_tools = self.services.get_mcp_servers().await?;
         let agent_tools = self.agent_executor.agent_definitions().await?;
-        let system_tools = ToolCatalog::iter()
-            .map(|tool| tool.definition())
-            .collect::<Vec<_>>();
+
+        // Check if current working directory is indexed
+        let environment = self.services.get_environment();
+        let cwd = environment.cwd.clone();
+        let is_indexed = self.services.is_indexed(&cwd).await.unwrap_or(false);
+        let is_authenticated = self.services.is_authenticated().await.unwrap_or(false);
 
         Ok(ToolsOverview::new()
-            .system(system_tools)
+            .system(Self::get_system_tools(
+                is_indexed && is_authenticated,
+                &environment,
+            ))
             .agents(agent_tools)
             .mcp(mcp_tools))
     }
 }
 
 impl<S> ToolRegistry<S> {
+    fn get_system_tools(sem_search_supported: bool, env: &Environment) -> Vec<ToolDefinition> {
+        use crate::TemplateEngine;
+
+        let handlebars = TemplateEngine::handlebar_instance();
+
+        // Create template data with environment nested under "env"
+        let ctx = SystemContext { env: Some(env.clone()), ..Default::default() };
+
+        ToolCatalog::iter()
+            .filter(|tool| {
+                // Filter out sem_search if cwd is not indexed
+                if matches!(tool, ToolCatalog::SemSearch(_)) {
+                    sem_search_supported
+                } else {
+                    true
+                }
+            })
+            .map(|tool| {
+                let mut def = tool.definition();
+                // Render template variables in description
+                if let Ok(rendered) = handlebars.render_template(&def.description, &ctx) {
+                    def.description = rendered;
+                }
+                def
+            })
+            .collect::<Vec<_>>()
+    }
+
     /// Validates if a tool is supported by both the agent and the system.
     ///
     /// # Validation Process
@@ -164,7 +256,7 @@ impl<S> ToolRegistry<S> {
 
 #[cfg(test)]
 mod tests {
-    use paws_domain::{Agent, AgentId, ModelId, ProviderId, ToolCatalog, ToolName};
+    use forge_domain::{Agent, AgentId, Environment, ModelId, ProviderId, ToolCatalog, ToolName};
     use pretty_assertions::assert_eq;
 
     use crate::error::Error;
@@ -177,7 +269,7 @@ mod tests {
             ProviderId::ANTHROPIC,
             ModelId::new("claude-3-5-sonnet-20241022"),
         )
-        .tools(vec![ToolName::new("read"), ToolName::new("search")])
+        .tools(vec![ToolName::new("read"), ToolName::new("fs_search")])
     }
 
     #[tokio::test]
@@ -196,7 +288,7 @@ mod tests {
             .to_string();
         assert_eq!(
             error,
-            "Tool 'write' is not available. Please try again with one of these tools: [read, search]"
+            "Tool 'write' is not available. Please try again with one of these tools: [read, fs_search]"
         );
     }
 
@@ -344,7 +436,7 @@ mod tests {
         .tools(vec![
             ToolName::new("read"),
             ToolName::new("write"),
-            ToolName::new("search"),
+            ToolName::new("fs_search"),
         ]);
 
         let actual_read = ToolRegistry::<()>::validate_tool_call(&fixture, &ToolName::new("read"));
@@ -388,4 +480,75 @@ mod tests {
         assert!(actual_match.is_ok());
         assert!(actual_no_match.is_err());
     }
+
+    #[test]
+    fn test_validate_tool_call_capitalized_read_write() {
+        // Test that capitalized "Read" and "Write" are accepted when agent has
+        // lowercase versions
+        let fixture = Agent::new(
+            AgentId::new("test_agent"),
+            ProviderId::ANTHROPIC,
+            ModelId::new("claude-3-5-sonnet-20241022"),
+        )
+        .tools(vec![ToolName::new("read"), ToolName::new("write")]);
+
+        let actual_read = ToolRegistry::<()>::validate_tool_call(&fixture, &ToolName::new("Read"));
+        let actual_write =
+            ToolRegistry::<()>::validate_tool_call(&fixture, &ToolName::new("Write"));
+        let actual_lowercase_read =
+            ToolRegistry::<()>::validate_tool_call(&fixture, &ToolName::new("read"));
+
+        assert!(actual_read.is_ok(), "Capitalized 'Read' should be accepted");
+        assert!(
+            actual_write.is_ok(),
+            "Capitalized 'Write' should be accepted"
+        );
+        assert!(
+            actual_lowercase_read.is_ok(),
+            "Lowercase 'read' should still be accepted"
+        );
+    }
+
+    #[test]
+    fn test_sem_search_included_when_supported() {
+        use fake::{Fake, Faker};
+        let env: Environment = Faker.fake();
+        let actual = ToolRegistry::<()>::get_system_tools(true, &env);
+        assert!(actual.iter().any(|t| t.name.as_str() == "sem_search"));
+    }
+
+    #[test]
+    fn test_sem_search_filtered_when_not_supported() {
+        use fake::{Fake, Faker};
+        let env: Environment = Faker.fake();
+        let actual = ToolRegistry::<()>::get_system_tools(false, &env);
+        assert!(actual.iter().all(|t| t.name.as_str() != "sem_search"));
+    }
+}
+
+#[test]
+fn test_template_rendering_in_tool_descriptions() {
+    use fake::{Fake, Faker};
+
+    let mut env: Environment = Faker.fake();
+    env.max_search_lines = 1000;
+
+    let actual = ToolRegistry::<()>::get_system_tools(true, &env);
+    let fs_search_tool = actual
+        .iter()
+        .find(|t| t.name.as_str() == "fs_search")
+        .unwrap();
+
+    // The description should have the template variable rendered
+    assert!(
+        fs_search_tool.description.contains("1000"),
+        "Description should contain the rendered max_search_lines value: {}",
+        fs_search_tool.description
+    );
+    assert!(
+        !fs_search_tool
+            .description
+            .contains("{{env.maxSearchLines}}"),
+        "Description should not contain unrendered template variable"
+    );
 }
