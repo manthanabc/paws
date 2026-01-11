@@ -33,7 +33,7 @@ async fn run_test_one_chunk() -> anyhow::Result<()> {
     spinner.write_ln("normal text")?;
     spinner.write_ln("normal text 2")?;
     let chunks = [
-        "# Header\n",
+        "# Header\n\n\n",
         "This is a paragraph\n",
         "built from chunks.\n",
         "- List item 1\n",
@@ -69,7 +69,7 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
     spinner.write_ln("normal text")?;
     spinner.write_ln("normal text 2")?;
     let chunks = [
-        "# Header\n",
+        "# Header\n\n\n",
         "This is a paragraph\n",
         "built from chunks.\n",
         "- List item 1\n",
@@ -78,13 +78,13 @@ async fn run_test(use_spinner: bool, max_height: Option<usize>) -> anyhow::Resul
         "- List item 4\n",
         "- List item 5\n",
         "- List item 6\n",
-        "End of stream.",
+        "End of stream.\n\n\n",
     ];
 
     for chunk in chunks {
         // Simulate streaming delay
         thread::sleep(Duration::from_millis(200));
-        writer.add_chunk(chunk, &mut spinner)?;
+        writer.add_chunk_dimmed(chunk, &mut spinner)?;
     }
     spinner.write_ln("add chunk end")?;
 

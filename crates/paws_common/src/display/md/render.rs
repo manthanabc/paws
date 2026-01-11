@@ -76,8 +76,7 @@ impl MarkdownRenderer {
             .collect::<Vec<_>>()
             .join("\n");
 
-        // cleaned;
-        wrap_ansi_simple(&cleaned, self.width)
+        wrap_ansi_simple(&cleaned, self.width).trim().to_string()
     }
 
     fn render_markdown(&self, text: &str, no_color: bool) -> Vec<Segment> {
