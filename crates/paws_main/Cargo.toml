@@ -14,7 +14,7 @@ futures.workspace = true
 paws_services.workspace = true
 
 [dev-dependencies]
-serial_test = "3.2"
+serial_test = "3.3"
 strip-ansi-escapes = "0.2"
 
 [dependencies.clap]
