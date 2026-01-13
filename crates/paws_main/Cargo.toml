@@ -9,7 +9,6 @@ edition = "2024"
 
 [dependencies]
 atty = "0.2"
-regex = { workspace = true }
 crossterm = { version = "0.28", features = ["event-stream"] }
 futures.workspace = true
 paws_services.workspace = true

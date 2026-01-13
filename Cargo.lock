@@ -3271,6 +3271,7 @@ dependencies = [
  "paws_services",
  "pretty_assertions",
  "reedline",
+ "regex",
  "rust-embed",
  "serde",
  "serde_json",
