@@ -29,7 +29,7 @@ fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
         seconds
     );
 
-    print!("{line}");
+    eprint!("{line}");
     let _ = io::stdout().flush();
 }
 

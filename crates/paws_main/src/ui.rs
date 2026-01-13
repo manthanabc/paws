@@ -702,10 +702,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.state.conversation_id = original_id;
             }
             ConversationCommand::Resume { id } => {
-                self.validate_conversation_exists(&id).await?;
+                let conversation_id = match id {
+                    Some(id) => {
+                        self.validate_conversation_exists(&id).await?;
+                        id
+                    }
+                    None => {
+                        let last_conversation =
+                            self.api.last_conversation().await?.ok_or_else(|| {
+                                anyhow::anyhow!("No conversation found to resume")
+                            })?;
+                        last_conversation.id
+                    }
+                };
 
-                self.state.conversation_id = Some(id);
-                self.writeln_title(TitleFormat::info(format!("Resumed conversation: {id}")))?;
+                self.state.conversation_id = Some(conversation_id);
+                self.writeln_title(TitleFormat::info(format!(
+                    "Resumed conversation: {conversation_id}"
+                )))?;
                 // Interactive mode will be handled by the main loop
             }
             ConversationCommand::Show { id } => {
@@ -1520,6 +1534,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
+            SlashCommand::Resume => {
+                self.handle_resume_conversation().await?;
+            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1825,6 +1842,21 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn handle_delete_conversation(&mut self) -> anyhow::Result<()> {
         let conversation_id = self.init_conversation().await?;
         self.on_conversation_delete(conversation_id).await?;
+        Ok(())
+    }
+
+    async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
+        let last_conversation = self
+            .api
+            .last_conversation()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+
+        self.state.conversation_id = Some(last_conversation.id);
+        self.writeln_title(TitleFormat::info(format!(
+            "Resumed conversation: {}",
+            last_conversation.id
+        )))?;
         Ok(())
     }
 
@@ -2982,14 +3014,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
                                 self.writeln(header)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}\n", prefix, line))?;
+                                    self.writeln(format!("{}{}", prefix, line))?;
                                 }
                             } else {
                                 self.writeln(full_prompt)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
                                 }
                             }
+                            self.writeln("")?;
                         }
                         Role::Assistant => {
                             if !content.is_empty() {

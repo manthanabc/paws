@@ -47,7 +47,6 @@ impl<F> PawsHttpInfra<F> {
             ))
             .pool_max_idle_per_host(env_http.http.pool_max_idle_per_host)
             .redirect(Policy::limited(env_http.http.max_redirects))
-            .hickory_dns(env_http.http.hickory)
             // HTTP/2 configuration from config
             .http2_adaptive_window(env_http.http.adaptive_window)
             .http2_keep_alive_interval(env_http.http.keep_alive_interval.map(Duration::from_secs))

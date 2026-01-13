@@ -441,8 +441,9 @@ pub enum ConversationCommand {
 
     /// Resume conversation in interactive mode.
     Resume {
-        /// Conversation ID to resume.
-        id: ConversationId,
+        /// Conversation ID to resume. If not provided, resumes the last
+        /// conversation.
+        id: Option<ConversationId>,
     },
 
     /// Show last assistant message.
@@ -841,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conversation_resume() {
+    fn test_conversation_resume_with_id() {
         let fixture = Cli::parse_from([
             "paws",
             "conversation",
@@ -851,14 +852,27 @@ mod tests {
         let id = match fixture.subcommands {
             Some(TopLevelCommand::Conversation(conversation)) => match conversation.command {
                 ConversationCommand::Resume { id } => id,
-                _ => ConversationId::default(),
+                _ => None,
             },
-            _ => ConversationId::default(),
+            _ => None,
         };
         assert_eq!(
             id,
-            ConversationId::parse("550e8400-e29b-41d4-a716-446655440005").unwrap()
+            Some(ConversationId::parse("550e8400-e29b-41d4-a716-446655440005").unwrap())
         );
+    }
+
+    #[test]
+    fn test_conversation_resume_without_id() {
+        let fixture = Cli::parse_from(["paws", "conversation", "resume"]);
+        let id = match fixture.subcommands {
+            Some(TopLevelCommand::Conversation(conversation)) => match conversation.command {
+                ConversationCommand::Resume { id } => id,
+                _ => None,
+            },
+            _ => None,
+        };
+        assert_eq!(id, None);
     }
 
     #[test]
