@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
+use convert_case::{Case, Casing};
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers, MouseEventKind,
 };
 use crossterm::{cursor, execute, terminal};
-use convert_case::{Case, Casing};
 use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
@@ -1691,8 +1691,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 )?;
 
                 // print conversation transcript version
-                if let Some(conversation_id) = self.state.conversation_id {
-                    if let Some(conversation) = self.api.conversation(&conversation_id).await? {
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Some(conversation) = self.api.conversation(&conversation_id).await? {
                         let mut lines = self.render_transcript(conversation.clone()).await?;
                         let mut scroll_offset = 0;
                         let (_width, mut height) = terminal::size()?;
@@ -1816,7 +1816,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             }
                         }
                     }
-                }
                 execute!(
                     std::io::stdout(),
                     DisableMouseCapture,
@@ -3068,8 +3067,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             return Ok(lines);
         };
 
-        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
         use crossterm::style::Attribute;
+        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
         let renderer = MarkdownRenderer::default();
 
         for message in &context.messages {
