@@ -3083,58 +3083,55 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let renderer = MarkdownRenderer::default();
 
         for message in &context.messages {
-            match &**message {
-                ContextMessage::Text(text_message) => match text_message.role {
-                    Role::User => {
-                        let user_lines = self.format_user_message(text_message);
-                        lines.extend(user_lines);
-                    }
-                    Role::Assistant => {
-                        // Show full thinking/reasoning
-                        if let Some(reasoning) = &text_message.reasoning_details {
-                            for detail in reasoning {
-                                if let Some(text) = &detail.text {
-                                    let rendered = renderer.render(text, Some(Attribute::Dim));
-                                    for line in rendered.lines() {
-                                        lines.push(line.to_string());
-                                    }
+            if let ContextMessage::Text(text_message) = &**message { match text_message.role {
+                Role::User => {
+                    let user_lines = self.format_user_message(text_message);
+                    lines.extend(user_lines);
+                }
+                Role::Assistant => {
+                    // Show full thinking/reasoning
+                    if let Some(reasoning) = &text_message.reasoning_details {
+                        for detail in reasoning {
+                            if let Some(text) = &detail.text {
+                                let rendered = renderer.render(text, Some(Attribute::Dim));
+                                for line in rendered.lines() {
+                                    lines.push(line.to_string());
                                 }
                             }
                         }
+                    }
 
-                        if !text_message.content.is_empty() {
-                            let rendered = renderer.render(&text_message.content, None);
-                            for line in rendered.lines() {
-                                lines.push(line.to_string());
-                            }
+                    if !text_message.content.is_empty() {
+                        let rendered = renderer.render(&text_message.content, None);
+                        for line in rendered.lines() {
+                            lines.push(line.to_string());
                         }
+                    }
 
-                        // Show tool calls using the same formatting as normal mode
-                        if let Some(calls) = &text_message.tool_calls {
-                            for call in calls {
-                                if let Ok(catalog) = ToolCatalog::try_from(call.clone())
-                                    && let Some(content) =
-                                        catalog.to_content(&self.api.environment())
-                                {
-                                    match content {
-                                        ChatResponseContent::Title(title) => {
-                                            lines.push(title.display().to_string());
-                                        }
-                                        ChatResponseContent::PlainText(text)
-                                        | ChatResponseContent::Markdown(text) => {
-                                            for line in text.lines() {
-                                                lines.push(line.to_string());
-                                            }
+                    // Show tool calls using the same formatting as normal mode
+                    if let Some(calls) = &text_message.tool_calls {
+                        for call in calls {
+                            if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                && let Some(content) =
+                                    catalog.to_content(&self.api.environment())
+                            {
+                                match content {
+                                    ChatResponseContent::Title(title) => {
+                                        lines.push(title.display().to_string());
+                                    }
+                                    ChatResponseContent::PlainText(text)
+                                    | ChatResponseContent::Markdown(text) => {
+                                        for line in text.lines() {
+                                            lines.push(line.to_string());
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    _ => {}
-                },
+                }
                 _ => {}
-            }
+            } }
         }
 
         Ok(lines)
