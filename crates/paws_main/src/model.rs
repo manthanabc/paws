@@ -57,6 +57,28 @@ impl Display for CliModel {
 #[derive(Clone)]
 pub struct CliProvider(pub AnyProvider);
 
+/// Item for provider selection with optional section separators
+#[derive(Clone)]
+pub enum SelectItem {
+    /// Empty line separator
+    Separator,
+    /// Provider option
+    Provider(Box<CliProvider>),
+}
+
+impl Display for SelectItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectItem::Separator => {
+                write!(f, "")
+            }
+            SelectItem::Provider(provider) => {
+                write!(f, "{provider}")
+            }
+        }
+    }
+}
+
 impl Display for CliProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use fixed width for alignment
