@@ -36,6 +36,7 @@ impl Transformer for ProviderPipeline<'_> {
         let zai_thinking = SetZaiThinking.when(move |_| is_zai_provider(provider));
 
         let or_transformers = DefaultTransformation::<Request>::new()
+            .pipe(SetMinimaxParams.when(when_model("minimax")))
             .pipe(DropToolCalls.when(when_model("mistral")))
             .pipe(SetToolChoice::new(ToolChoice::Auto).when(when_model("gemini")))
             .pipe(SetCache.when(when_model("gemini|anthropic")))

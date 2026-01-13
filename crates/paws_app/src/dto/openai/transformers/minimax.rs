@@ -1,4 +1,4 @@
-use paws_domain::Transformer;
+use forge_domain::Transformer;
 
 use crate::dto::openai::Request;
 
@@ -45,7 +45,7 @@ impl Transformer for SetMinimaxParams {
 
 #[cfg(test)]
 mod tests {
-    use paws_domain::ModelId;
+    use forge_domain::ModelId;
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -70,8 +70,8 @@ mod tests {
     }
 
     #[test]
-    fn test_minimax_m2_1_sets_parameters() {
-        let fixture = create_request_fixture("minimax-m2.1");
+    fn test_minimax_m2_1_sets_higher_top_k() {
+        let fixture = create_request_fixture("minimax-m2.1-large");
         let mut transformer = SetMinimaxParams;
         let actual = transformer.transform(fixture);
 
@@ -84,21 +84,65 @@ mod tests {
     fn test_non_minimax_model_unchanged() {
         let fixture = create_request_fixture("gpt-4");
         let mut transformer = SetMinimaxParams;
-        let actual = transformer.transform(fixture);
+        let actual = transformer.transform(fixture.clone());
 
-        assert_eq!(actual.temperature, Some(0.7));
-        assert_eq!(actual.top_p, Some(0.8));
-        assert_eq!(actual.top_k, Some(50));
+        assert_eq!(actual.temperature, fixture.temperature);
+        assert_eq!(actual.top_p, fixture.top_p);
+        assert_eq!(actual.top_k, fixture.top_k);
     }
 
     #[test]
-    fn test_case_insensitive_model_matching() {
-        let fixture = create_request_fixture("MINIMAX-M2");
+    fn test_minimax_case_insensitive() {
+        let fixture = create_request_fixture("MiniMax-M2-Pro");
         let mut transformer = SetMinimaxParams;
         let actual = transformer.transform(fixture);
 
         assert_eq!(actual.temperature, Some(1.0));
         assert_eq!(actual.top_p, Some(0.95));
         assert_eq!(actual.top_k, Some(20));
+    }
+
+    #[test]
+    fn test_minimax_m2_1_case_insensitive() {
+        let fixture = create_request_fixture("MINIMAX-M2.1-XL");
+        let mut transformer = SetMinimaxParams;
+        let actual = transformer.transform(fixture);
+
+        assert_eq!(actual.temperature, Some(1.0));
+        assert_eq!(actual.top_p, Some(0.95));
+        assert_eq!(actual.top_k, Some(40));
+    }
+
+    #[test]
+    fn test_minimax_m2_with_no_existing_parameters() {
+        let fixture = Request::default().model(ModelId::new("minimax-m2"));
+        let mut transformer = SetMinimaxParams;
+        let actual = transformer.transform(fixture);
+
+        assert_eq!(actual.temperature, Some(1.0));
+        assert_eq!(actual.top_p, Some(0.95));
+        assert_eq!(actual.top_k, Some(20));
+    }
+
+    #[test]
+    fn test_minimax_partial_match_ignored() {
+        let fixture = create_request_fixture("not-minimax");
+        let mut transformer = SetMinimaxParams;
+        let actual = transformer.transform(fixture.clone());
+
+        assert_eq!(actual.temperature, fixture.temperature);
+        assert_eq!(actual.top_p, fixture.top_p);
+        assert_eq!(actual.top_k, fixture.top_k);
+    }
+
+    #[test]
+    fn test_no_model_unchanged() {
+        let fixture = Request::default().temperature(0.7).top_p(0.8).top_k(50);
+        let mut transformer = SetMinimaxParams;
+        let actual = transformer.transform(fixture.clone());
+
+        assert_eq!(actual.temperature, fixture.temperature);
+        assert_eq!(actual.top_p, fixture.top_p);
+        assert_eq!(actual.top_k, fixture.top_k);
     }
 }
