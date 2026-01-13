@@ -2868,14 +2868,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
                                 self.writeln(header)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}\n", prefix, line))?;
+                                    self.writeln(format!("{}{}", prefix, line))?;
                                 }
                             } else {
                                 self.writeln(full_prompt)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
                                 }
                             }
+                            self.writeln("")?;
                         }
                         Role::Assistant => {
                             if !content.is_empty() {

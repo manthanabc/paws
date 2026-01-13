@@ -90,6 +90,10 @@ impl Console {
         let mut history_index = history.len();
         let mut temp_buffer = String::new(); // Store current input when navigating history
 
+        // Paste detection: track if we're in the middle of a paste operation
+        let mut paste_detected = false;
+        let mut paste_timer = std::time::Instant::now();
+
         loop {
             let event = reader.next().await;
 
@@ -97,7 +101,19 @@ impl Console {
                 Some(Ok(Event::Key(key_event))) => {
                     match key_event.code {
                         KeyCode::Enter => {
-                            println!("\r"); // Move to next line with carriage return
+                            // Ignore Enter if we're in a paste operation (multiple rapid
+                            // characters)
+                            let now = std::time::Instant::now();
+                            let is_paste =
+                                paste_detected && now.duration_since(paste_timer).as_millis() < 200;
+
+                            if is_paste {
+                                paste_timer = now;
+                                buffer.push('\n');
+                                println!("\r");
+                                continue;
+                            }
+
                             let trimmed = buffer.trim();
                             if trimmed.is_empty() {
                                 // Reprint prompt and continue
@@ -147,7 +163,20 @@ impl Console {
                             return Ok(SlashCommand::Exit);
                         }
                         KeyCode::Char(c) => {
+                            let now = std::time::Instant::now();
+                            let elapsed = now.duration_since(paste_timer).as_millis();
+                            // Detect paste: if characters arrive very rapidly (<10ms apart)
+                            if elapsed < 10 {
+                                paste_detected = true;
+                            } else {
+                                paste_detected = false;
+                            }
+                            paste_timer = now;
+
+                            // Store the char
                             buffer.push(c);
+
+                            // Push to stdout
                             print!("{}", c);
                             io::stdout().flush()?;
                         }
