@@ -1691,61 +1691,103 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 )?;
 
                 // print conversation transcript version
-                if let Some(conversation_id) = self.state.conversation_id {
-                    if let Some(conversation) = self.api.conversation(&conversation_id).await? {
-                        let mut lines = self.render_transcript(conversation.clone()).await?;
-                        let mut scroll_offset = 0;
-                        let (_width, mut height) = terminal::size()?;
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Some(conversation) = self.api.conversation(&conversation_id).await?
+                {
+                    let mut lines = self.render_transcript(conversation.clone()).await?;
+                    let mut scroll_offset = 0;
+                    let (_width, mut height) = terminal::size()?;
 
-                        // Initial draw
-                        self.draw_transcript_viewport(&lines, scroll_offset, height as usize)?;
+                    // Initial draw
+                    self.draw_transcript_viewport(&lines, scroll_offset, height as usize)?;
 
-                        let mut reader = EventStream::new();
-                        loop {
-                            let event = reader.next().await;
-                            match event {
-                                Some(Ok(crossterm::event::Event::Key(key_event))) => {
-                                    if key_event.code == KeyCode::Esc
-                                        || (key_event.code == KeyCode::Char('o')
-                                            && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                                        || (key_event.code == KeyCode::Char('c')
-                                            && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                                    {
-                                        break;
-                                    }
+                    let mut reader = EventStream::new();
+                    loop {
+                        let event = reader.next().await;
+                        match event {
+                            Some(Ok(crossterm::event::Event::Key(key_event))) => {
+                                if key_event.code == KeyCode::Esc
+                                    || (key_event.code == KeyCode::Char('o')
+                                        && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                                    || (key_event.code == KeyCode::Char('c')
+                                        && key_event.modifiers.contains(KeyModifiers::CONTROL))
+                                {
+                                    break;
+                                }
 
-                                    match key_event.code {
-                                        KeyCode::Up => {
-                                            if scroll_offset > 0 {
-                                                scroll_offset -= 1;
-                                                self.draw_transcript_viewport(
-                                                    &lines,
-                                                    scroll_offset,
-                                                    height as usize,
-                                                )?;
-                                            }
-                                        }
-                                        KeyCode::Down => {
-                                            if scroll_offset + (height as usize) < lines.len() {
-                                                scroll_offset += 1;
-                                                self.draw_transcript_viewport(
-                                                    &lines,
-                                                    scroll_offset,
-                                                    height as usize,
-                                                )?;
-                                            }
-                                        }
-                                        KeyCode::PageUp => {
-                                            scroll_offset =
-                                                scroll_offset.saturating_sub(height as usize);
+                                match key_event.code {
+                                    KeyCode::Up => {
+                                        if scroll_offset > 0 {
+                                            scroll_offset -= 1;
                                             self.draw_transcript_viewport(
                                                 &lines,
                                                 scroll_offset,
                                                 height as usize,
                                             )?;
                                         }
-                                        KeyCode::PageDown => {
-                                            scroll_offset = (scroll_offset + (height as usize))
+                                    }
+                                    KeyCode::Down => {
+                                        if scroll_offset + (height as usize) < lines.len() {
+                                            scroll_offset += 1;
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                    }
+                                    KeyCode::PageUp => {
+                                        scroll_offset =
+                                            scroll_offset.saturating_sub(height as usize);
+                                        self.draw_transcript_viewport(
+                                            &lines,
+                                            scroll_offset,
+                                            height as usize,
+                                        )?;
+                                    }
+                                    KeyCode::PageDown => {
+                                        scroll_offset = (scroll_offset + (height as usize))
+                                            .min(lines.len().saturating_sub(height as usize));
+                                        self.draw_transcript_viewport(
+                                            &lines,
+                                            scroll_offset,
+                                            height as usize,
+                                        )?;
+                                    }
+                                    KeyCode::Home => {
+                                        scroll_offset = 0;
+                                        self.draw_transcript_viewport(
+                                            &lines,
+                                            scroll_offset,
+                                            height as usize,
+                                        )?;
+                                    }
+                                    KeyCode::End => {
+                                        scroll_offset = lines.len().saturating_sub(height as usize);
+                                        self.draw_transcript_viewport(
+                                            &lines,
+                                            scroll_offset,
+                                            height as usize,
+                                        )?;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            Some(Ok(crossterm::event::Event::Mouse(mouse_event))) => {
+                                match mouse_event.kind {
+                                    MouseEventKind::ScrollUp => {
+                                        if scroll_offset > 0 {
+                                            scroll_offset = scroll_offset.saturating_sub(3);
+                                            self.draw_transcript_viewport(
+                                                &lines,
+                                                scroll_offset,
+                                                height as usize,
+                                            )?;
+                                        }
+                                    }
+                                    MouseEventKind::ScrollDown => {
+                                        if scroll_offset + (height as usize) < lines.len() {
+                                            scroll_offset = (scroll_offset + 3)
                                                 .min(lines.len().saturating_sub(height as usize));
                                             self.draw_transcript_viewport(
                                                 &lines,
@@ -1753,67 +1795,23 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                                 height as usize,
                                             )?;
                                         }
-                                        KeyCode::Home => {
-                                            scroll_offset = 0;
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                        KeyCode::End => {
-                                            scroll_offset =
-                                                lines.len().saturating_sub(height as usize);
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                        _ => {}
                                     }
+                                    _ => {}
                                 }
-                                Some(Ok(crossterm::event::Event::Mouse(mouse_event))) => {
-                                    match mouse_event.kind {
-                                        MouseEventKind::ScrollUp => {
-                                            if scroll_offset > 0 {
-                                                scroll_offset = scroll_offset.saturating_sub(3);
-                                                self.draw_transcript_viewport(
-                                                    &lines,
-                                                    scroll_offset,
-                                                    height as usize,
-                                                )?;
-                                            }
-                                        }
-                                        MouseEventKind::ScrollDown => {
-                                            if scroll_offset + (height as usize) < lines.len() {
-                                                scroll_offset = (scroll_offset + 3).min(
-                                                    lines.len().saturating_sub(height as usize),
-                                                );
-                                                self.draw_transcript_viewport(
-                                                    &lines,
-                                                    scroll_offset,
-                                                    height as usize,
-                                                )?;
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                Some(Ok(crossterm::event::Event::Resize(_w, h))) => {
-                                    height = h;
-                                    // Re-render because wrapping depends on width
-                                    lines = self.render_transcript(conversation.clone()).await?;
-                                    scroll_offset = scroll_offset
-                                        .min(lines.len().saturating_sub(height as usize));
-                                    self.draw_transcript_viewport(
-                                        &lines,
-                                        scroll_offset,
-                                        height as usize,
-                                    )?;
-                                }
-                                _ => {}
                             }
+                            Some(Ok(crossterm::event::Event::Resize(_w, h))) => {
+                                height = h;
+                                // Re-render because wrapping depends on width
+                                lines = self.render_transcript(conversation.clone()).await?;
+                                scroll_offset =
+                                    scroll_offset.min(lines.len().saturating_sub(height as usize));
+                                self.draw_transcript_viewport(
+                                    &lines,
+                                    scroll_offset,
+                                    height as usize,
+                                )?;
+                            }
+                            _ => {}
                         }
                     }
                 }
