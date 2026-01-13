@@ -166,11 +166,7 @@ impl Console {
                             let now = std::time::Instant::now();
                             let elapsed = now.duration_since(paste_timer).as_millis();
                             // Detect paste: if characters arrive very rapidly (<10ms apart)
-                            if elapsed < 10 {
-                                paste_detected = true;
-                            } else {
-                                paste_detected = false;
-                            }
+                            paste_detected = elapsed < 10;
                             paste_timer = now;
 
                             // Store the char
