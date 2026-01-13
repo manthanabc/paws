@@ -815,7 +815,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 "zai_coding",
                 "open_router",
                 "claude_code",
-                "github_copilot"
+                "github_copilot",
             ];
 
             // Split providers into suggested and others
