@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
+use convert_case::{Case, Casing};
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers, MouseEventKind,
 };
 use crossterm::{cursor, execute, terminal};
-use convert_case::{Case, Casing};
 use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
@@ -27,7 +27,7 @@ use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
 use paws_domain::{
-    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, ToolValue, UserCommand,
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
 use tokio_stream::StreamExt;
 use tracing::debug;
@@ -2983,6 +2983,39 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
+    fn format_user_message(&self, message: &TextMessage) -> Vec<String> {
+        let content = &message.content;
+        let content_to_show = message
+            .raw_content
+            .as_ref()
+            .and_then(|v| v.as_user_prompt())
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| content.clone());
+
+        let paws_prompt = PawsPrompt {
+            cwd: self.state.cwd.clone(),
+            agent_id: AgentId::default(),
+            model: message.model.clone(),
+            git_branch: None,
+        };
+        let full_prompt = paws_prompt.render_prompt();
+
+        let mut lines = Vec::new();
+        lines.push("".to_string());
+        if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+            lines.push(header.to_string());
+            for line in content_to_show.lines() {
+                lines.push(format!("{}{}", prefix, line));
+            }
+        } else {
+            lines.push(full_prompt);
+            for line in content_to_show.lines() {
+                lines.push(format!("{} {}", "┃".white().bold(), line));
+            }
+        }
+        lines
+    }
+
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
         let Some(context) = conversation.context else {
@@ -2993,45 +3026,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.markdown = MarkdownWriter::new();
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
-                    match role {
+                ContextMessage::Text(text_message) => {
+                    match text_message.role {
                         Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str().to_string())
-                                .unwrap_or_else(|| content.clone());
-
-                            let paws_prompt = PawsPrompt {
-                                cwd: self.state.cwd.clone(),
-                                agent_id: AgentId::default(),
-                                model: model.clone(),
-                                git_branch: None,
-                            };
-                            let full_prompt = paws_prompt.render_prompt();
-
-                            self.writeln("")?;
-                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
-                                self.writeln(header)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}", prefix, line))?;
-                                }
-                            } else {
-                                self.writeln(full_prompt)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
-                                }
+                            let lines = self.format_user_message(text_message);
+                            for line in lines {
+                                self.writeln(line)?;
                             }
                             self.writeln("")?;
                         }
                         Role::Assistant => {
-                            if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner)?;
+                            if !text_message.content.is_empty() {
+                                self.markdown
+                                    .add_chunk(&text_message.content, &mut self.spinner)?;
                                 self.markdown.reset();
                             }
 
                             // Show tool calls if any
-                            if let Some(calls) = tool_calls {
+                            if let Some(calls) = &text_message.tool_calls {
                                 for call in calls {
                                     if let Ok(catalog) = ToolCatalog::try_from(call.clone())
                                         && let Some(content) =
@@ -3068,51 +3080,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             return Ok(lines);
         };
 
-        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
         use crossterm::style::Attribute;
+        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
         let renderer = MarkdownRenderer::default();
 
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage {
-                    content,
-                    role,
-                    tool_calls,
-                    model,
-                    reasoning_details,
-                    ..
-                }) => match role {
+                ContextMessage::Text(text_message) => match text_message.role {
                     Role::User => {
-                        let content_to_show = message
-                            .as_value()
-                            .and_then(|v| v.as_user_prompt())
-                            .map(|p| p.as_str().to_string())
-                            .unwrap_or_else(|| content.clone());
-
-                        let paws_prompt = PawsPrompt {
-                            cwd: self.state.cwd.clone(),
-                            agent_id: AgentId::default(),
-                            model: model.clone(),
-                            git_branch: None,
-                        };
-                        let full_prompt = paws_prompt.render_prompt();
-
-                        lines.push("".to_string());
-                        if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
-                            lines.push(header.to_string());
-                            for line in content_to_show.lines() {
-                                lines.push(format!("{}{}", prefix, line));
-                            }
-                        } else {
-                            lines.push(full_prompt);
-                            for line in content_to_show.lines() {
-                                lines.push(format!("{} {}", "┃".white().bold(), line));
-                            }
-                        }
+                        let user_lines = self.format_user_message(text_message);
+                        lines.extend(user_lines);
                     }
                     Role::Assistant => {
                         // Show full thinking/reasoning
-                        if let Some(reasoning) = reasoning_details {
+                        if let Some(reasoning) = &text_message.reasoning_details {
                             for detail in reasoning {
                                 if let Some(text) = &detail.text {
                                     let rendered = renderer.render(text, Some(Attribute::Dim));
@@ -3123,48 +3104,37 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             }
                         }
 
-                        if !content.is_empty() {
-                            let rendered = renderer.render(content, None);
+                        if !text_message.content.is_empty() {
+                            let rendered = renderer.render(&text_message.content, None);
                             for line in rendered.lines() {
                                 lines.push(line.to_string());
                             }
                         }
 
-                        // Show full tool calls
-                        if let Some(calls) = tool_calls {
+                        // Show tool calls using the same formatting as normal mode
+                        if let Some(calls) = &text_message.tool_calls {
                             for call in calls {
-                                let title = format!("🛠️ Tool Call: {}", call.name);
-                                lines.push(TitleFormat::action(title).display().to_string());
-                                let args = serde_json::to_string_pretty(&call.arguments)?;
-                                let rendered =
-                                    renderer.render(&format!("```json\n{}\n```", args), None);
-                                for line in rendered.lines() {
-                                    lines.push(line.to_string());
+                                if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                    && let Some(content) =
+                                        catalog.to_content(&self.api.environment())
+                                {
+                                    match content {
+                                        ChatResponseContent::Title(title) => {
+                                            lines.push(title.display().to_string());
+                                        }
+                                        ChatResponseContent::PlainText(text)
+                                        | ChatResponseContent::Markdown(text) => {
+                                            for line in text.lines() {
+                                                lines.push(line.to_string());
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                     _ => {}
                 },
-                ContextMessage::Tool(result) => {
-                    let title = format!("✅ Tool Result: {}", result.name);
-                    lines.push(TitleFormat::action(title).display().to_string());
-                    for value in &result.output.values {
-                        match value {
-                            ToolValue::Text(text) => {
-                                for line in text.lines() {
-                                    lines.push(line.to_string());
-                                }
-                            }
-                            ToolValue::AI { value, .. } => {
-                                for line in value.lines() {
-                                    lines.push(line.to_string());
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
                 _ => {}
             }
         }

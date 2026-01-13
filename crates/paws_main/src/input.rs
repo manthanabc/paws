@@ -126,9 +126,10 @@ impl Console {
                             return self.command.parse(trimmed);
                         }
                         KeyCode::Char('o')
-                            if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                                return Ok(SlashCommand::Transcript);
-                            }
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            return Ok(SlashCommand::Transcript);
+                        }
                         KeyCode::Up => {
                             if history_index > 0 {
                                 if history_index == history.len() {

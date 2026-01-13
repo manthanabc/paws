@@ -507,7 +507,7 @@ pub enum SlashCommand {
 
     /// Transcript Mode
     #[strum(props(usage = "Switch to transcript mode"))]
-    Transcript
+    Transcript,
 }
 
 impl SlashCommand {
@@ -541,7 +541,7 @@ impl SlashCommand {
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
             SlashCommand::Resize => "resize",
-            SlashCommand::Transcript => "transcript"
+            SlashCommand::Transcript => "transcript",
         }
     }
 
