@@ -133,7 +133,8 @@ impl Console {
                             if is_paste {
                                 paste_timer = now;
                                 buffer.push('\n');
-                                println!("\r");
+                                print!("\r\n");
+                                io::stdout().flush()?;
                                 continue;
                             }
 
@@ -176,7 +177,7 @@ impl Console {
                         {
                             buffer.clear();
                             history_index = history.len();
-                            println!("\r");
+                            print!("\r\n");
                             print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
                             io::stdout().flush()?;
                             continue;
@@ -253,7 +254,7 @@ impl Console {
 
         // Re-render prompt + buffer
         print!("{}", rendered_prompt);
-        print!("{}", buffer);
+        print!("{}", buffer.replace('\n', "\r\n"));
 
         stdout.flush()?;
         Ok(())
@@ -398,5 +399,24 @@ mod tests {
         let history = console.load_history();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0], "valid command");
+    }
+
+    #[test]
+    fn test_multiline_history_newlines_preserved() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        let multiline = "line 1\nline 2\nline 3";
+        console.append_history(multiline);
+
+        let history = console.load_history();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0], multiline);
+        assert_eq!(history[0].lines().count(), 3);
     }
 }
