@@ -130,20 +130,22 @@ impl Console {
                                 if history_index == history.len() {
                                     temp_buffer = buffer.clone();
                                 }
+                                let old_buffer = buffer.clone();
                                 history_index -= 1;
                                 buffer = history[history_index].clone();
-                                self.redraw_buffer(&prompt, &buffer)?;
+                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
                         KeyCode::Down => {
                             if history_index < history.len() {
+                                let old_buffer = buffer.clone();
                                 history_index += 1;
                                 if history_index == history.len() {
                                     buffer = temp_buffer.clone();
                                 } else {
                                     buffer = history[history_index].clone();
                                 }
-                                self.redraw_buffer(&prompt, &buffer)?;
+                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
                         KeyCode::Char('c')
@@ -204,15 +206,22 @@ impl Console {
         Ok(SlashCommand::Exit)
     }
 
-    fn redraw_buffer(&self, prompt: &PawsPrompt, buffer: &str) -> anyhow::Result<()> {
+    fn redraw_buffer(
+        &self,
+        prompt: &PawsPrompt,
+        buffer: &str,
+        old_buffer: &str,
+    ) -> anyhow::Result<()> {
         let mut stdout = io::stdout();
 
         let rendered_prompt = prompt.render_prompt().replace('\n', "\r\n");
         let prompt_lines = rendered_prompt.matches("\r\n").count();
+        let buffer_lines = old_buffer.matches('\n').count();
+        let total_lines = prompt_lines + buffer_lines;
 
         // Move cursor up to first line of prompt
-        if prompt_lines > 0 {
-            execute!(stdout, MoveUp(prompt_lines as u16))?;
+        if total_lines > 0 {
+            execute!(stdout, MoveUp(total_lines as u16))?;
         }
 
         // Now move to beginning of line and clear everything below
