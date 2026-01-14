@@ -127,11 +127,10 @@ workspace = true
 workspace = true
 
 [dev-dependencies.fake]
-version = "4.4.0"
-features = [ "derive",]
+workspace = true
 
 [dev-dependencies.paws_domain]
-path = "../paws_domain"
+workspace = true
 
 [target."cfg(not(target_os = \"android\"))".dependencies]
 arboard = "3.4"
