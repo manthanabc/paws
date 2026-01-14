@@ -263,10 +263,12 @@ impl Console {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use fake::{Fake, Faker};
     use std::fs;
+
+    use fake::{Fake, Faker};
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_history_entry_serialization() {
