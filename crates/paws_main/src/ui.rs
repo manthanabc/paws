@@ -3087,8 +3087,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         lines.push(format!("│ Messages: {}", msg_count));
 
         // Usage information
-        if let Some(context) = &conversation.context {
-            if let Some(usage) = context.accumulate_usage() {
+        if let Some(context) = &conversation.context
+            && let Some(usage) = context.accumulate_usage() {
                 let total_tokens = match usage.total_tokens {
                     TokenCount::Actual(count) => count,
                     TokenCount::Approx(count) => count,
@@ -3115,7 +3115,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     lines.push(format!("│ Cost: ${:.4}", cost));
                 }
             }
-        }
 
         // Bottom border
         lines.push(
