@@ -3198,8 +3198,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let renderer = MarkdownRenderer::default();
 
         for message in &context.messages {
-            match &**message {
-                ContextMessage::Text(text_message) => match text_message.role {
+            if let ContextMessage::Text(text_message) = &**message {
+                match text_message.role {
                     Role::User => {
                         let user_lines = self.format_user_message(text_message);
                         lines.extend(user_lines);
@@ -3289,8 +3289,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
 
