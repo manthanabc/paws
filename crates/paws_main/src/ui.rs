@@ -6,6 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use chrono::Utc;
 use colored::Colorize;
 use convert_case::{Case, Casing};
 use crossterm::event::{
@@ -27,7 +30,7 @@ use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
 use paws_domain::{
-    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, TokenCount, UserCommand,
 };
 use tokio_stream::StreamExt;
 use tracing::debug;
@@ -1695,6 +1698,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     && let Some(conversation) = self.api.conversation(&conversation_id).await?
                 {
                     let mut lines = self.render_transcript(conversation.clone()).await?;
+
+                    // Add header with usage info and controls
+                    let header_lines = self.render_transcript_header(&conversation);
+                    lines.splice(0..0, header_lines);
+
+                    // Add summary at the end
+                    let summary_lines = self.render_transcript_summary(&conversation);
+                    lines.extend(summary_lines);
+
                     let mut scroll_offset = 0;
                     let (_width, mut height) = terminal::size()?;
 
@@ -1716,6 +1728,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 }
 
                                 match key_event.code {
+                                    KeyCode::Char('p') | KeyCode::Char('P') => {
+                                        // Print transcript to stdout
+                                        self.on_print_transcript(conversation.clone()).await?;
+                                    }
                                     KeyCode::Up => {
                                         if scroll_offset > 0 {
                                             scroll_offset -= 1;
@@ -1727,7 +1743,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         }
                                     }
                                     KeyCode::Down => {
-                                        if scroll_offset + (height as usize) < lines.len() {
+                                        let content_height = height.saturating_sub(1) as usize;
+                                        if scroll_offset + content_height < lines.len() {
                                             scroll_offset += 1;
                                             self.draw_transcript_viewport(
                                                 &lines,
@@ -1737,8 +1754,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         }
                                     }
                                     KeyCode::PageUp => {
+                                        let content_height = height.saturating_sub(1) as usize;
                                         scroll_offset =
-                                            scroll_offset.saturating_sub(height as usize);
+                                            scroll_offset.saturating_sub(content_height);
                                         self.draw_transcript_viewport(
                                             &lines,
                                             scroll_offset,
@@ -1746,8 +1764,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         )?;
                                     }
                                     KeyCode::PageDown => {
-                                        scroll_offset = (scroll_offset + (height as usize))
-                                            .min(lines.len().saturating_sub(height as usize));
+                                        let content_height = height.saturating_sub(1) as usize;
+                                        scroll_offset = (scroll_offset + content_height)
+                                            .min(lines.len().saturating_sub(content_height));
                                         self.draw_transcript_viewport(
                                             &lines,
                                             scroll_offset,
@@ -1763,7 +1782,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         )?;
                                     }
                                     KeyCode::End => {
-                                        scroll_offset = lines.len().saturating_sub(height as usize);
+                                        let content_height = height.saturating_sub(1) as usize;
+                                        scroll_offset = lines.len().saturating_sub(content_height);
                                         self.draw_transcript_viewport(
                                             &lines,
                                             scroll_offset,
@@ -1774,6 +1794,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 }
                             }
                             Some(Ok(crossterm::event::Event::Mouse(mouse_event))) => {
+                                let content_height = height.saturating_sub(1) as usize;
                                 match mouse_event.kind {
                                     MouseEventKind::ScrollUp => {
                                         if scroll_offset > 0 {
@@ -1786,9 +1807,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                         }
                                     }
                                     MouseEventKind::ScrollDown => {
-                                        if scroll_offset + (height as usize) < lines.len() {
+                                        if scroll_offset + content_height < lines.len() {
                                             scroll_offset = (scroll_offset + 3)
-                                                .min(lines.len().saturating_sub(height as usize));
+                                                .min(lines.len().saturating_sub(content_height));
                                             self.draw_transcript_viewport(
                                                 &lines,
                                                 scroll_offset,
@@ -1803,8 +1824,13 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                 height = h;
                                 // Re-render because wrapping depends on width
                                 lines = self.render_transcript(conversation.clone()).await?;
+                                let header_lines = self.render_transcript_header(&conversation);
+                                lines.splice(0..0, header_lines);
+                                let summary_lines = self.render_transcript_summary(&conversation);
+                                lines.extend(summary_lines);
+                                let content_height = height.saturating_sub(1) as usize;
                                 scroll_offset =
-                                    scroll_offset.min(lines.len().saturating_sub(height as usize));
+                                    scroll_offset.min(lines.len().saturating_sub(content_height));
                                 self.draw_transcript_viewport(
                                     &lines,
                                     scroll_offset,
@@ -3014,6 +3040,95 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         lines
     }
 
+    /// Renders a header for the transcript view showing conversation metadata
+    /// and controls.
+    fn render_transcript_header(&self, conversation: &Conversation) -> Vec<String> {
+        let mut lines = vec![];
+
+        // Top border
+        lines.push(
+            "┌─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        // Title row
+        lines.push("│ Transcript Mode".to_string());
+
+        // Separator
+        lines.push(
+            "├─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        // Conversation info
+        let id = conversation.id.to_string();
+        let id_display = format!("{}...", &id[..id.len().min(8)]);
+        lines.push(format!("│ ID: {}", id_display));
+
+        if let Some(title) = &conversation.title {
+            lines.push(format!("│ Title: {}", title));
+        }
+
+        let created_at = conversation.metadata.created_at;
+        let formatted = created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        lines.push(format!("│ Created: {}", formatted));
+
+        if let Some(updated_at) = conversation.metadata.updated_at {
+            let formatted = updated_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+            lines.push(format!("│ Updated: {}", formatted));
+        }
+
+        // Message count
+        let msg_count = conversation
+            .context
+            .as_ref()
+            .map(|c| c.messages.len())
+            .unwrap_or(0);
+        lines.push(format!("│ Messages: {}", msg_count));
+
+        // Usage information
+        if let Some(context) = &conversation.context {
+            if let Some(usage) = context.accumulate_usage() {
+                let total_tokens = match usage.total_tokens {
+                    TokenCount::Actual(count) => count,
+                    TokenCount::Approx(count) => count,
+                };
+                let prompt_tokens = match usage.prompt_tokens {
+                    TokenCount::Actual(count) => count,
+                    TokenCount::Approx(count) => count,
+                };
+                let completion_tokens = match usage.completion_tokens {
+                    TokenCount::Actual(count) => count,
+                    TokenCount::Approx(count) => count,
+                };
+                let cached_tokens = match usage.cached_tokens {
+                    TokenCount::Actual(count) => count,
+                    TokenCount::Approx(count) => count,
+                };
+
+                lines.push(format!(
+                    "│ Tokens: {} total ({} input + {} output, {} cached)",
+                    total_tokens, prompt_tokens, completion_tokens, cached_tokens
+                ));
+
+                if let Some(cost) = usage.cost {
+                    lines.push(format!("│ Cost: ${:.4}", cost));
+                }
+            }
+        }
+
+        // Bottom border
+        lines.push(
+            "└─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        // Empty line after header
+        lines.push(String::new());
+
+        lines
+    }
+
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
         let Some(context) = conversation.context else {
@@ -3091,12 +3206,54 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     }
                     Role::Assistant => {
                         // Show full thinking/reasoning
+                        debug!(
+                            "Transcript: Assistant message has reasoning_details: {:?}",
+                            text_message.reasoning_details.is_some()
+                        );
                         if let Some(reasoning) = &text_message.reasoning_details {
-                            for detail in reasoning {
-                                if let Some(text) = &detail.text {
+                            debug!("Transcript: Found {} reasoning details", reasoning.len());
+                            for (idx, detail) in reasoning.iter().enumerate() {
+                                debug!(
+                                    "Reasoning detail {}: text={:?}, data={:?}, type_of={:?}",
+                                    idx,
+                                    detail.text.is_some(),
+                                    detail.data.is_some(),
+                                    detail.type_of
+                                );
+
+                                // Try text field first, then decode data field if it's base64
+                                let decoded_data = detail.data.as_ref().and_then(|data| {
+                                    // Try to decode as base64
+                                    STANDARD
+                                        .decode(data)
+                                        .ok()
+                                        .and_then(|bytes| String::from_utf8(bytes).ok())
+                                });
+
+                                let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
+
+                                if let Some(text) = reasoning_text {
+                                    // Show reasoning type header if available
+                                    if let Some(type_of) = &detail.type_of {
+                                        lines.push(format!(
+                                            "{}: {}",
+                                            "Reasoning".dimmed(),
+                                            type_of.dimmed()
+                                        ));
+                                    }
                                     let rendered = renderer.render(text, Some(Attribute::Dim));
                                     for line in rendered.lines() {
                                         lines.push(line.to_string());
+                                    }
+                                } else if detail.data.is_some() {
+                                    // Show placeholder for encrypted/undecodable reasoning
+                                    if let Some(type_of) = &detail.type_of {
+                                        lines.push(format!(
+                                            "{}: {} (encrypted, {} bytes)",
+                                            "Reasoning".dimmed(),
+                                            type_of.dimmed(),
+                                            detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
+                                        ));
                                     }
                                 }
                             }
@@ -3140,6 +3297,69 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(lines)
     }
 
+    /// Renders a summary for the transcript view showing additional info at the
+    /// end.
+    fn render_transcript_summary(&self, conversation: &Conversation) -> Vec<String> {
+        let mut lines = vec![];
+
+        // Empty line before summary
+        lines.push(String::new());
+
+        // Top border
+        lines.push(
+            "┌─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        // Title row
+        lines.push("│ Summary".to_string());
+
+        // Separator
+        lines.push(
+            "├─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        // File operations from metrics
+        if !conversation.metrics.file_operations.is_empty() {
+            lines.push("│ File Operations:".to_string());
+            for (path, operation) in &conversation.metrics.file_operations {
+                lines.push(format!("│   • {} - {}", path, operation.tool));
+                if operation.lines_added > 0 || operation.lines_removed > 0 {
+                    lines.push(format!(
+                        "│     Lines: +{} / -{}",
+                        operation.lines_added, operation.lines_removed
+                    ));
+                }
+            }
+        }
+
+        // Session duration
+        if conversation.metrics.started_at.is_some() {
+            let now = Utc::now();
+            if let Some(duration) = conversation.metrics.duration(now) {
+                let secs = duration.as_secs();
+                let mins = secs / 60;
+                let hours = mins / 60;
+                if hours > 0 {
+                    lines.push(format!("│ Session Duration: {}h {}m", hours, mins % 60));
+                } else if mins > 0 {
+                    lines.push(format!("│ Session Duration: {}m {}s", mins, secs % 60));
+                } else {
+                    lines.push(format!("│ Session Duration: {}s", secs));
+                }
+            }
+        }
+
+        // Bottom border
+        lines.push(
+            "└─────────────────────────────────────────────────────────────────────────────"
+                .to_string(),
+        );
+
+        lines
+    }
+
     fn draw_transcript_viewport(
         &self,
         lines: &[String],
@@ -3153,17 +3373,37 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             cursor::MoveTo(0, 0)
         )?;
 
-        let end = (offset + height).min(lines.len());
+        // Reserve space for footer (1 line at the bottom)
+        let content_height = height.saturating_sub(1);
+
+        // Draw content
+        let end = (offset + content_height).min(lines.len());
         for i in offset..end {
             write!(stdout, "{}\r\n", lines[i])?;
         }
+
+        // Draw footer at the actual last line
+        execute!(stdout, cursor::MoveTo(0, (height - 1) as u16))?;
+        let footer = " P: Print | Ctrl+O or Esc to exit ".dimmed().to_string();
+        let footer_line = format!("└{}{}", "─".repeat(79 - footer.len()), footer);
+        write!(stdout, "{}", footer_line)?;
+
         stdout.flush()?;
         Ok(())
     }
 
     /// Prints the transcript version of the conversation
     pub async fn on_print_transcript(&mut self, conversation: Conversation) -> Result<()> {
-        let lines = self.render_transcript(conversation).await?;
+        let mut lines = self.render_transcript(conversation.clone()).await?;
+
+        // Add header
+        let header_lines = self.render_transcript_header(&conversation);
+        lines.splice(0..0, header_lines);
+
+        // Add summary
+        let summary_lines = self.render_transcript_summary(&conversation);
+        lines.extend(summary_lines);
+
         for line in lines {
             self.writeln(line)?;
         }
