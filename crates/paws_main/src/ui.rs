@@ -36,7 +36,7 @@ use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
 use crate::info::Info;
 use crate::input::Console;
-use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
+use crate::model::{CliModel, CliProvider, PawsCommandManager, SelectItem, SlashCommand};
 use crate::porcelain::Porcelain;
 use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
@@ -697,10 +697,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.state.conversation_id = original_id;
             }
             ConversationCommand::Resume { id } => {
-                self.validate_conversation_exists(&id).await?;
+                let conversation_id = match id {
+                    Some(id) => {
+                        self.validate_conversation_exists(&id).await?;
+                        id
+                    }
+                    None => {
+                        let last_conversation =
+                            self.api.last_conversation().await?.ok_or_else(|| {
+                                anyhow::anyhow!("No conversation found to resume")
+                            })?;
+                        last_conversation.id
+                    }
+                };
 
-                self.state.conversation_id = Some(id);
-                self.writeln_title(TitleFormat::info(format!("Resumed conversation: {id}")))?;
+                self.state.conversation_id = Some(conversation_id);
+                self.writeln_title(TitleFormat::info(format!(
+                    "Resumed conversation: {conversation_id}"
+                )))?;
                 // Interactive mode will be handled by the main loop
             }
             ConversationCommand::Show { id } => {
@@ -793,25 +807,64 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             self.api.get_provider(id).await?
         } else {
             // Fetch all providers for selection
-            let providers = self
-                .api
-                .get_providers()
-                .await?
-                .into_iter()
-                .map(CliProvider)
-                .collect::<Vec<_>>();
+            let providers = self.api.get_providers().await?;
 
-            // Sort the providers by their display names
-            let mut sorted_providers = providers;
-            sorted_providers.sort_by_key(|a| a.to_string());
+            let suggested_ids = [
+                "opencode_zen",
+                "antigravity-proxy",
+                "zai_coding",
+                "open_router",
+                "claude_code",
+                "github_copilot",
+            ];
+
+            // Split providers into suggested and others
+            let (suggested, others): (Vec<_>, Vec<_>) = providers
+                .into_iter()
+                .partition(|p| suggested_ids.contains(&p.id().as_ref().as_ref()));
+
+            // Sort suggested by the order in suggested_ids, then others alphabetically
+            let suggested: Vec<_> = suggested
+                .into_iter()
+                .map(|p| (p.id().as_ref().as_ref().to_string(), p))
+                .collect();
+
+            let suggested: Vec<_> = suggested_ids
+                .iter()
+                .filter_map(|id| {
+                    suggested
+                        .iter()
+                        .find(|(p_id, _)| p_id == id)
+                        .map(|(_, p)| p)
+                })
+                .cloned()
+                .map(CliProvider)
+                .collect();
+
+            let mut others: Vec<_> = others.into_iter().map(CliProvider).collect();
+            others.sort_by_key(|a| a.to_string());
+
+            // Build selection list with separator after suggested
+            let mut select_items: Vec<SelectItem> = vec![];
+            select_items.extend(
+                suggested
+                    .into_iter()
+                    .map(|p| SelectItem::Provider(Box::new(p))),
+            );
+            select_items.push(SelectItem::Separator);
+            select_items.extend(
+                others
+                    .into_iter()
+                    .map(|p| SelectItem::Provider(Box::new(p))),
+            );
 
             // Use the centralized select module
-            match PawsSelect::select("Select a provider to login:", sorted_providers)
+            match PawsSelect::select("Select a provider to login:", select_items)
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
                 .prompt()?
             {
-                Some(provider) => provider.0,
-                None => {
+                Some(SelectItem::Provider(provider)) => provider.0,
+                _ => {
                     self.writeln_title(TitleFormat::info("Cancelled"))?;
                     return Ok(());
                 }
@@ -1515,6 +1568,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
+            SlashCommand::Resume => {
+                self.handle_resume_conversation().await?;
+            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1679,6 +1735,21 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn handle_delete_conversation(&mut self) -> anyhow::Result<()> {
         let conversation_id = self.init_conversation().await?;
         self.on_conversation_delete(conversation_id).await?;
+        Ok(())
+    }
+
+    async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
+        let last_conversation = self
+            .api
+            .last_conversation()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+
+        self.state.conversation_id = Some(last_conversation.id);
+        self.writeln_title(TitleFormat::info(format!(
+            "Resumed conversation: {}",
+            last_conversation.id
+        )))?;
         Ok(())
     }
 
@@ -2836,14 +2907,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
                                 self.writeln(header)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}\n", prefix, line))?;
+                                    self.writeln(format!("{}{}", prefix, line))?;
                                 }
                             } else {
                                 self.writeln(full_prompt)?;
                                 for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}\n", "┃".white().bold(), line))?;
+                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
                                 }
                             }
+                            self.writeln("")?;
                         }
                         Role::Assistant => {
                             if !content.is_empty() {

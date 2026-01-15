@@ -9,7 +9,7 @@ paws_services.workspace = true
 
 
 [dev-dependencies]
-serial_test = "3.2"
+serial_test = "3.3"
 
 [dependencies.paws_app]
 workspace = true
