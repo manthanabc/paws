@@ -3088,33 +3088,34 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Usage information
         if let Some(context) = &conversation.context
-            && let Some(usage) = context.accumulate_usage() {
-                let total_tokens = match usage.total_tokens {
-                    TokenCount::Actual(count) => count,
-                    TokenCount::Approx(count) => count,
-                };
-                let prompt_tokens = match usage.prompt_tokens {
-                    TokenCount::Actual(count) => count,
-                    TokenCount::Approx(count) => count,
-                };
-                let completion_tokens = match usage.completion_tokens {
-                    TokenCount::Actual(count) => count,
-                    TokenCount::Approx(count) => count,
-                };
-                let cached_tokens = match usage.cached_tokens {
-                    TokenCount::Actual(count) => count,
-                    TokenCount::Approx(count) => count,
-                };
+            && let Some(usage) = context.accumulate_usage()
+        {
+            let total_tokens = match usage.total_tokens {
+                TokenCount::Actual(count) => count,
+                TokenCount::Approx(count) => count,
+            };
+            let prompt_tokens = match usage.prompt_tokens {
+                TokenCount::Actual(count) => count,
+                TokenCount::Approx(count) => count,
+            };
+            let completion_tokens = match usage.completion_tokens {
+                TokenCount::Actual(count) => count,
+                TokenCount::Approx(count) => count,
+            };
+            let cached_tokens = match usage.cached_tokens {
+                TokenCount::Actual(count) => count,
+                TokenCount::Approx(count) => count,
+            };
 
-                lines.push(format!(
-                    "│ Tokens: {} total ({} input + {} output, {} cached)",
-                    total_tokens, prompt_tokens, completion_tokens, cached_tokens
-                ));
+            lines.push(format!(
+                "│ Tokens: {} total ({} input + {} output, {} cached)",
+                total_tokens, prompt_tokens, completion_tokens, cached_tokens
+            ));
 
-                if let Some(cost) = usage.cost {
-                    lines.push(format!("│ Cost: ${:.4}", cost));
-                }
+            if let Some(cost) = usage.cost {
+                lines.push(format!("│ Cost: ${:.4}", cost));
             }
+        }
 
         // Bottom border
         lines.push(
