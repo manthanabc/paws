@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use convert_case::{Case, Casing};
 use derive_more::From;
 use eserde::Deserialize;
-use forge_tool_macros::ToolDescription;
+use paws_tool_macros::ToolDescription;
 use schemars::JsonSchema;
 use schemars::schema::RootSchema;
 use serde::Serialize;
@@ -40,7 +40,6 @@ use crate::{ToolCallArguments, ToolCallFull, ToolDefinition, ToolDescription, To
 pub enum ToolCatalog {
     #[serde(alias = "Read")]
     Read(FSRead),
-    ReadImage(ReadImage),
     #[serde(alias = "Write")]
     Write(FSWrite),
     FsSearch(FSSearch),
@@ -72,7 +71,7 @@ fn default_true() -> bool {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_read.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_read.md"]
 pub struct FSRead {
     /// The path of the file to read, always provide absolute paths.
     pub path: String,
@@ -93,8 +92,7 @@ pub struct FSRead {
     pub end_line: Option<i32>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/read_image.md"]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct ReadImage {
     /// The absolute path to the image file (e.g., /home/user/image.png).
     /// Relative paths are not supported. The file must exist and be readable.
@@ -102,7 +100,7 @@ pub struct ReadImage {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_write.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_write.md"]
 pub struct FSWrite {
     /// The path of the file to write to (absolute path required)
     pub path: String,
@@ -121,7 +119,7 @@ pub struct FSWrite {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_search.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_search.md"]
 pub struct FSSearch {
     /// The absolute path of the directory or file to search in. If it's a
     /// directory, it will be searched recursively. If it's a file path,
@@ -180,7 +178,7 @@ impl SearchQuery {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/semantic_search.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/semantic_search.md"]
 pub struct SemanticSearch {
     /// List of search queries to execute in parallel. Using multiple queries
     /// (2-3) with varied phrasings significantly improves results - each query
@@ -197,7 +195,7 @@ pub struct SemanticSearch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_remove.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_remove.md"]
 pub struct FSRemove {
     /// The path of the file to remove (absolute path required)
     pub path: String,
@@ -257,7 +255,7 @@ impl JsonSchema for PatchOperation {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_patch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_patch.md"]
 pub struct FSPatch {
     /// The path to the file to modify
     pub path: String,
@@ -285,20 +283,24 @@ pub struct FSPatch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_undo.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_undo.md"]
 pub struct FSUndo {
     /// The absolute path of the file to revert to its previous state.
     pub path: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/shell.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/shell.md"]
 pub struct Shell {
     /// The shell command to execute.
     pub command: String,
 
     /// The working directory where the command should be executed.
-    pub cwd: PathBuf,
+    /// If not specified, defaults to the current working directory from the
+    /// environment.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<PathBuf>,
 
     /// Whether to preserve ANSI escape codes in the output.
     /// If true, ANSI escape codes will be preserved in the output.
@@ -316,7 +318,7 @@ pub struct Shell {
 
 /// Input type for the net fetch tool
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/net_fetch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/net_fetch.md"]
 pub struct NetFetch {
     /// URL to fetch
     pub url: String,
@@ -328,7 +330,7 @@ pub struct NetFetch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/followup.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/followup.md"]
 pub struct Followup {
     /// Question to ask the user
     pub question: String,
@@ -360,7 +362,7 @@ pub struct Followup {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/plan_create.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/plan_create.md"]
 pub struct PlanCreate {
     /// The name of the plan (will be used in the filename)
     pub plan_name: String,
@@ -374,7 +376,7 @@ pub struct PlanCreate {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/skill_fetch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/skill_fetch.md"]
 pub struct SkillFetch {
     /// The name of the skill to fetch (e.g., "pdf", "code_review")
     pub name: String,
@@ -478,7 +480,6 @@ impl ToolDescription for ToolCatalog {
             ToolCatalog::FsSearch(v) => v.description(),
             ToolCatalog::SemSearch(v) => v.description(),
             ToolCatalog::Read(v) => v.description(),
-            ToolCatalog::ReadImage(v) => v.description(),
             ToolCatalog::Remove(v) => v.description(),
             ToolCatalog::Undo(v) => v.description(),
             ToolCatalog::Write(v) => v.description(),
@@ -525,7 +526,6 @@ impl ToolCatalog {
             ToolCatalog::FsSearch(_) => r#gen.into_root_schema_for::<FSSearch>(),
             ToolCatalog::SemSearch(_) => r#gen.into_root_schema_for::<SemanticSearch>(),
             ToolCatalog::Read(_) => r#gen.into_root_schema_for::<FSRead>(),
-            ToolCatalog::ReadImage(_) => r#gen.into_root_schema_for::<ReadImage>(),
             ToolCatalog::Remove(_) => r#gen.into_root_schema_for::<FSRemove>(),
             ToolCatalog::Undo(_) => r#gen.into_root_schema_for::<FSUndo>(),
             ToolCatalog::Write(_) => r#gen.into_root_schema_for::<FSWrite>(),
@@ -580,12 +580,6 @@ impl ToolCatalog {
                 cwd,
                 message: format!("Read file: {}", display_path_for(&input.path)),
             }),
-            ToolCatalog::ReadImage(input) => Some(crate::policies::PermissionOperation::Read {
-                path: std::path::PathBuf::from(&input.path),
-                cwd,
-                message: format!("Image file: {}", display_path_for(&input.path)),
-            }),
-
             ToolCatalog::Write(input) => Some(crate::policies::PermissionOperation::Write {
                 path: std::path::PathBuf::from(&input.path),
                 cwd,
@@ -650,11 +644,6 @@ impl ToolCatalog {
         }))
     }
 
-    /// Creates a ReadImage tool call with the specified path
-    pub fn tool_call_read_image(path: &str) -> ToolCallFull {
-        ToolCallFull::from(ToolCatalog::ReadImage(ReadImage { path: path.to_string() }))
-    }
-
     /// Creates a Write tool call with the specified path and content
     pub fn tool_call_write(path: &str, content: &str) -> ToolCallFull {
         ToolCallFull::from(ToolCatalog::Write(FSWrite {
@@ -689,7 +678,7 @@ impl ToolCatalog {
     pub fn tool_call_shell(command: &str, cwd: impl Into<PathBuf>) -> ToolCallFull {
         ToolCallFull::from(ToolCatalog::Shell(Shell {
             command: command.to_string(),
-            cwd: cwd.into(),
+            cwd: Some(cwd.into()),
             ..Default::default()
         }))
     }
@@ -793,7 +782,7 @@ impl TryFrom<ToolCallFull> for ToolCatalog {
             .find(|tool| tool.definition().name == normalized_name)
             .map(|tool| {
                 let schema = tool.definition().input_schema;
-                forge_json_repair::coerce_to_schema(parsed_args.clone(), &schema)
+                paws_common::json_repair::coerce_to_schema(parsed_args.clone(), &schema)
             })
             .unwrap_or(parsed_args);
 

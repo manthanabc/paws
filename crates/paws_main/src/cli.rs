@@ -258,6 +258,9 @@ pub struct ExtensionCommandGroup {
 pub enum ExtensionCommand {
     /// Generate ZSH extension script.
     Zsh,
+    /// Generate the right prompt for the shell
+    #[command(hide = true)]
+    Prompt,
 }
 
 /// Command group for MCP server management.

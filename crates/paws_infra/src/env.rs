@@ -73,6 +73,7 @@ impl PawsEnvironmentInfra {
             retry_config,
             max_search_lines: 200,
             max_search_result_bytes: max_bytes.ceil() as usize,
+            max_line_length: 5000,
             fetch_truncation_limit: 40_000,
             max_read_size: 2000,
             stdout_max_prefix_length: 200,
@@ -131,6 +132,10 @@ impl EnvironmentInfra for PawsEnvironmentInfra {
     fn get_env_vars(&self) -> BTreeMap<String, String> {
         // TODO: Maybe cache it?
         std::env::vars().collect()
+    }
+
+    fn is_restricted(&self) -> bool {
+        self.restricted
     }
 }
 

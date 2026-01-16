@@ -59,6 +59,7 @@ pub struct CliProvider(pub AnyProvider);
 
 /// Item for provider selection with optional section separators
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum SelectItem {
     /// Empty line separator
     Separator,

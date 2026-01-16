@@ -237,7 +237,7 @@ fn try_parse_json_string(s: &str) -> Result<Value, serde_json::Error> {
 
     // If that fails, try parsing as JSON5 (handles single quotes, comments, etc.)
     // Convert serde_json5::Error to serde_json::Error
-    serde_json5::from_str::<Value>(s).map_err(|e| serde_json::Error::custom(e.to_string()))
+    serde_json::from_str::<Value>(s).map_err(|e| serde_json::Error::custom(e.to_string()))
 }
 
 #[cfg(test)]

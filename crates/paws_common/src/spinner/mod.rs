@@ -289,6 +289,12 @@ impl SpinnerManager {
         }
         Ok(())
     }
+
+    pub fn reset(&mut self) {
+        self.message = None;
+        self.running = false;
+        self.hidden = false;
+    }
 }
 
 impl Drop for SpinnerManager {

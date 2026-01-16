@@ -2,11 +2,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Context;
-use forge_app::{
+use paws_app::{
     Content, EnvironmentInfra, FileInfoInfra, FileReaderInfra as InfraFsReadService, FsReadService,
     ReadOutput, compute_hash,
 };
-use forge_domain::{FileInfo, Image};
+use paws_domain::{FileInfo, Image};
 
 use crate::range::resolve_range;
 use crate::utils::assert_absolute_path;
@@ -93,16 +93,16 @@ pub async fn assert_file_size<F: FileInfoInfra>(
 /// end_line parameters, ensuring the total range does not exceed 2,000 lines.
 /// Specifying a range exceeding this limit will result in an error. Binary
 /// files are automatically detected and rejected.
-pub struct ForgeFsRead<F>(Arc<F>);
+pub struct PawsFsRead<F>(Arc<F>);
 
-impl<F> ForgeFsRead<F> {
+impl<F> PawsFsRead<F> {
     pub fn new(infra: Arc<F>) -> Self {
         Self(infra)
     }
 }
 
 #[async_trait::async_trait]
-impl<F: FileInfoInfra + EnvironmentInfra + InfraFsReadService> FsReadService for ForgeFsRead<F> {
+impl<F: FileInfoInfra + EnvironmentInfra + InfraFsReadService> FsReadService for PawsFsRead<F> {
     async fn read(
         &self,
         path: String,
@@ -144,7 +144,7 @@ impl<F: FileInfoInfra + EnvironmentInfra + InfraFsReadService> FsReadService for
             let hash = compute_hash(image.url());
 
             return Ok(ReadOutput {
-                content: Content::image(image),
+                content: Content::Image(image),
                 start_line: 0,
                 end_line: 0,
                 total_lines: 0,

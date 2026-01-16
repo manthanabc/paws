@@ -231,6 +231,10 @@ impl<F: EnvironmentInfra> EnvironmentInfra for PawsRepo<F> {
     fn get_env_vars(&self) -> BTreeMap<String, String> {
         self.infra.get_env_vars()
     }
+
+    fn is_restricted(&self) -> bool {
+        self.infra.is_restricted()
+    }
 }
 
 #[async_trait::async_trait]

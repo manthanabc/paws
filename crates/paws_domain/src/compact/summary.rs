@@ -264,15 +264,17 @@ fn extract_tool_info(call: &ToolCallFull) -> Option<SummaryTool> {
 
     match tool {
         ToolCatalog::Read(input) => Some(SummaryTool::FileRead { path: input.path }),
-        ToolCatalog::ReadImage(input) => Some(SummaryTool::FileRead { path: input.path }),
         ToolCatalog::Write(input) => Some(SummaryTool::FileUpdate { path: input.path }),
         ToolCatalog::Patch(input) => Some(SummaryTool::FileUpdate { path: input.path }),
         ToolCatalog::Remove(input) => Some(SummaryTool::FileRemove { path: input.path }),
         ToolCatalog::Shell(input) => Some(SummaryTool::Shell { command: input.command }),
-        ToolCatalog::Search(input) => input
+        ToolCatalog::FsSearch(input) => input
             .file_pattern
             .or(input.regex)
             .map(|pattern| SummaryTool::Search { pattern }),
+        ToolCatalog::SemSearch(input) => Some(SummaryTool::Search {
+            pattern: input.queries.first().map(|q| q.query.clone()).unwrap_or_default(),
+        }),
         ToolCatalog::Undo(input) => Some(SummaryTool::Undo { path: input.path }),
         ToolCatalog::Fetch(input) => Some(SummaryTool::Fetch { url: input.url }),
         ToolCatalog::Followup(input) => Some(SummaryTool::Followup { question: input.question }),

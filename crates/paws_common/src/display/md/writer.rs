@@ -83,6 +83,10 @@ impl MarkdownWriter {
         self.stream(&msg, spn);
     }
 
+    pub fn render(&self, content: &str) -> String {
+        self.renderer.render(content, None)
+    }
+
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
         let mut lines_new: Vec<&str> = content.lines().collect();
         let lines_prev: Vec<String> = self

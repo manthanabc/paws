@@ -3,11 +3,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use console::style;
-use forge_domain::{
+use paws_domain::{
     Agent, AgentId, AgentInput, ChatResponse, ChatResponseContent, Environment, SystemContext,
     ToolCallContext, ToolCallFull, ToolCatalog, ToolDefinition, ToolName, ToolOutput, ToolResult,
 };
-use forge_template::Element;
+use paws_common::template::Element;
 use futures::future::join_all;
 use strum::IntoEnumIterator;
 use tokio::time::timeout;
@@ -19,7 +19,7 @@ use crate::fmt::content::FormatContent;
 use crate::mcp_executor::McpExecutor;
 use crate::tool_executor::ToolExecutor;
 use crate::{
-    EnvironmentService, McpService, PolicyService, Services, ToolResolver, WorkspaceService,
+    EnvironmentService, McpService, PolicyService, Services, ToolResolver,
 };
 
 pub struct ToolRegistry<S> {
@@ -71,7 +71,7 @@ impl<S: Services> ToolRegistry<S> {
 
             // Send custom policy message to the user when a policy file was created
             if let Some(policy_path) = decision.path {
-                use forge_domain::TitleFormat;
+                use paws_domain::TitleFormat;
 
                 use crate::utils::format_display_path;
                 context
@@ -101,7 +101,7 @@ impl<S: Services> ToolRegistry<S> {
 
         // First, try to call a Forge tool
         if ToolCatalog::contains(&input.name) {
-            let tool_input: ToolCatalog = ToolCatalog::try_from(input)?;
+            let tool_input: ToolCatalog = ToolCatalog::try_from(input.clone())?;
             let env = self.services.get_environment();
             if let Some(content) = tool_input.to_content(&env) {
                 context.send(content).await?;
@@ -114,7 +114,7 @@ impl<S: Services> ToolRegistry<S> {
             {
                 // Send formatted output message for policy denial
                 context
-                    .send(forge_domain::TitleFormat::error("Permission Denied"))
+                    .send(paws_domain::TitleFormat::error("Permission Denied"))
                     .await?;
 
                 return Ok(ToolOutput::text(
@@ -124,7 +124,7 @@ impl<S: Services> ToolRegistry<S> {
             }
 
             self.call_with_timeout(&tool_name, || {
-                self.tool_executor.execute(tool_input, context)
+                self.tool_executor.execute(input, context)
             })
             .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
@@ -189,9 +189,10 @@ impl<S: Services> ToolRegistry<S> {
 
         // Check if current working directory is indexed
         let environment = self.services.get_environment();
-        let cwd = environment.cwd.clone();
-        let is_indexed = self.services.is_indexed(&cwd).await.unwrap_or(false);
-        let is_authenticated = self.services.is_authenticated().await.unwrap_or(false);
+        // TODO: Implement is_indexed for Paws when semantic search is added
+        let is_indexed = false;
+        // TODO: Implement is_authenticated for Paws when cloud features are added
+        let is_authenticated = false;
 
         Ok(ToolsOverview::new()
             .system(Self::get_system_tools(
@@ -256,7 +257,7 @@ impl<S> ToolRegistry<S> {
 
 #[cfg(test)]
 mod tests {
-    use forge_domain::{Agent, AgentId, Environment, ModelId, ProviderId, ToolCatalog, ToolName};
+    use paws_domain::{Agent, AgentId, Environment, ModelId, ProviderId, ToolCatalog, ToolName};
     use pretty_assertions::assert_eq;
 
     use crate::error::Error;

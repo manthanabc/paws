@@ -30,10 +30,6 @@ impl FormatContent for ToolCatalog {
                 };
                 Some(TitleFormat::debug("Read").sub_title(subtitle).into())
             }
-            ToolCatalog::ReadImage(input) => {
-                let display_path = display_path_for(&input.path);
-                Some(TitleFormat::debug("Image").sub_title(display_path).into())
-            }
             ToolCatalog::Write(input) => {
                 let path = PathBuf::from(&input.path);
                 let display_path = display_path_for(&input.path);
@@ -48,7 +44,7 @@ impl FormatContent for ToolCatalog {
                 };
                 Some(TitleFormat::debug(title).sub_title(display_path).into())
             }
-            ToolCatalog::Search(input) => {
+            ToolCatalog::FsSearch(input) => {
                 let formatted_dir = display_path_for(&input.path);
                 let title = match (&input.regex, &input.file_pattern) {
                     (Some(regex), Some(pattern)) => {
@@ -95,6 +91,7 @@ impl FormatContent for ToolCatalog {
                     .sub_title(input.name.to_lowercase())
                     .into(),
             ),
+            ToolCatalog::SemSearch(_) => None,
         }
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use forge_domain::{Agent, ToolDefinition, ToolName};
+use paws_domain::{Agent, ToolDefinition, ToolName};
 use glob::Pattern;
 
 /// Service that resolves tool definitions for agents based on their configured
@@ -37,7 +37,7 @@ impl ToolResolver {
         let patterns = Self::build_patterns(agent);
         let mut resolved = self.match_tools(&patterns);
         self.dedupe_tools(&mut resolved);
-        agent.tool_order().sort_refs(&mut resolved);
+        // TODO: Implement tool_order sorting when ToolOrder type is available
         resolved
     }
 
@@ -92,7 +92,7 @@ impl ToolResolver {
 
 #[cfg(test)]
 mod tests {
-    use forge_domain::{Agent, AgentId, ModelId, ProviderId, ToolDefinition, ToolName};
+    use paws_domain::{Agent, AgentId, ModelId, ProviderId, ToolDefinition, ToolName};
     use pretty_assertions::assert_eq;
 
     use super::ToolResolver;

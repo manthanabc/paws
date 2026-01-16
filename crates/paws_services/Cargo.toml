@@ -75,6 +75,9 @@ workspace = true
 [dependencies.strum_macros]
 workspace = true
 
+[dependencies.infer]
+workspace = true
+
 [dependencies.bytes]
 workspace = true
 

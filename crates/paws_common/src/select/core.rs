@@ -4,7 +4,7 @@ use crossterm::cursor;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect};
 
-use crate::{ApplicationCursorKeysGuard, BracketedPasteGuard, CursorRestoreGuard};
+use crate::select::terminal::{ApplicationCursorKeysGuard, BracketedPasteGuard, CursorRestoreGuard};
 
 /// Check if a dialoguer error is an interrupted error (CTRL+C)
 fn is_interrupted_error(err: &dialoguer::Error) -> bool {
@@ -14,7 +14,7 @@ fn is_interrupted_error(err: &dialoguer::Error) -> bool {
 }
 
 /// Centralized dialoguer select functionality with consistent error handling
-pub struct ForgeSelect;
+pub struct PawsSelect;
 
 /// Builder for select prompts with fuzzy search
 pub struct SelectBuilder<T> {
@@ -34,7 +34,7 @@ pub struct SelectBuilderOwned<T> {
     initial_text: Option<String>,
 }
 
-impl ForgeSelect {
+impl PawsSelect {
     /// Create a consistent theme for all select operations without prompt
     /// suffix arrow
     fn default_theme() -> ColorfulTheme {
@@ -140,7 +140,7 @@ impl<T: 'static> SelectBuilder<T> {
 
         // Handle confirm case (bool options)
         if std::any::TypeId::of::<T>() == std::any::TypeId::of::<bool>() {
-            let theme = ForgeSelect::default_theme();
+            let theme = PawsSelect::default_theme();
             let mut confirm = Confirm::with_theme(&theme).with_prompt(&self.message);
 
             if let Some(default) = self.default {
@@ -167,7 +167,7 @@ impl<T: 'static> SelectBuilder<T> {
         // Disable application cursor keys to ensure arrow keys work correctly
         let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
 
-        let theme = ForgeSelect::default_theme();
+        let theme = PawsSelect::default_theme();
 
         // Strip ANSI codes from display strings for better fuzzy search experience
         let display_options: Vec<String> = self
@@ -238,7 +238,7 @@ impl<T> SelectBuilderOwned<T> {
         let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
         // Ensure cursor is visible when prompt completes
         let _cursor_restore_guard = CursorRestoreGuard::new();
-        let theme = ForgeSelect::default_theme();
+        let theme = PawsSelect::default_theme();
 
         // Strip ANSI codes from display strings for better fuzzy search experience
         let display_options: Vec<String> = self
@@ -279,11 +279,16 @@ pub struct InputBuilder {
 }
 
 // Internal type for dialoguer interaction
-#[derive(Clone, derive_more::Display)]
-#[display("{display}")]
+#[derive(Clone)]
 struct MaskedDefault {
     value: String,
     display: String,
+}
+
+impl std::fmt::Display for MaskedDefault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display)
+    }
 }
 
 impl std::str::FromStr for MaskedDefault {
@@ -330,7 +335,7 @@ impl InputBuilder {
         // Ensure cursor is visible when prompt completes
         let _cursor_restore_guard = CursorRestoreGuard::new();
 
-        let theme = ForgeSelect::default_theme();
+        let theme = PawsSelect::default_theme();
 
         // Check if we have both value and display (masked default scenario)
         if let (Some(value), Some(display)) = (self.default, self.default_display) {
@@ -408,7 +413,7 @@ impl<T> MultiSelectBuilder<T> {
         // Ensure cursor is visible when prompt completes
         let _cursor_restore_guard = CursorRestoreGuard::new();
 
-        let theme = ForgeSelect::default_theme();
+        let theme = PawsSelect::default_theme();
         let multi_select = MultiSelect::with_theme(&theme)
             .with_prompt(&self.message)
             .items(&self.options);
@@ -436,28 +441,28 @@ mod tests {
 
     #[test]
     fn test_select_builder_creates() {
-        let builder = ForgeSelect::select("Test", vec!["a", "b", "c"]);
+        let builder = PawsSelect::select("Test", vec!["a", "b", "c"]);
         assert_eq!(builder.message, "Test");
         assert_eq!(builder.options, vec!["a", "b", "c"]);
     }
 
     #[test]
     fn test_confirm_builder_creates() {
-        let builder = ForgeSelect::confirm("Confirm?");
+        let builder = PawsSelect::confirm("Confirm?");
         assert_eq!(builder.message, "Confirm?");
         assert_eq!(builder.options, vec![true, false]);
     }
 
     #[test]
     fn test_input_builder_creates() {
-        let builder = ForgeSelect::input("Enter name:");
+        let builder = PawsSelect::input("Enter name:");
         assert_eq!(builder.message, "Enter name:");
         assert_eq!(builder.allow_empty, false);
     }
 
     #[test]
     fn test_multi_select_builder_creates() {
-        let builder = ForgeSelect::multi_select("Select options:", vec!["a", "b", "c"]);
+        let builder = PawsSelect::multi_select("Select options:", vec!["a", "b", "c"]);
         assert_eq!(builder.message, "Select options:");
         assert_eq!(builder.options, vec!["a", "b", "c"]);
     }
@@ -465,13 +470,13 @@ mod tests {
     #[test]
     fn test_select_builder_with_initial_text() {
         let builder =
-            ForgeSelect::select("Test", vec!["apple", "banana", "cherry"]).with_initial_text("app");
+            PawsSelect::select("Test", vec!["apple", "banana", "cherry"]).with_initial_text("app");
         assert_eq!(builder.initial_text, Some("app".to_string()));
     }
 
     #[test]
     fn test_select_owned_builder_with_initial_text() {
-        let builder = ForgeSelect::select_owned("Test", vec!["apple", "banana", "cherry"])
+        let builder = PawsSelect::select_owned("Test", vec!["apple", "banana", "cherry"])
             .with_initial_text("ban");
         assert_eq!(builder.initial_text, Some("ban".to_string()));
     }

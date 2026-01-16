@@ -39,7 +39,6 @@ impl FormatContent for ToolOperation {
             | ToolOperation::FsCreate { .. }
             | ToolOperation::FsRemove { .. }
             | ToolOperation::FsSearch { .. }
-            | ToolOperation::CodebaseSearch { .. }
             | ToolOperation::FsUndo { .. }
             | ToolOperation::NetFetch { .. }
             | ToolOperation::FollowUp { .. }

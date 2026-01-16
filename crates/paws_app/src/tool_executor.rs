@@ -166,11 +166,6 @@ impl<
 
                 (input, output).into()
             }
-            ToolCatalog::ReadImage(input) => {
-                let normalized_path = self.normalize_path(input.path.clone());
-                let output = self.services.read_image(normalized_path).await?;
-                output.into()
-            }
             ToolCatalog::Write(input) => {
                 let normalized_path = self.normalize_path(input.path.clone());
                 let output = self
@@ -179,7 +174,7 @@ impl<
                     .await?;
                 (input, output).into()
             }
-            ToolCatalog::Search(input) => {
+            ToolCatalog::FsSearch(input) => {
                 let normalized_path = self.normalize_path(input.path.clone());
                 let output = self
                     .services
@@ -190,6 +185,10 @@ impl<
                     )
                     .await?;
                 (input, output).into()
+            }
+            ToolCatalog::SemSearch(_) => {
+                // Semantic search is not implemented in Paws yet
+                anyhow::bail!("Semantic search is not yet supported")
             }
             ToolCatalog::Remove(input) => {
                 let normalized_path = self.normalize_path(input.path.clone());
@@ -215,7 +214,8 @@ impl<
                 (input, output).into()
             }
             ToolCatalog::Shell(input) => {
-                let normalized_cwd = self.normalize_path(input.cwd.display().to_string());
+                let cwd = input.cwd.unwrap_or_else(|| PathBuf::from("."));
+                let normalized_cwd = self.normalize_path(cwd.display().to_string());
                 let output = self
                     .services
                     .execute(
@@ -264,7 +264,7 @@ impl<
             }
             ToolCatalog::Skill(input) => {
                 let skill = self.services.fetch_skill(input.name.clone()).await?;
-                ToolOperation::Skill { output: skill }
+                ToolOperation::Skill { input, output: skill }
             }
         })
     }
