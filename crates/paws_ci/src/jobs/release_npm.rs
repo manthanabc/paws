@@ -28,7 +28,7 @@ pub fn release_npm_job() -> Job {
 fn create_npm_matrix() -> Value {
     serde_json::json!({
         "repository": [
-            "pawscode/npm-paws"
+            "manthanabc/npm-paws"
         ]
     })
 }

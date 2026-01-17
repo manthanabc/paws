@@ -742,7 +742,7 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 
 ## Documentation
 
-For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/pawscode/paws/tree/main/docs).
+For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/manthanabc/paws/tree/main/docs).
 
 ---
 

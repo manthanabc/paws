@@ -1,5 +1,5 @@
 run:
-  - git clone --depth=1 --branch main https://github.com/pawscode/paws
+  - git clone --depth=1 --branch main https://github.com/manthanabc/paws
   - ls -la
   - echo "Forge deployment: $(readlink $(which forgee))"
   - echo '{{message}}'

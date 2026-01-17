@@ -29,7 +29,7 @@ esac
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 if [ "$OS" != "linuxe" ]; then
     echo -e "${RED}This script is not ready yet. please see:${NC}"
-    echo -e "${BLUE}https://github.com/pawscode/paws#installation${NC}"
+    echo -e "${BLUE}https://github.com/manthanabc/paws#installation${NC}"
     exit 1
 fi
 
@@ -45,7 +45,7 @@ fi
 VERSION="${1:-latest}"
 
 # Construct download URL
-DOWNLOAD_URL="https://github.com/pawscode/paws/releases/download/$VERSION/paws-$ARCH-unknown-linux$LIBC_SUFFIX"
+DOWNLOAD_URL="https://github.com/manthanabc/paws/releases/download/$VERSION/paws-$ARCH-unknown-linux$LIBC_SUFFIX"
 
 # Create temp directory
 TMP_DIR=$(mktemp -d)
