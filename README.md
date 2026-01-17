@@ -3,11 +3,26 @@
 
 Do check original ![forge](https://github.com/antimonyhq/forge)
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
-[![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/pawscode/paws/ci.yml?style=for-the-badge)](https://github.com/pawscode/paws/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/pawscode/paws?style=for-the-badge)](https://github.com/pawscode/paws/releases)
  
 [![asciicast](https://asciinema.org/a/Ahhq0trN61YSHssd.svg)](https://asciinema.org/a/Ahhq0trN61YSHssd)
 ---
+
+## Quickstart
+
+To get started with Paws, run the command below:
+
+```bash
+npx pawscode@latest
+```
+
+Or install globally:
+
+```bash
+npm install -g pawscode
+```
+
 <summary>About fork</summary>
 
 Difference so far-
@@ -727,7 +742,7 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 
 ## Documentation
 
-For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/manthanabc/paws/tree/main/docs).
+For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/pawscode/paws/tree/main/docs).
 
 ---
 
