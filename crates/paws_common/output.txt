@@ -1,0 +1,100 @@
+=== Test 1: MarkdownWriter with Spinner Active (No Height Limit) ===
+normal text
+normal text 2
+
+[1A[0J[2m                                           [0m[1mHeader[0m
+[1A[0J
+[0G[0G
+[0G[0G[2mThis is a paragraph[0m
+[1A[0J[2mbuilt from chunks.[0m
+[1A[0J[2m- List item 1[0m
+[1A[0J[2m- List item 2[0m
+[1A[0J[2m- List item 3[0m
+[1A[0J[2m- List item 4[0m
+[1A[0J[2m- List item 5[0m
+[1A[0J[2m- List item 6[0m
+[1A[0J[2mEnd of stream.[0m
+add chunk end
+Done
+
+=== Test 2: MarkdownWriter with Spinner Inactive (No Height Limit) ===
+normal text
+normal text 2
+
+[0J[2m                                           [0m[1mHeader[0m
+[0J
+[0G[0G
+[0G[0G[2mThis is a paragraph[0m
+[0J[2mbuilt from chunks.[0m
+[0J[2m- List item 1[0m
+[0J[2m- List item 2[0m
+[0J[2m- List item 3[0m
+[0J[2m- List item 4[0m
+[0J[2m- List item 5[0m
+[0J[2m- List item 6[0m
+[0J[2mEnd of stream.[0m
+add chunk end
+Done (no spinner)
+
+=== Test 3: MarkdownWriter with Spinner Active (Height Limit = 5) ===
+normal text
+normal text 2
+
+[1A[0J[2m                                           [0m[1mHeader[0m
+[1A[0J
+[0G[0G
+[0G[0G[2mThis is a paragraph[0m
+[1A[0J[2mbuilt from chunks.[0m
+[6A[0J
+[0G[0G
+[0G[0G[2mThis is a paragraph[0m
+[0G[0G[2mbuilt from chunks.[0m
+[0G[0G[2m- List item 1[0m
+[5A[0J[2mThis is a paragraph[0m
+[0G[0G[2mbuilt from chunks.[0m
+[0G[0G[2m- List item 1[0m
+[0G[0G[2m- List item 2[0m
+[6A[0J[2mThis is a paragraph[0m
+[0G[0G[2mbuilt from chunks.[0m
+[0G[0G[2m- List item 1[0m
+[0G[0G[2m- List item 2[0m
+[0G[0G[2m- List item 3[0m
+[6A[0J[2mbuilt from chunks.[0m
+[0G[0G[2m- List item 1[0m
+[0G[0G[2m- List item 2[0m
+[0G[0G[2m- List item 3[0m
+[0G[0G[2m- List item 4[0m
+[6A[0J[2m- List item 1[0m
+[0G[0G[2m- List item 2[0m
+[0G[0G[2m- List item 3[0m
+[0G[0G[2m- List item 4[0m
+[0G[0G[2m- List item 5[0m
+[6A[0J[2m- List item 2[0m
+[0G[0G[2m- List item 3[0m
+[0G[0G[2m- List item 4[0m
+[0G[0G[2m- List item 5[0m
+[0G[0G[2m- List item 6[0m
+[6A[0J[2m- List item 4[0m
+[0G[0G[2m- List item 5[0m
+[0G[0G[2m- List item 6[0m
+[0G[0G[2mEnd of stream.[0m
+add chunk end
+Done
+
+=== Test 4: Control ===
+normal text
+normal text 2
+
+[1A[0J[2m                                           [0m[1mHeader[0m
+[0G[0G
+[0G[0G
+[0G[0G[2mThis is a paragraph[0m
+[0G[0G[2mbuilt from chunks.[0m
+[0G[0G[2m- List item 1[0m
+[0G[0G[2m- List item 2[0m
+[0G[0G[2m- List item 3[0m
+[0G[0G[2m- List item 4[0m
+[0G[0G[2m- List item 5[0m
+[0G[0G[2m- List item 6[0m
+[0G[0G[2mEnd of stream.[0m
+Done
