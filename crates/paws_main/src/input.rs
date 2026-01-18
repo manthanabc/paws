@@ -3,7 +3,7 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use crossterm::cursor::{MoveToColumn, MoveUp};
-use crossterm::event::{Event, EventStream, KeyCode, KeyModifiers};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
 use futures::StreamExt;
@@ -99,6 +99,9 @@ impl Console {
 
             match event {
                 Some(Ok(Event::Key(key_event))) => {
+                    if key_event.kind == KeyEventKind::Release {
+                        continue;
+                    }
                     match key_event.code {
                         KeyCode::Enter => {
                             // Ignore Enter if we're in a paste operation (multiple rapid

@@ -40,7 +40,7 @@ impl PawsPrompt {
 
         write!(
             result,
-            "{} ",
+            "\r{} ",
             mode_style.paint(self.agent_id.as_str().to_case(Case::UpperSnake)),
         )
         .unwrap();
