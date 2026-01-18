@@ -1,4 +1,4 @@
-use forge_json_repair::json_repair;
+use paws_common::json_repair::json_repair;
 use pretty_assertions::assert_eq;
 
 #[test]

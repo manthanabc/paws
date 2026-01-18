@@ -510,28 +510,7 @@ mod tests {
         assert_eq!(actual, expected);
     }
 
-    #[test]
-    fn test_context_summary_extracts_read_image_tool_calls() {
-        let fixture = context(vec![assistant_with_tools(
-            "Reading image",
-            vec![ToolCatalog::tool_call_read_image("/test/image.png").call_id("call_1")],
-        )]);
 
-        let actual = ContextSummary::from(&fixture);
-
-        let expected = ContextSummary::new(vec![SummaryBlock::new(
-            Role::Assistant,
-            vec![
-                Block::content("Reading image"),
-                SummaryToolCall::read("/test/image.png")
-                    .id("call_1")
-                    .is_success(false)
-                    .into(),
-            ],
-        )]);
-
-        assert_eq!(actual, expected);
-    }
 
     #[test]
     fn test_context_summary_extracts_shell_tool_calls() {

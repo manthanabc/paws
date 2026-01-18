@@ -270,6 +270,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let api = Arc::new(f());
         let env = api.environment();
         let command = Arc::new(PawsCommandManager::default());
+        let mut spinner = SpinnerManager::new();
+        let _ctrl_c_rx = spinner.init()?;
         Ok(Self {
             state: Default::default(),
             api,
@@ -277,7 +279,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(),
+            spinner,
             markdown: MarkdownWriter::new(),
         })
     }

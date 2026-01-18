@@ -21,6 +21,10 @@ pub struct MockEnvironmentInfra {}
 
 #[async_trait::async_trait]
 impl EnvironmentInfra for MockEnvironmentInfra {
+    fn is_restricted(&self) -> bool {
+        false
+    }
+
     fn get_environment(&self) -> Environment {
         use fake::{Fake, Faker};
         let max_bytes: f64 = 250.0 * 1024.0; // 250 KB
@@ -522,6 +526,10 @@ impl FileReaderInfra for MockCompositeService {
 
 #[async_trait::async_trait]
 impl EnvironmentInfra for MockCompositeService {
+    fn is_restricted(&self) -> bool {
+        false
+    }
+
     fn get_environment(&self) -> Environment {
         self.env_service.get_environment()
     }

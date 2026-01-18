@@ -139,17 +139,3 @@ jobs:
         AUTO_PUSH: 'true'
         CI: 'true'
         NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-  homebrew_release:
-    needs:
-    - build_release
-    name: homebrew_release
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v6
-      with:
-        repository: antinomyhq/homebrew-code-paws
-        ref: main
-        token: ${{ secrets.HOMEBREW_ACCESS }}
-    - name: Update Homebrew Formula
-      run: GITHUB_TOKEN="${{ secrets.HOMEBREW_ACCESS }}" ./update-formula.sh ${{ github.event.release.tag_name }}

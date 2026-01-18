@@ -90,7 +90,7 @@ impl crate::fs::PawsFS {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use forge_domain::FileInfo;
+    use crate::fs::FileInfo;
     use pretty_assertions::assert_eq;
     use tokio::fs;
 
@@ -198,31 +198,31 @@ mod test {
 
         // Test: end_line = total_lines (exact match)
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 1, 5).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 1, 5).await?;
         assert_eq!(actual_content, content);
         assert_eq!(actual_info, FileInfo::new(1, 5, 5));
 
         // Test: end_line = total_lines + 1 (one beyond)
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 1, 6).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 1, 6).await?;
         assert_eq!(actual_content, content);
         assert_eq!(actual_info, FileInfo::new(1, 5, 5));
 
         // Test: end_line >> total_lines (far beyond)
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 1, 10000).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 1, 10000).await?;
         assert_eq!(actual_content, content);
         assert_eq!(actual_info, FileInfo::new(1, 5, 5));
 
         // Test: range starting in the middle with excessive end_line
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 3, 100).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 3, 100).await?;
         assert_eq!(actual_content, "Line 3\nLine 4\nLine 5");
         assert_eq!(actual_info, FileInfo::new(3, 5, 5));
 
         // Test: reading last line with excessive end_line
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 5, 100).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 5, 100).await?;
         assert_eq!(actual_content, "Line 5");
         assert_eq!(actual_info, FileInfo::new(5, 5, 5));
 
@@ -238,19 +238,19 @@ mod test {
 
         // Test: range within file bounds
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 1, 50).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 1, 50).await?;
         assert_eq!(actual_content.lines().count(), 50);
         assert_eq!(actual_info, FileInfo::new(1, 50, 5000));
 
         // Test: range in the middle
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 2500, 3500).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 2500, 3500).await?;
         assert_eq!(actual_content.lines().count(), 1001); // Lines 2500-3500 inclusive
         assert_eq!(actual_info, FileInfo::new(2500, 3500, 5000));
 
         // Test: end beyond file bounds (simulates max_read_size limiting)
         let (actual_content, actual_info) =
-            crate::ForgeFS::read_range_utf8(file.path(), 4990, 6000).await?;
+            crate::fs::PawsFS::read_range_utf8(file.path(), 4990, 6000).await?;
         assert_eq!(actual_content.lines().count(), 11); // Lines 4990-5000
         assert_eq!(actual_info, FileInfo::new(4990, 5000, 5000));
 
