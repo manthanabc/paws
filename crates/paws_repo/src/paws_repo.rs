@@ -452,4 +452,3 @@ impl<F: StrategyFactory> StrategyFactory for PawsRepo<F> {
             .create_auth_strategy(provider_id, auth_method, required_params)
     }
 }
-

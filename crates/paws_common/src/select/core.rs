@@ -4,7 +4,9 @@ use crossterm::cursor;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect};
 
-use crate::select::terminal::{ApplicationCursorKeysGuard, BracketedPasteGuard, CursorRestoreGuard};
+use crate::select::terminal::{
+    ApplicationCursorKeysGuard, BracketedPasteGuard, CursorRestoreGuard,
+};
 
 /// Check if a dialoguer error is an interrupted error (CTRL+C)
 fn is_interrupted_error(err: &dialoguer::Error) -> bool {

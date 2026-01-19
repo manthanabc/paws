@@ -90,9 +90,10 @@ impl crate::fs::PawsFS {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use crate::fs::FileInfo;
     use pretty_assertions::assert_eq;
     use tokio::fs;
+
+    use crate::fs::FileInfo;
 
     // Helper to create a temporary file with test content
     async fn create_test_file(content: &str) -> Result<tempfile::NamedTempFile> {

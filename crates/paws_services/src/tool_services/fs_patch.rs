@@ -243,7 +243,6 @@ impl<F: FileWriterInfra + SnapshotRepository> FsPatchService for PawsFsPatch<F> 
             after: current_content,
             content_hash,
         })
-
     }
 }
 

@@ -273,7 +273,11 @@ fn extract_tool_info(call: &ToolCallFull) -> Option<SummaryTool> {
             .or(input.regex)
             .map(|pattern| SummaryTool::Search { pattern }),
         ToolCatalog::SemSearch(input) => Some(SummaryTool::Search {
-            pattern: input.queries.first().map(|q| q.query.clone()).unwrap_or_default(),
+            pattern: input
+                .queries
+                .first()
+                .map(|q| q.query.clone())
+                .unwrap_or_default(),
         }),
         ToolCatalog::Undo(input) => Some(SummaryTool::Undo { path: input.path }),
         ToolCatalog::Fetch(input) => Some(SummaryTool::Fetch { url: input.url }),
@@ -509,8 +513,6 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
-
-
 
     #[test]
     fn test_context_summary_extracts_shell_tool_calls() {

@@ -9,7 +9,6 @@ use paws_domain::{
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
     Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation, Provider,
     ProviderId, ResultStream, Scope, SyntaxError, Template, ToolCallFull, ToolOutput, Workflow,
-
 };
 use reqwest::Response;
 use reqwest::header::HeaderMap;

@@ -3,12 +3,12 @@ use std::time::Duration;
 
 use anyhow::Context;
 use console::style;
+use futures::future::join_all;
+use paws_common::template::Element;
 use paws_domain::{
     Agent, AgentId, AgentInput, ChatResponse, ChatResponseContent, Environment, SystemContext,
     ToolCallContext, ToolCallFull, ToolCatalog, ToolDefinition, ToolName, ToolOutput, ToolResult,
 };
-use paws_common::template::Element;
-use futures::future::join_all;
 use strum::IntoEnumIterator;
 use tokio::time::timeout;
 
@@ -18,9 +18,7 @@ use crate::error::Error;
 use crate::fmt::content::FormatContent;
 use crate::mcp_executor::McpExecutor;
 use crate::tool_executor::ToolExecutor;
-use crate::{
-    EnvironmentService, McpService, PolicyService, Services, ToolResolver,
-};
+use crate::{EnvironmentService, McpService, PolicyService, Services, ToolResolver};
 
 pub struct ToolRegistry<S> {
     tool_executor: ToolExecutor<S>,
@@ -99,7 +97,7 @@ impl<S: Services> ToolRegistry<S> {
         tracing::info!(tool_name = %input.name, arguments = %input.arguments.clone().into_string(), "Executing tool call");
         let tool_name = input.name.clone();
 
-        // First, try to call a Forge tool
+        // First, try to call a tool
         if ToolCatalog::contains(&input.name) {
             let tool_input: ToolCatalog = ToolCatalog::try_from(input.clone())?;
             let env = self.services.get_environment();
@@ -123,10 +121,8 @@ impl<S: Services> ToolRegistry<S> {
                 ));
             }
 
-            self.call_with_timeout(&tool_name, || {
-                self.tool_executor.execute(input, context)
-            })
-            .await
+            self.call_with_timeout(&tool_name, || self.tool_executor.execute(input, context))
+                .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
             // Handle agent delegation tool calls
             let agent_input = AgentInput::try_from(&input)?;
@@ -189,23 +185,16 @@ impl<S: Services> ToolRegistry<S> {
 
         // Check if current working directory is indexed
         let environment = self.services.get_environment();
-        // TODO: Implement is_indexed for Paws when semantic search is added
-        let is_indexed = false;
-        // TODO: Implement is_authenticated for Paws when cloud features are added
-        let is_authenticated = false;
 
         Ok(ToolsOverview::new()
-            .system(Self::get_system_tools(
-                is_indexed && is_authenticated,
-                &environment,
-            ))
+            .system(Self::get_system_tools(&environment))
             .agents(agent_tools)
             .mcp(mcp_tools))
     }
 }
 
 impl<S> ToolRegistry<S> {
-    fn get_system_tools(sem_search_supported: bool, env: &Environment) -> Vec<ToolDefinition> {
+    fn get_system_tools(env: &Environment) -> Vec<ToolDefinition> {
         use crate::TemplateEngine;
 
         let handlebars = TemplateEngine::handlebar_instance();
@@ -214,17 +203,8 @@ impl<S> ToolRegistry<S> {
         let ctx = SystemContext { env: Some(env.clone()), ..Default::default() };
 
         ToolCatalog::iter()
-            .filter(|tool| {
-                // Filter out sem_search if cwd is not indexed
-                if matches!(tool, ToolCatalog::SemSearch(_)) {
-                    sem_search_supported
-                } else {
-                    true
-                }
-            })
             .map(|tool| {
                 let mut def = tool.definition();
-                // Render template variables in description
                 if let Ok(rendered) = handlebars.render_template(&def.description, &ctx) {
                     def.description = rendered;
                 }

@@ -316,7 +316,10 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
     }
 
     async fn migrate_env_credentials(&self) -> Result<Option<paws_domain::MigrationResult>> {
-        self.services.provider_service().migrate_env_credentials().await
+        self.services
+            .provider_service()
+            .migrate_env_credentials()
+            .await
     }
 
     fn hydrate_channel(&self) -> Result<()> {

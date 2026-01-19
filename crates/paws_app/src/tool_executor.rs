@@ -4,7 +4,6 @@ use std::sync::Arc;
 use paws_common::template::Element;
 use paws_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput};
 
-
 use crate::fmt::content::FormatContent;
 use crate::operation::{TempContentFiles, ToolOperation};
 use crate::services::ShellService;

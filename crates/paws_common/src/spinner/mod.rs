@@ -74,7 +74,6 @@ impl SpinnerManager {
             let mut status_text = String::new();
             let mut active = false;
             let mut hidden = false;
-            let mut writing_content = false; // Track if we're writing content
             let mut stderr = io::stderr();
 
             loop {
@@ -100,20 +99,16 @@ impl SpinnerManager {
                     }
                     Ok(Cmd::Write(s)) => {
                         if active {
-                            // Hide spinner if not already hidden and not already writing
-                            if !hidden && !writing_content {
-                                term(execute!(
-                                    stderr,
-                                    cursor::MoveToColumn(0),
-                                    Clear(ClearType::CurrentLine),
-                                    cursor::Show
-                                ));
-                                let _ = disable_raw_mode();
-                                writing_content = true;
+                            term(execute!(
+                                stderr,
+                                cursor::MoveToColumn(0),
+                                Clear(ClearType::CurrentLine)
+                            ));
+                            println!("{}", s);
+                            if !hidden {
+                                let elapsed = start_time.elapsed().as_secs();
+                                render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                             }
-                            
-                            // Print the content (write_ln already adds newlines)
-                            print!("{}", s);
                             let _ = io::stdout().flush();
                         } else {
                             println!("{}", s);
@@ -130,7 +125,6 @@ impl SpinnerManager {
                             let _ = io::stdout().flush();
                             let _ = disable_raw_mode();
                             hidden = true;
-                            writing_content = false; // Reset writing flag when explicitly hidden
                         }
                     }
                     Ok(Cmd::Show) => {
@@ -141,7 +135,6 @@ impl SpinnerManager {
                             let elapsed = start_time.elapsed().as_secs();
                             render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                             hidden = false;
-                            writing_content = false; // Reset writing flag when shown
                         }
                     }
                     Ok(Cmd::Stop(tx)) => {
@@ -156,7 +149,6 @@ impl SpinnerManager {
                             let _ = disable_raw_mode();
                             active = false;
                             hidden = false;
-                            writing_content = false;
                         }
                         // Signal that we have stopped
                         let _ = tx.send(());

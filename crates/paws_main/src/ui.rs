@@ -7,13 +7,16 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
+use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
     ChatResponse, CodeRequest, Conversation, ConversationId, DeviceCodeRequest, Event,
-    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, UserPrompt, Workflow,
+    InterruptionReason, Model, ModelId, Provider, ProviderId, TextMessage, ToolCatalog, UserPrompt,
+    Workflow,
 };
-use paws_app::utils::{format_display_path, truncate_key};
 use paws_app::ToolResolver;
+use paws_app::fmt::content::FormatContent;
+use paws_app::utils::{format_display_path, truncate_key};
 use paws_common::display::md::MarkdownWriter;
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
@@ -21,26 +24,23 @@ use paws_common::spinner::SpinnerManager;
 use paws_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, TokenCount, UserCommand,
 };
-use merge::Merge;
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
 
-use crate::cli::{
-    Cli, ConversationCommand, ListCommand, McpCommand, TopLevelCommand,
-};
+use crate::banner;
+use crate::cli::{Cli, ConversationCommand, ListCommand, McpCommand, TopLevelCommand};
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
 use crate::info::Info;
 use crate::input::Console;
-use crate::model::{CliModel, CliProvider, PawsCommandManager, SlashCommand};
+use crate::model::{CliModel, CliProvider, PawsCommandManager, SelectItem, SlashCommand};
 use crate::porcelain::Porcelain;
-use crate::prompt::PawsPrompt;
+use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
 use crate::update::on_update;
-use crate::banner;
 
 // File-specific constants
 const MISSING_AGENT_TITLE: &str = "<missing agent.title>";
@@ -136,6 +136,8 @@ pub struct UI<A, F: Fn() -> A> {
     command: Arc<PawsCommandManager>,
     cli: Cli,
     spinner: SpinnerManager,
+    ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
+    thinking_start: Option<std::time::Instant>,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -193,30 +195,36 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     /// Displays banner only if user is in interactive mode.
     async fn display_banner(&self) -> Result<()> {
         if self.cli.is_interactive() {
-            let version = env!("CARGO_PKG_VERSION").to_string();
-            
-            let model = self.api.get_default_model().await
-                .map(|m| m.to_string())
-                .unwrap_or_else(|| "Unknown".to_string());
-                
-            let provider = self.api.get_default_provider().await
-                .map(|p| p.id.to_string())
-                .unwrap_or_else(|_| "Unknown".to_string());
-
-            let conversation_id = self.state.conversation_id
-                .map(|id| id.into_string())
-                .unwrap_or_else(|| "New Session".to_string());
-
-            let info = banner::BannerInfo {
-                model,
-                provider,
-                version,
-                conversation_id,
-            };
-            
-            banner::display(&info)?;
+            let info = self.get_banner_info().await;
+            banner::display(&info)?
         }
         Ok(())
+    }
+
+    async fn get_banner_info(&self) -> banner::BannerInfo {
+        let version = env!("CARGO_PKG_VERSION").to_string();
+
+        let model = self
+            .api
+            .get_default_model()
+            .await
+            .map(|m| m.to_string())
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let provider = self
+            .api
+            .get_default_provider()
+            .await
+            .map(|p| p.id.to_string())
+            .unwrap_or_else(|_| "Unknown".to_string());
+
+        let conversation_id = self
+            .state
+            .conversation_id
+            .map(|id| id.into_string())
+            .unwrap_or_else(|| "New Session".to_string());
+
+        banner::BannerInfo { model, provider, version, conversation_id }
     }
 
     // Handle creating a new conversation
@@ -271,7 +279,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let env = api.environment();
         let command = Arc::new(PawsCommandManager::default());
         let mut spinner = SpinnerManager::new();
-        let _ctrl_c_rx = spinner.init()?;
+        let ctrl_c_rx = spinner.init()?;
         Ok(Self {
             state: Default::default(),
             api,
@@ -280,19 +288,42 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             cli,
             command,
             spinner,
+            ctrl_c_rx,
             markdown: MarkdownWriter::new(),
+            thinking_start: None,
         })
     }
 
     async fn prompt(&self) -> Result<SlashCommand> {
+        // Get usage from current conversation if available
+        let _usage = if let Some(conversation_id) = &self.state.conversation_id {
+            self.api
+                .conversation(conversation_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|conv| conv.accumulated_usage())
+        } else {
+            None
+        };
+
         // Prompt the user for input
         let agent_id = self.api.get_active_agent().await.unwrap_or_default();
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
-        let git_branch = crate::prompt::get_git_branch();
-        let forge_prompt = PawsPrompt { cwd: self.state.cwd.clone(), agent_id, model, git_branch };
-        self.console.prompt(forge_prompt).await
+
+        let paws_prompt = PawsPrompt {
+            cwd: self.state.cwd.clone(),
+            model,
+            agent_id,
+            git_branch: get_git_branch(),
+        };
+        let command = self.console.prompt(paws_prompt).await?;
+
+        // Make space
+        println!();
+        Ok(command)
     }
 
     pub async fn run(&mut self) {
@@ -333,47 +364,59 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             return self.handle_dispatch(dispatch_json).await;
         }
 
-        // Handle direct prompt or piped input if provided (raw text messages)
-        let input = self.cli.prompt.clone().or(self.cli.piped_input.clone());
-        if let Some(input) = input {
-            self.spinner.start(None)?;
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("User interrupted operation with Ctrl+C");
-                    self.spinner.stop(None)?;
-                    return Ok(());
-                }
-                result = self.on_message(Some(input)) => {
-                    result?;
-                }
-            }
-            return Ok(());
-        }
+        // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
+        let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
 
-        // Get initial input from prompt
-        let mut command = self.prompt().await;
+        // Get initial input from prompt or CLI
+        let mut command =
+            if let Some(prompt) = self.cli.prompt.clone().or(self.cli.piped_input.clone()) {
+                Ok(SlashCommand::Message(prompt))
+            } else {
+                self.prompt().await
+            };
+
+        let is_interactive = self.cli.is_interactive();
 
         loop {
             match command {
-                Ok(command) => {
-                    tokio::select! {
-                        _ = tokio::signal::ctrl_c() => {
-                            tracing::info!("User interrupted operation with Ctrl+C");
-                        }
-                        result = self.on_command(command) => {
-                            match result {
-                                Ok(exit) => if exit {return Ok(())},
-                                Err(error) => {
-                                    tracing::error!(error = ?error);
-                                    self.spinner.stop(None)?;
-                                    self.writeln_to_stderr(TitleFormat::error(format!("{error:?}")).display().to_string())?;
-                                },
+                Ok(ref cmd) => match cmd {
+                    SlashCommand::Resize => {
+                        self.on_resize().await?;
+                    }
+                    _ => {
+                        let result = tokio::select! {
+                            _ = tokio::signal::ctrl_c() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            _ = ctrl_c_rx.recv() => {
+                                self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
+                                Ok(false)
+                            }
+                            res = self.on_command(cmd.clone()) => res,
+                        };
+
+                        match result {
+                            Ok(exit) => {
+                                if exit || !is_interactive {
+                                    return Ok(());
+                                }
+                            }
+                            Err(error) => {
+                                tracing::error!(error = ?error);
+                                self.spinner.stop(None)?;
+                                self.writeln_to_stderr(
+                                    TitleFormat::error(format!("{error:?}"))
+                                        .display()
+                                        .to_string(),
+                                )?;
+                                if !is_interactive {
+                                    return Ok(());
+                                }
                             }
                         }
                     }
-
-                    self.spinner.stop(None)?;
-                }
+                },
                 Err(error) => {
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
@@ -384,7 +427,25 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
+            self.markdown.reset();
         }
+    }
+
+    async fn on_resize(&mut self) -> Result<()> {
+        println!("\x1b[3J\x1b[2J\x1b[H");
+        eprintln!("\x1b[3J\x1b[2J\x1b[H");
+        let conversation_id = self.init_conversation().await?;
+        let conversation = self
+            .api
+            .conversation(&conversation_id)
+            .await
+            .unwrap()
+            .expect("IDK why this happened, do report");
+
+        self.display_banner().await?;
+        self.on_print_conversation(conversation.clone()).await?;
+        self.on_show_conv_info(conversation).await?;
+        Ok(())
     }
 
     // Improve startup time by hydrating caches
@@ -597,23 +658,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln(data?)?;
                 }
             }
-            TopLevelCommand::Extension(extension) => {
-                match extension.command {
-                    crate::cli::ExtensionCommand::Zsh => {
-                        let script = crate::zsh_plugin::generate_zsh_plugin()?;
-                        println!("{}", script);
-                    }
-                    crate::cli::ExtensionCommand::Prompt => {
-                        if let Some(prompt) = self.handle_zsh_rprompt_command().await {
-                            print!("{}", prompt);
-                        }
+            TopLevelCommand::Extension(extension) => match extension.command {
+                crate::cli::ExtensionCommand::Zsh => {
+                    let script = crate::zsh_plugin::generate_zsh_plugin()?;
+                    println!("{}", script);
+                }
+                crate::cli::ExtensionCommand::Prompt => {
+                    if let Some(prompt) = self.handle_zsh_rprompt_command().await {
+                        print!("{}", prompt);
                     }
                 }
-            }
-            TopLevelCommand::Banner => {
-                // Banner display was removed in Paws
-                self.writeln("Banner command is not available in Paws")?;
-            }
+            },
+            TopLevelCommand::Banner => {}
         }
         Ok(())
     }
@@ -769,25 +825,64 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             self.api.get_provider(id).await?
         } else {
             // Fetch all providers for selection
-            let providers = self
-                .api
-                .get_providers()
-                .await?
-                .into_iter()
-                .map(CliProvider)
-                .collect::<Vec<_>>();
+            let providers = self.api.get_providers().await?;
 
-            // Sort the providers by their display names
-            let mut sorted_providers = providers;
-            sorted_providers.sort_by_key(|a| a.to_string());
+            let suggested_ids = [
+                "opencode_zen",
+                "antigravity-proxy",
+                "zai_coding",
+                "open_router",
+                "claude_code",
+                "github_copilot",
+            ];
+
+            // Split providers into suggested and others
+            let (suggested, others): (Vec<_>, Vec<_>) = providers
+                .into_iter()
+                .partition(|p| suggested_ids.contains(&p.id().as_ref().as_ref()));
+
+            // Sort suggested by the order in suggested_ids, then others alphabetically
+            let suggested: Vec<_> = suggested
+                .into_iter()
+                .map(|p| (p.id().as_ref().as_ref().to_string(), p))
+                .collect();
+
+            let suggested: Vec<_> = suggested_ids
+                .iter()
+                .filter_map(|id| {
+                    suggested
+                        .iter()
+                        .find(|(p_id, _)| p_id == id)
+                        .map(|(_, p)| p)
+                })
+                .cloned()
+                .map(CliProvider)
+                .collect();
+
+            let mut others: Vec<_> = others.into_iter().map(CliProvider).collect();
+            others.sort_by_key(|a| a.to_string());
+
+            // Build selection list with separator after suggested
+            let mut select_items: Vec<SelectItem> = vec![];
+            select_items.extend(
+                suggested
+                    .into_iter()
+                    .map(|p| SelectItem::Provider(Box::new(p))),
+            );
+            select_items.push(SelectItem::Separator);
+            select_items.extend(
+                others
+                    .into_iter()
+                    .map(|p| SelectItem::Provider(Box::new(p))),
+            );
 
             // Use the centralized select module
-            match PawsSelect::select("Select a provider to login:", sorted_providers)
+            match PawsSelect::select("Select a provider to login:", select_items)
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
                 .prompt()?
             {
-                Some(provider) => provider.0,
-                None => {
+                Some(SelectItem::Provider(provider)) => provider.0,
+                _ => {
                     self.writeln_title(TitleFormat::info("Cancelled"))?;
                     return Ok(());
                 }
@@ -1115,7 +1210,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    /// Lists only custom commands (used by `forge run`)
+    /// Lists only custom commands (used by `paws run`)
     async fn on_show_custom_commands(&mut self, porcelain: bool) -> anyhow::Result<()> {
         let custom_commands = self.api.get_commands().await?;
         let mut info = Info::new();
@@ -1417,14 +1512,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             let conversation_id = conversation.id;
             self.state.conversation_id = Some(conversation_id);
 
-            // Show conversation content
-            self.on_show_last_message(conversation).await?;
-
             // Print log about conversation switching
             self.writeln_title(TitleFormat::info(format!(
                 "Switched to conversation {}",
                 conversation_id.into_string().bold()
             )))?;
+
+            // Show conversation
+            self.on_print_conversation(conversation).await?;
 
             // Show conversation info
             self.on_info(false, Some(conversation_id)).await?;
@@ -1491,6 +1586,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
+            SlashCommand::Resume => {
+                self.handle_resume_conversation().await?;
+            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1526,17 +1624,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             SlashCommand::Paws => {
                 self.on_agent_change(AgentId::PAWS).await?;
-            }
-            SlashCommand::Resume => {
-                 if let Some(conv) = self.api.last_conversation().await? {
-                     self.state.conversation_id = Some(conv.id);
-                     self.writeln_title(TitleFormat::info(format!("Resumed conversation: {}", conv.id)))?;
-                 } else {
-                     self.writeln_title(TitleFormat::error("No previous conversation found"))?;
-                 }
-            }
-            SlashCommand::Resize => {
-                // No-op
             }
             SlashCommand::Help => {
                 let info = Info::from(self.command.as_ref());
@@ -1642,6 +1729,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     ));
                 }
             }
+            SlashCommand::Resize => {
+                return Ok(false);
+            }
         }
 
         Ok(false)
@@ -1661,6 +1751,21 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn handle_delete_conversation(&mut self) -> anyhow::Result<()> {
         let conversation_id = self.init_conversation().await?;
         self.on_conversation_delete(conversation_id).await?;
+        Ok(())
+    }
+
+    async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
+        let last_conversation = self
+            .api
+            .last_conversation()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+
+        self.state.conversation_id = Some(last_conversation.id);
+        self.writeln_title(TitleFormat::info(format!(
+            "Resumed conversation: {}",
+            last_conversation.id
+        )))?;
         Ok(())
     }
 
@@ -2278,7 +2383,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // only call on_update if this is the first initialization
             on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
             if !workflow.commands.is_empty() {
-                self.writeln_title(TitleFormat::error("forge.yaml commands are deprecated. Use .md files in forge/ (home) or .forge/ (project) instead"))?;
+                self.writeln_title(TitleFormat::error(".yaml commands are deprecated. Use .md files in .paws/ (home) or .paws/ (project) instead"))?;
             }
         }
 
@@ -2361,7 +2466,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 Ok(message) => self.handle_chat_response(message).await?,
                 Err(err) => {
                     self.spinner.stop(None)?;
-                    self.spinner.reset();
                     return Err(err);
                 }
             }
@@ -2428,17 +2532,28 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         match message {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
-                ChatResponseContent::PlainText(text) => self.writeln(text)?,
+                ChatResponseContent::PlainText(text) => {
+                    let lines: Vec<&str> = text.lines().collect();
+                    let tail = lines.iter().rev().take(5).rev();
+
+                    let formatted = tail
+                        .map(|line| format!("  {}", line))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        + "\n";
+
+                    self.writeln(formatted.dimmed())?;
+                }
                 ChatResponseContent::Markdown(text) => {
-                    tracing::info!(message = %text, "Agent Response");
-                    self.writeln(self.markdown.render(&text))?;
+                    self.finish_thinking().await?;
+                    self.markdown.add_chunk(&text, &mut self.spinner)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
-                self.spinner.stop(None)?;
+                self.markdown.reset();
+                self.finish_thinking().await?;
             }
             ChatResponse::ToolCallEnd(_toolcall_result) => {
-                self.spinner.start(None)?;
                 if !self.cli.verbose {
                     return Ok(());
                 }
@@ -2466,17 +2581,39 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
-                    let rendered_content = self.markdown.render(&content);
-                    self.writeln(rendered_content.dimmed())?;
+                    if self.thinking_start.is_none() {
+                        self.thinking_start = Some(std::time::Instant::now());
+                        let max_h = (self.markdown.height() as f64 * 0.4) as usize;
+                        self.markdown.set_max_height(Some(max_h));
+                    }
+                    self.markdown
+                        .add_chunk_dimmed(&content, &mut self.spinner)?;
                 }
             }
             ChatResponse::TaskComplete => {
-                if let Some(conversation_id) = self.state.conversation_id {
+                self.finish_thinking().await?;
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Ok(conversation) =
+                        self.validate_conversation_exists(&conversation_id).await
+                {
                     self.writeln_title(
                         TitleFormat::debug("Finished").sub_title(conversation_id.into_string()),
                     )?;
+                    self.on_show_conv_info(conversation).await?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    async fn finish_thinking(&mut self) -> Result<()> {
+        if let Some(start) = self.thinking_start.take() {
+            let duration = start.elapsed();
+
+            self.markdown
+                .clear(&mut self.spinner, duration.as_secs_f64());
+
+            self.markdown.set_max_height(None);
         }
         Ok(())
     }
@@ -2498,8 +2635,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.spinner.start(Some("Loading Summary"))?;
 
         let info = Info::default().extend(&conversation);
-        self.writeln(info)?;
         self.spinner.stop(None)?;
+        self.writeln(info)?;
 
         Ok(())
     }
@@ -2605,9 +2742,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    fn update_model(&mut self, _model: Option<ModelId>) {
-        // tracker::set_model(model.to_string());
-    }
+    fn update_model(&mut self, _model: Option<ModelId>) {}
 
     async fn on_custom_event(&mut self, event: Event) -> Result<()> {
         let conversation_id = self.init_conversation().await?;
@@ -2793,11 +2928,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
     }
 
-    /// Shows the last message from a conversation
-    ///
-    /// # Errors
-    /// - If the conversation doesn't exist
-    /// - If the conversation has no messages
     async fn on_show_last_message(&mut self, conversation: Conversation) -> Result<()> {
         let context = conversation
             .context
@@ -2814,12 +2944,85 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Format and display the message using the message_display module
         if let Some(message) = message {
-            self.writeln(self.markdown.render(message))?;
+            self.markdown.add_chunk(message, &mut self.spinner)?;
         }
 
         Ok(())
     }
+    /// Prints the conversation history
+    async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
+        let Some(context) = conversation.context else {
+            return Ok(());
+        };
+        // Create new markdown writer, (which will be based on current terminal size)
+        self.markdown = MarkdownWriter::new();
+        for message in &context.messages {
+            match &**message {
+                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
+                    match role {
+                        Role::User => {
+                            let content_to_show = message
+                                .as_value()
+                                .and_then(|v| v.as_user_prompt())
+                                .map(|p| p.as_str().to_string())
+                                .unwrap_or_else(|| content.clone());
 
+                            let paws_prompt = PawsPrompt {
+                                cwd: self.state.cwd.clone(),
+                                agent_id: AgentId::default(),
+                                model: model.clone(),
+                                git_branch: None,
+                            };
+                            let full_prompt = paws_prompt.render_prompt();
+
+                            self.writeln("")?;
+                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+                                self.writeln(header)?;
+                                for line in content_to_show.lines() {
+                                    self.writeln(format!("{}{}", prefix, line))?;
+                                }
+                            } else {
+                                self.writeln(full_prompt)?;
+                                for line in content_to_show.lines() {
+                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
+                                }
+                            }
+                            self.writeln("")?;
+                        }
+                        Role::Assistant => {
+                            if !content.is_empty() {
+                                self.markdown.add_chunk(content, &mut self.spinner)?;
+                                self.markdown.reset();
+                            }
+                            // Show tool calls if any
+                            if let Some(calls) = tool_calls {
+                                for call in calls {
+                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                        && let Some(content) =
+                                            catalog.to_content(&self.api.environment())
+                                    {
+                                        match content {
+                                            ChatResponseContent::Title(title) => {
+                                                self.writeln_title(title)?;
+                                            }
+                                            ChatResponseContent::PlainText(text)
+                                            | ChatResponseContent::Markdown(text) => {
+                                                self.writeln(text)?;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                ContextMessage::Tool(_result) => {}
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 
     /// Handle credential migration
     async fn handle_migrate_credentials(&mut self) -> Result<()> {
@@ -2845,12 +3048,4 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    // Note: Tests for confirm_delete_conversation are disabled because
-    // PawsSelect::confirm is not easily mockable in the current
-    // architecture. The functionality is tested through integration tests
-    // instead.
 }
