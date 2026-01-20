@@ -10,7 +10,8 @@ https://discord.gg/9EGrd4s9fe)
 
 Do check original ![forge](https://github.com/antimonyhq/forge)
 
- 
+<img width="901" height="592" alt="screenshot" src="https://github.com/user-attachments/assets/8f6dd4ee-fe36-4078-8eec-35acfd5c5198" />
+
 [![asciicast](https://asciinema.org/a/Ahhq0trN61YSHssd.svg)](https://asciinema.org/a/Ahhq0trN61YSHssd)
 ---
 
