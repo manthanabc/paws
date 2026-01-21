@@ -3043,39 +3043,26 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     /// Renders a header for the transcript view showing conversation metadata
     /// and controls.
     fn render_transcript_header(&self, conversation: &Conversation) -> Vec<String> {
-        let mut lines = vec![];
+        let mut info = Info::new();
 
-        // Top border
-        lines.push(
-            "┌─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
-
-        // Title row
-        lines.push("│ Transcript Mode".to_string());
-
-        // Separator
-        lines.push(
-            "├─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
+        info = info.add_title("TRANSCRIPT");
 
         // Conversation info
         let id = conversation.id.to_string();
         let id_display = format!("{}...", &id[..id.len().min(8)]);
-        lines.push(format!("│ ID: {}", id_display));
+        info = info.add_key_value("ID", id_display);
 
         if let Some(title) = &conversation.title {
-            lines.push(format!("│ Title: {}", title));
+            info = info.add_key_value("Title", title);
         }
 
         let created_at = conversation.metadata.created_at;
         let formatted = created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
-        lines.push(format!("│ Created: {}", formatted));
+        info = info.add_key_value("Created", formatted);
 
         if let Some(updated_at) = conversation.metadata.updated_at {
             let formatted = updated_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
-            lines.push(format!("│ Updated: {}", formatted));
+            info = info.add_key_value("Updated", formatted);
         }
 
         // Message count
@@ -3084,7 +3071,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .as_ref()
             .map(|c| c.messages.len())
             .unwrap_or(0);
-        lines.push(format!("│ Messages: {}", msg_count));
+        info = info.add_key_value("Messages", msg_count);
 
         // Usage information
         if let Some(context) = &conversation.context
@@ -3107,26 +3094,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 TokenCount::Approx(count) => count,
             };
 
-            lines.push(format!(
-                "│ Tokens: {} total ({} input + {} output, {} cached)",
-                total_tokens, prompt_tokens, completion_tokens, cached_tokens
-            ));
+            info = info.add_key_value(
+                "Tokens",
+                format!("{} total ({} input + {} output, {} cached)", total_tokens, prompt_tokens, completion_tokens, cached_tokens)
+            );
 
             if let Some(cost) = usage.cost {
-                lines.push(format!("│ Cost: ${:.4}", cost));
+                info = info.add_key_value("Cost", format!("${:.4}", cost));
             }
         }
 
-        // Bottom border
-        lines.push(
-            "└─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
-
-        // Empty line after header
-        lines.push(String::new());
-
-        lines
+        // Convert Info to string and split into lines
+        let info_string = info.to_string();
+        info_string.lines().map(|s| s.to_string()).collect()
     }
 
     /// Prints the conversation history
@@ -3299,34 +3279,39 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     /// Renders a summary for the transcript view showing additional info at the
     /// end.
     fn render_transcript_summary(&self, conversation: &Conversation) -> Vec<String> {
-        let mut lines = vec![];
+        let mut info = Info::new();
 
-        // Empty line before summary
-        lines.push(String::new());
+        info = info.add_title("SUMMARY");
 
-        // Top border
-        lines.push(
-            "┌─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
+        // Add task summary from conversation (similar to Info::from(&Conversation))
+        let mut user_messages = conversation
+            .context
+            .iter()
+            .flat_map(|ctx| ctx.messages.iter())
+            .filter(|message| message.has_role(Role::User));
 
-        // Title row
-        lines.push("│ Summary".to_string());
+        let task = user_messages.next();
 
-        // Separator
-        lines.push(
-            "├─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
+        if let Some(task) = task
+            && let Some(task) = crate::info::format_user_message(task)
+        {
+            info = info.add_key_value("Tasks", task);
+
+            for feedback in user_messages {
+                if let Some(feedback) = crate::info::format_user_message(feedback) {
+                    info = info.add_value(feedback);
+                }
+            }
+        }
 
         // File operations from metrics
         if !conversation.metrics.file_operations.is_empty() {
-            lines.push("│ File Operations:".to_string());
+            info = info.add_key_value("File Operations", "");
             for (path, operation) in &conversation.metrics.file_operations {
-                lines.push(format!("│   • {} - {}", path, operation.tool));
+                info = info.add_value(format!("• {} - {}", path, operation.tool));
                 if operation.lines_added > 0 || operation.lines_removed > 0 {
-                    lines.push(format!(
-                        "│     Lines: +{} / -{}",
+                    info = info.add_value(format!(
+                        "  Lines: +{} / -{}",
                         operation.lines_added, operation.lines_removed
                     ));
                 }
@@ -3340,23 +3325,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 let secs = duration.as_secs();
                 let mins = secs / 60;
                 let hours = mins / 60;
-                if hours > 0 {
-                    lines.push(format!("│ Session Duration: {}h {}m", hours, mins % 60));
+                let duration_str = if hours > 0 {
+                    format!("{}h {}m", hours, mins % 60)
                 } else if mins > 0 {
-                    lines.push(format!("│ Session Duration: {}m {}s", mins, secs % 60));
+                    format!("{}m {}s", mins, secs % 60)
                 } else {
-                    lines.push(format!("│ Session Duration: {}s", secs));
-                }
+                    format!("{}s", secs)
+                };
+                info = info.add_key_value("Session Duration", duration_str);
             }
         }
 
-        // Bottom border
-        lines.push(
-            "└─────────────────────────────────────────────────────────────────────────────"
-                .to_string(),
-        );
-
-        lines
+        // Convert Info to string and split into lines
+        let info_string = info.to_string();
+        info_string.lines().map(|s| s.to_string()).collect()
     }
 
     fn draw_transcript_viewport(

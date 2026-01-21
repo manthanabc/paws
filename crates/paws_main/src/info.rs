@@ -258,6 +258,36 @@ impl IntoInfoValue for String {
     }
 }
 
+impl IntoInfoValue for usize {
+    fn into_value(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl IntoInfoValue for u32 {
+    fn into_value(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl IntoInfoValue for u64 {
+    fn into_value(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl IntoInfoValue for i32 {
+    fn into_value(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl IntoInfoValue for i64 {
+    fn into_value(self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
 impl IntoInfoValue for crate::display_constants::CommandType {
     fn into_value(self) -> Option<String> {
         Some(self.to_string())
@@ -715,7 +745,7 @@ pub fn format_reset_time(seconds: u64) -> String {
 }
 
 /// Extracts the first line of raw content from a context message.
-fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
+pub(crate) fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
     let content = msg
         .as_value()
         .and_then(|v| v.as_user_prompt())
