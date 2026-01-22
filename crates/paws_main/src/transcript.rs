@@ -6,7 +6,6 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::Utc;
 use colored::Colorize;
-use console;
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers,
     MouseEventKind,
@@ -156,7 +155,7 @@ impl TranscriptRenderer {
                     Role::Assistant => {
                         // Show full thinking/reasoning
                         if let Some(reasoning) = &text_message.reasoning_details {
-                            for (_idx, detail) in reasoning.iter().enumerate() {
+                            for detail in reasoning.iter() {
                                 // Try text field first, then decode data field if it's base64
                                 let decoded_data = detail.data.as_ref().and_then(|data| {
                                     STANDARD
@@ -569,17 +568,16 @@ impl TranscriptRenderer {
                                 current_match_idx = None;
                             }
                             KeyCode::Char('n') => {
-                                if !matches.is_empty() {
-                                    if let Some(curr) = current_match_idx {
+                                if !matches.is_empty()
+                                    && let Some(curr) = current_match_idx {
                                         let next = (curr + 1) % matches.len();
                                         current_match_idx = Some(next);
                                         scroll_offset = matches[next].saturating_sub(2);
                                     }
-                                }
                             }
                             KeyCode::Char('N') => {
-                                if !matches.is_empty() {
-                                    if let Some(curr) = current_match_idx {
+                                if !matches.is_empty()
+                                    && let Some(curr) = current_match_idx {
                                         let prev = if curr == 0 {
                                             matches.len() - 1
                                         } else {
@@ -588,7 +586,6 @@ impl TranscriptRenderer {
                                         current_match_idx = Some(prev);
                                         scroll_offset = matches[prev].saturating_sub(2);
                                     }
-                                }
                             }
                             KeyCode::Char('p') | KeyCode::Char('P') => {
                                 self.print(&conversation)?;
@@ -614,9 +611,7 @@ impl TranscriptRenderer {
                                 )?;
                             }
                             KeyCode::Up | KeyCode::Char('k') => {
-                                if scroll_offset > 0 {
-                                    scroll_offset -= 1;
-                                }
+                                scroll_offset = scroll_offset.saturating_sub(1);
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
                                 let content_height = height.saturating_sub(1) as usize;
