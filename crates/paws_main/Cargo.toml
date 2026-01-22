@@ -36,6 +36,9 @@ workspace = true
 [dependencies.merge]
 workspace = true
 
+[dependencies.tempfile]
+workspace = true
+
 [dependencies.tokio]
 workspace = true
 

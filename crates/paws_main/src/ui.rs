@@ -1,20 +1,12 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-use chrono::Utc;
 use colored::Colorize;
 use convert_case::{Case, Casing};
-use crossterm::event::{
-    DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers, MouseEventKind,
-};
-use crossterm::{cursor, execute, terminal};
 use merge::Merge;
 use paws_api::{
     API, AgentId, AnyProvider, ApiKeyRequest, AuthContextRequest, AuthContextResponse, ChatRequest,
@@ -30,7 +22,7 @@ use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
 use paws_domain::{
-    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, TokenCount, UserCommand,
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
 use tokio_stream::StreamExt;
 use tracing::debug;
@@ -50,6 +42,7 @@ use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
+use crate::transcript::TranscriptRenderer;
 use crate::update::on_update;
 
 // File-specific constants
@@ -1686,167 +1679,15 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 return Ok(false);
             }
             SlashCommand::Transcript => {
-                // Enter alternate screen and enable mouse capture
-                execute!(
-                    std::io::stdout(),
-                    terminal::EnterAlternateScreen,
-                    EnableMouseCapture
-                )?;
-
-                // print conversation transcript version
                 if let Some(conversation_id) = self.state.conversation_id
                     && let Some(conversation) = self.api.conversation(&conversation_id).await?
                 {
-                    let mut lines = self.render_transcript(conversation.clone()).await?;
-
-                    // Add header with usage info and controls
-                    let header_lines = self.render_transcript_header(&conversation);
-                    lines.splice(0..0, header_lines);
-
-                    // Add summary at the end
-                    lines.push(String::new());
-                    let summary_lines = self.render_transcript_summary(&conversation);
-                    lines.extend(summary_lines);
-
-                    let mut scroll_offset = 0;
-                    let (_width, mut height) = terminal::size()?;
-
-                    // Initial draw
-                    self.draw_transcript_viewport(&lines, scroll_offset, height as usize)?;
-
-                    let mut reader = EventStream::new();
-                    loop {
-                        let event = reader.next().await;
-                        match event {
-                            Some(Ok(crossterm::event::Event::Key(key_event))) => {
-                                if key_event.code == KeyCode::Esc
-                                    || (key_event.code == KeyCode::Char('o')
-                                        && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                                    || (key_event.code == KeyCode::Char('c')
-                                        && key_event.modifiers.contains(KeyModifiers::CONTROL))
-                                {
-                                    break;
-                                }
-
-                                match key_event.code {
-                                    KeyCode::Char('p') | KeyCode::Char('P') => {
-                                        // Print transcript to stdout
-                                        self.on_print_transcript(conversation.clone()).await?;
-                                    }
-                                    KeyCode::Up => {
-                                        if scroll_offset > 0 {
-                                            scroll_offset -= 1;
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                    }
-                                    KeyCode::Down => {
-                                        let content_height = height.saturating_sub(1) as usize;
-                                        if scroll_offset + content_height < lines.len() {
-                                            scroll_offset += 1;
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                    }
-                                    KeyCode::PageUp => {
-                                        let content_height = height.saturating_sub(1) as usize;
-                                        scroll_offset =
-                                            scroll_offset.saturating_sub(content_height);
-                                        self.draw_transcript_viewport(
-                                            &lines,
-                                            scroll_offset,
-                                            height as usize,
-                                        )?;
-                                    }
-                                    KeyCode::PageDown => {
-                                        let content_height = height.saturating_sub(1) as usize;
-                                        scroll_offset = (scroll_offset + content_height)
-                                            .min(lines.len().saturating_sub(content_height));
-                                        self.draw_transcript_viewport(
-                                            &lines,
-                                            scroll_offset,
-                                            height as usize,
-                                        )?;
-                                    }
-                                    KeyCode::Home => {
-                                        scroll_offset = 0;
-                                        self.draw_transcript_viewport(
-                                            &lines,
-                                            scroll_offset,
-                                            height as usize,
-                                        )?;
-                                    }
-                                    KeyCode::End => {
-                                        let content_height = height.saturating_sub(1) as usize;
-                                        scroll_offset = lines.len().saturating_sub(content_height);
-                                        self.draw_transcript_viewport(
-                                            &lines,
-                                            scroll_offset,
-                                            height as usize,
-                                        )?;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            Some(Ok(crossterm::event::Event::Mouse(mouse_event))) => {
-                                let content_height = height.saturating_sub(1) as usize;
-                                match mouse_event.kind {
-                                    MouseEventKind::ScrollUp => {
-                                        if scroll_offset > 0 {
-                                            scroll_offset = scroll_offset.saturating_sub(3);
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                    }
-                                    MouseEventKind::ScrollDown => {
-                                        if scroll_offset + content_height < lines.len() {
-                                            scroll_offset = (scroll_offset + 3)
-                                                .min(lines.len().saturating_sub(content_height));
-                                            self.draw_transcript_viewport(
-                                                &lines,
-                                                scroll_offset,
-                                                height as usize,
-                                            )?;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            Some(Ok(crossterm::event::Event::Resize(_w, h))) => {
-                                height = h;
-                                // Re-render because wrapping depends on width
-                                lines = self.render_transcript(conversation.clone()).await?;
-                                let header_lines = self.render_transcript_header(&conversation);
-                                lines.splice(0..0, header_lines);
-                                let summary_lines = self.render_transcript_summary(&conversation);
-                                lines.extend(summary_lines);
-                                let content_height = height.saturating_sub(1) as usize;
-                                scroll_offset =
-                                    scroll_offset.min(lines.len().saturating_sub(content_height));
-                                self.draw_transcript_viewport(
-                                    &lines,
-                                    scroll_offset,
-                                    height as usize,
-                                )?;
-                            }
-                            _ => {}
-                        }
-                    }
+                    let mut renderer = TranscriptRenderer::new(
+                        self.state.cwd.clone(),
+                        self.api.environment().clone(),
+                    );
+                    renderer.run(conversation).await?;
                 }
-                execute!(
-                    std::io::stdout(),
-                    DisableMouseCapture,
-                    terminal::LeaveAlternateScreen
-                )?;
             }
         }
 
@@ -3043,76 +2884,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     /// Renders a header for the transcript view showing conversation metadata
     /// and controls.
-    fn render_transcript_header(&self, conversation: &Conversation) -> Vec<String> {
-        let mut info = Info::new();
-
-        info = info.add_title("TRANSCRIPT");
-
-        // Conversation info
-        let id = conversation.id.to_string();
-        let id_display = format!("{}...", &id[..id.len().min(8)]);
-        info = info.add_key_value("ID", id_display);
-
-        if let Some(title) = &conversation.title {
-            info = info.add_key_value("Title", title);
-        }
-
-        let created_at = conversation.metadata.created_at;
-        let formatted = created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
-        info = info.add_key_value("Created", formatted);
-
-        if let Some(updated_at) = conversation.metadata.updated_at {
-            let formatted = updated_at.format("%Y-%m-%d %H:%M:%S UTC").to_string();
-            info = info.add_key_value("Updated", formatted);
-        }
-
-        // Message count
-        let msg_count = conversation
-            .context
-            .as_ref()
-            .map(|c| c.messages.len())
-            .unwrap_or(0);
-        info = info.add_key_value("Messages", msg_count.to_string());
-
-        // Usage information
-        if let Some(context) = &conversation.context
-            && let Some(usage) = context.accumulate_usage()
-        {
-            let total_tokens = match usage.total_tokens {
-                TokenCount::Actual(count) => count,
-                TokenCount::Approx(count) => count,
-            };
-            let prompt_tokens = match usage.prompt_tokens {
-                TokenCount::Actual(count) => count,
-                TokenCount::Approx(count) => count,
-            };
-            let completion_tokens = match usage.completion_tokens {
-                TokenCount::Actual(count) => count,
-                TokenCount::Approx(count) => count,
-            };
-            let cached_tokens = match usage.cached_tokens {
-                TokenCount::Actual(count) => count,
-                TokenCount::Approx(count) => count,
-            };
-
-            info = info.add_key_value(
-                "Tokens",
-                format!(
-                    "{} total ({} input + {} output, {} cached)",
-                    total_tokens, prompt_tokens, completion_tokens, cached_tokens
-                ),
-            );
-
-            if let Some(cost) = usage.cost {
-                info = info.add_key_value("Cost", format!("${:.4}", cost));
-            }
-        }
-
-        // Convert Info to string and split into lines
-        let info_string = info.to_string();
-        info_string.lines().map(|s| s.to_string()).collect()
-    }
-
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
         let Some(context) = conversation.context else {
@@ -3167,287 +2938,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
         }
 
-        Ok(())
-    }
-
-    /// Renders the transcript of the conversation to a list of lines
-    async fn render_transcript(&self, conversation: Conversation) -> Result<Vec<String>> {
-        let mut lines = Vec::new();
-        let Some(context) = conversation.context else {
-            return Ok(lines);
-        };
-
-        use crossterm::style::Attribute;
-        use paws_common::display::md::render::{MarkdownRenderer, crossterm};
-        let renderer = MarkdownRenderer::default();
-
-        for message in &context.messages {
-            if let ContextMessage::Text(text_message) = &**message {
-                match text_message.role {
-                    Role::User => {
-                        let user_lines = self.format_user_message(text_message);
-                        lines.extend(user_lines);
-                    }
-                    Role::Assistant => {
-                        // Show full thinking/reasoning
-                        debug!(
-                            "Transcript: Assistant message has reasoning_details: {:?}",
-                            text_message.reasoning_details.is_some()
-                        );
-                        if let Some(reasoning) = &text_message.reasoning_details {
-                            debug!("Transcript: Found {} reasoning details", reasoning.len());
-                            for (idx, detail) in reasoning.iter().enumerate() {
-                                debug!(
-                                    "Reasoning detail {}: text={:?}, data={:?}, type_of={:?}",
-                                    idx,
-                                    detail.text.is_some(),
-                                    detail.data.is_some(),
-                                    detail.type_of
-                                );
-
-                                // Try text field first, then decode data field if it's base64
-                                let decoded_data = detail.data.as_ref().and_then(|data| {
-                                    // Try to decode as base64
-                                    STANDARD
-                                        .decode(data)
-                                        .ok()
-                                        .and_then(|bytes| String::from_utf8(bytes).ok())
-                                });
-
-                                let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
-
-                                if let Some(text) = reasoning_text {
-                                    // Show reasoning type header if available
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {}",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed()
-                                        ));
-                                    }
-                                    let rendered = renderer.render(text, Some(Attribute::Dim));
-                                    for line in rendered.lines() {
-                                        lines.push(line.to_string());
-                                    }
-                                } else if detail.data.is_some() {
-                                    // Show placeholder for encrypted/undecodable reasoning
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {} (encrypted, {} bytes)",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed(),
-                                            detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
-                                        ));
-                                    }
-                                }
-                            }
-                        }
-
-                        if !text_message.content.is_empty() {
-                            let rendered = renderer.render(&text_message.content, None);
-                            for line in rendered.lines() {
-                                lines.push(line.to_string());
-                            }
-                        }
-
-                        // Show tool calls using the same formatting as normal mode
-                        if let Some(calls) = &text_message.tool_calls {
-                            for call in calls {
-                                if let Ok(catalog) = ToolCatalog::try_from(call.clone())
-                                    && let Some(content) =
-                                        catalog.to_content(&self.api.environment())
-                                {
-                                    match content {
-                                        ChatResponseContent::Title(title) => {
-                                            lines.push(title.display().to_string());
-                                        }
-                                        ChatResponseContent::PlainText(text)
-                                        | ChatResponseContent::Markdown(text) => {
-                                            for line in text.lines() {
-                                                lines.push(line.to_string());
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        Ok(lines)
-    }
-
-    /// Renders a summary for the transcript view showing additional info at the
-    /// end.
-    fn render_transcript_summary(&self, conversation: &Conversation) -> Vec<String> {
-        let mut info = Info::new();
-
-        info = info.add_title("SUMMARY");
-
-        // Add task summary from conversation (similar to Info::from(&Conversation))
-        let mut user_messages = conversation
-            .context
-            .iter()
-            .flat_map(|ctx| ctx.messages.iter())
-            .filter(|message| message.has_role(Role::User));
-
-        let task = user_messages.next();
-
-        if let Some(task) = task
-            && let Some(task) = crate::info::format_user_message(task)
-        {
-            info = info.add_key_value("Tasks", task);
-
-            for feedback in user_messages {
-                if let Some(feedback) = crate::info::format_user_message(feedback) {
-                    info = info.add_value(feedback);
-                }
-            }
-        }
-
-        // File operations from metrics
-        if !conversation.metrics.file_operations.is_empty() {
-            info = info.add_key_value("File Operations", "");
-
-            // Collect and sort operations
-            let mut operations: Vec<_> = conversation.metrics.file_operations.iter().collect();
-            operations.sort_by(|(path_a, op_a), (path_b, op_b)| {
-                // simple priority grouping
-                let get_priority = |op: &paws_domain::FileOperation| match op.tool {
-                    paws_domain::ToolKind::Remove => 0,
-                    paws_domain::ToolKind::Patch => 1,
-                    paws_domain::ToolKind::Write => 2,
-                    paws_domain::ToolKind::Undo => 3,
-                    paws_domain::ToolKind::Read => 4,
-                    _ => 5,
-                };
-
-                let priority_a = get_priority(op_a);
-                let priority_b = get_priority(op_b);
-
-                if priority_a != priority_b {
-                    priority_a.cmp(&priority_b)
-                } else {
-                    path_a.cmp(path_b)
-                }
-            });
-
-            for (path, operation) in operations {
-                // Determine operation type letter and color
-                let (op_letter, op_color) = match operation.tool {
-                    paws_domain::ToolKind::Write => ('w', colored::Color::Green),
-                    paws_domain::ToolKind::Patch => ('p', colored::Color::Yellow),
-                    paws_domain::ToolKind::Remove => ('d', colored::Color::Red),
-                    paws_domain::ToolKind::Undo => ('u', colored::Color::Blue),
-                    paws_domain::ToolKind::Read => ('r', colored::Color::Cyan),
-                    _ => ('?', colored::Color::White),
-                };
-
-                // Shorten path to top level or two levels
-                let short_path = std::path::Path::new(path)
-                    .components()
-                    .rev()
-                    .take(2)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .collect::<std::path::PathBuf>()
-                    .display()
-                    .to_string();
-
-                // Format line changes with fixed width alignment
-                // Format: " +123/-123" (max expected ~4 digits) -> width 11
-                let line_changes = if operation.lines_added > 0 || operation.lines_removed > 0 {
-                    format!(" +{}/-{}", operation.lines_added, operation.lines_removed)
-                } else {
-                    String::new()
-                };
-
-                let op_display = format!("[{}]", op_letter).color(op_color).bold();
-                let lines_display = if !line_changes.is_empty() {
-                    format!("{:<12}", line_changes).dimmed()
-                } else {
-                    format!("{:<12}", "").dimmed()
-                };
-
-                info = info.add_value(format!("  {} {}{}", op_display, lines_display, short_path));
-            }
-        }
-
-        // Session duration
-        if conversation.metrics.started_at.is_some() {
-            let now = Utc::now();
-            if let Some(duration) = conversation.metrics.duration(now) {
-                let secs = duration.as_secs();
-                let mins = secs / 60;
-                let hours = mins / 60;
-                let duration_str = if hours > 0 {
-                    format!("{}h {}m", hours, mins % 60)
-                } else if mins > 0 {
-                    format!("{}m {}s", mins, secs % 60)
-                } else {
-                    format!("{}s", secs)
-                };
-                info = info.add_key_value("Session Duration", duration_str);
-            }
-        }
-
-        // Convert Info to string and split into lines
-        let info_string = info.to_string();
-        info_string.lines().map(|s| s.to_string()).collect()
-    }
-
-    fn draw_transcript_viewport(
-        &self,
-        lines: &[String],
-        offset: usize,
-        height: usize,
-    ) -> Result<()> {
-        let mut stdout = std::io::stdout();
-        execute!(
-            stdout,
-            terminal::Clear(terminal::ClearType::All),
-            cursor::MoveTo(0, 0)
-        )?;
-
-        // Reserve space for footer (1 line at the bottom)
-        let content_height = height.saturating_sub(1);
-
-        // Draw content
-        let end = (offset + content_height).min(lines.len());
-        for i in offset..end {
-            write!(stdout, "{}\r\n", lines[i])?;
-        }
-
-        // Draw footer at the actual last line
-        execute!(stdout, cursor::MoveTo(0, (height - 1) as u16))?;
-        let footer = " P: Print | Ctrl+O or Esc to exit ".dimmed().to_string();
-        let footer_line = format!("└{}{}", "─".repeat(79 - footer.len()), footer);
-        write!(stdout, "{}", footer_line)?;
-
-        stdout.flush()?;
-        Ok(())
-    }
-
-    /// Prints the transcript version of the conversation
-    pub async fn on_print_transcript(&mut self, conversation: Conversation) -> Result<()> {
-        let mut lines = self.render_transcript(conversation.clone()).await?;
-
-        // Add header
-        let header_lines = self.render_transcript_header(&conversation);
-        lines.splice(0..0, header_lines);
-
-        // Add summary
-        lines.push(String::new());
-        let summary_lines = self.render_transcript_summary(&conversation);
-        lines.extend(summary_lines);
-
-        for line in lines {
-            self.writeln(line)?;
-        }
         Ok(())
     }
 }

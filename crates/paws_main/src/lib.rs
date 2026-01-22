@@ -11,6 +11,7 @@ mod sandbox;
 mod state;
 mod title_display;
 mod tools_display;
+mod transcript;
 
 mod ui;
 mod utils;
