@@ -258,36 +258,6 @@ impl IntoInfoValue for String {
     }
 }
 
-impl IntoInfoValue for usize {
-    fn into_value(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
-impl IntoInfoValue for u32 {
-    fn into_value(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
-impl IntoInfoValue for u64 {
-    fn into_value(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
-impl IntoInfoValue for i32 {
-    fn into_value(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
-impl IntoInfoValue for i64 {
-    fn into_value(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
-
 impl IntoInfoValue for crate::display_constants::CommandType {
     fn into_value(self) -> Option<String> {
         Some(self.to_string())

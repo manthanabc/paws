@@ -1704,6 +1704,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     lines.splice(0..0, header_lines);
 
                     // Add summary at the end
+                    lines.push(String::new());
                     let summary_lines = self.render_transcript_summary(&conversation);
                     lines.extend(summary_lines);
 
@@ -3071,7 +3072,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .as_ref()
             .map(|c| c.messages.len())
             .unwrap_or(0);
-        info = info.add_key_value("Messages", msg_count);
+        info = info.add_key_value("Messages", msg_count.to_string());
 
         // Usage information
         if let Some(context) = &conversation.context
@@ -3096,7 +3097,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
             info = info.add_key_value(
                 "Tokens",
-                format!("{} total ({} input + {} output, {} cached)", total_tokens, prompt_tokens, completion_tokens, cached_tokens)
+                format!(
+                    "{} total ({} input + {} output, {} cached)",
+                    total_tokens, prompt_tokens, completion_tokens, cached_tokens
+                ),
             );
 
             if let Some(cost) = usage.cost {
@@ -3307,14 +3311,69 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // File operations from metrics
         if !conversation.metrics.file_operations.is_empty() {
             info = info.add_key_value("File Operations", "");
-            for (path, operation) in &conversation.metrics.file_operations {
-                info = info.add_value(format!("• {} - {}", path, operation.tool));
-                if operation.lines_added > 0 || operation.lines_removed > 0 {
-                    info = info.add_value(format!(
-                        "  Lines: +{} / -{}",
-                        operation.lines_added, operation.lines_removed
-                    ));
+
+            // Collect and sort operations
+            let mut operations: Vec<_> = conversation.metrics.file_operations.iter().collect();
+            operations.sort_by(|(path_a, op_a), (path_b, op_b)| {
+                // simple priority grouping
+                let get_priority = |op: &paws_domain::FileOperation| match op.tool {
+                    paws_domain::ToolKind::Remove => 0,
+                    paws_domain::ToolKind::Patch => 1,
+                    paws_domain::ToolKind::Write => 2,
+                    paws_domain::ToolKind::Undo => 3,
+                    paws_domain::ToolKind::Read => 4,
+                    _ => 5,
+                };
+
+                let priority_a = get_priority(op_a);
+                let priority_b = get_priority(op_b);
+
+                if priority_a != priority_b {
+                    priority_a.cmp(&priority_b)
+                } else {
+                    path_a.cmp(path_b)
                 }
+            });
+
+            for (path, operation) in operations {
+                // Determine operation type letter and color
+                let (op_letter, op_color) = match operation.tool {
+                    paws_domain::ToolKind::Write => ('w', colored::Color::Green),
+                    paws_domain::ToolKind::Patch => ('p', colored::Color::Yellow),
+                    paws_domain::ToolKind::Remove => ('d', colored::Color::Red),
+                    paws_domain::ToolKind::Undo => ('u', colored::Color::Blue),
+                    paws_domain::ToolKind::Read => ('r', colored::Color::Cyan),
+                    _ => ('?', colored::Color::White),
+                };
+
+                // Shorten path to top level or two levels
+                let short_path = std::path::Path::new(path)
+                    .components()
+                    .rev()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect::<std::path::PathBuf>()
+                    .display()
+                    .to_string();
+
+                // Format line changes with fixed width alignment
+                // Format: " +123/-123" (max expected ~4 digits) -> width 11
+                let line_changes = if operation.lines_added > 0 || operation.lines_removed > 0 {
+                    format!(" +{}/-{}", operation.lines_added, operation.lines_removed)
+                } else {
+                    String::new()
+                };
+
+                let op_display = format!("[{}]", op_letter).color(op_color).bold();
+                let lines_display = if !line_changes.is_empty() {
+                    format!("{:<12}", line_changes).dimmed()
+                } else {
+                    format!("{:<12}", "").dimmed()
+                };
+
+                info = info.add_value(format!("  {} {}{}", op_display, lines_display, short_path));
             }
         }
 
@@ -3382,6 +3441,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         lines.splice(0..0, header_lines);
 
         // Add summary
+        lines.push(String::new());
         let summary_lines = self.render_transcript_summary(&conversation);
         lines.extend(summary_lines);
 
