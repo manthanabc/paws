@@ -569,23 +569,25 @@ impl TranscriptRenderer {
                             }
                             KeyCode::Char('n') => {
                                 if !matches.is_empty()
-                                    && let Some(curr) = current_match_idx {
-                                        let next = (curr + 1) % matches.len();
-                                        current_match_idx = Some(next);
-                                        scroll_offset = matches[next].saturating_sub(2);
-                                    }
+                                    && let Some(curr) = current_match_idx
+                                {
+                                    let next = (curr + 1) % matches.len();
+                                    current_match_idx = Some(next);
+                                    scroll_offset = matches[next].saturating_sub(2);
+                                }
                             }
                             KeyCode::Char('N') => {
                                 if !matches.is_empty()
-                                    && let Some(curr) = current_match_idx {
-                                        let prev = if curr == 0 {
-                                            matches.len() - 1
-                                        } else {
-                                            curr - 1
-                                        };
-                                        current_match_idx = Some(prev);
-                                        scroll_offset = matches[prev].saturating_sub(2);
-                                    }
+                                    && let Some(curr) = current_match_idx
+                                {
+                                    let prev = if curr == 0 {
+                                        matches.len() - 1
+                                    } else {
+                                        curr - 1
+                                    };
+                                    current_match_idx = Some(prev);
+                                    scroll_offset = matches[prev].saturating_sub(2);
+                                }
                             }
                             KeyCode::Char('p') | KeyCode::Char('P') => {
                                 self.print(&conversation)?;
