@@ -3,14 +3,24 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 use crossterm::cursor::{MoveToColumn, MoveUp};
-use crossterm::event::{Event, EventStream, KeyCode, KeyModifiers};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
 use futures::StreamExt;
 use paws_api::Environment;
+use serde::{Deserialize, Serialize};
 
 use crate::model::{PawsCommandManager, SlashCommand};
 use crate::prompt::PawsPrompt;
+
+/// A single history entry with timestamp and command text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HistoryEntry {
+    /// ISO 8601 timestamp when the command was entered.
+    timestamp: String,
+    /// The command text (may contain newlines).
+    text: String,
+}
 
 /// Console implementation for handling user input via command line.
 #[derive(Clone)]
@@ -40,7 +50,15 @@ impl Console {
         reader
             .lines()
             .map_while(Result::ok)
-            .filter(|line| !line.trim().is_empty())
+            .filter_map(|line| {
+                let entry: HistoryEntry = serde_json::from_str(&line).ok()?;
+                let trimmed = entry.text.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            })
             .collect()
     }
 
@@ -62,12 +80,17 @@ impl Console {
             let _ = fs::create_dir_all(parent);
         }
 
+        let entry = HistoryEntry {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            text: line.to_string(),
+        };
+
         if let Ok(mut file) = OpenOptions::new()
             .append(true)
             .create(true)
             .open(history_path)
         {
-            let _ = writeln!(file, "{}", line);
+            let _ = writeln!(file, "{}", serde_json::to_string(&entry).unwrap());
         }
     }
 }
@@ -99,6 +122,9 @@ impl Console {
 
             match event {
                 Some(Ok(Event::Key(key_event))) => {
+                    if key_event.kind == KeyEventKind::Release {
+                        continue;
+                    }
                     match key_event.code {
                         KeyCode::Enter => {
                             // Ignore Enter if we're in a paste operation (multiple rapid
@@ -110,7 +136,8 @@ impl Console {
                             if is_paste {
                                 paste_timer = now;
                                 buffer.push('\n');
-                                println!("\r");
+                                print!("\r\n");
+                                io::stdout().flush()?;
                                 continue;
                             }
 
@@ -135,20 +162,22 @@ impl Console {
                                 if history_index == history.len() {
                                     temp_buffer = buffer.clone();
                                 }
+                                let old_buffer = buffer.clone();
                                 history_index -= 1;
                                 buffer = history[history_index].clone();
-                                self.redraw_buffer(&prompt, &buffer)?;
+                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
                         KeyCode::Down => {
                             if history_index < history.len() {
+                                let old_buffer = buffer.clone();
                                 history_index += 1;
                                 if history_index == history.len() {
                                     buffer = temp_buffer.clone();
                                 } else {
                                     buffer = history[history_index].clone();
                                 }
-                                self.redraw_buffer(&prompt, &buffer)?;
+                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
                         KeyCode::Char('c')
@@ -156,7 +185,7 @@ impl Console {
                         {
                             buffer.clear();
                             history_index = history.len();
-                            println!("\r");
+                            print!("\r\n");
                             print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
                             io::stdout().flush()?;
                             continue;
@@ -209,15 +238,22 @@ impl Console {
         Ok(SlashCommand::Exit)
     }
 
-    fn redraw_buffer(&self, prompt: &PawsPrompt, buffer: &str) -> anyhow::Result<()> {
+    fn redraw_buffer(
+        &self,
+        prompt: &PawsPrompt,
+        buffer: &str,
+        old_buffer: &str,
+    ) -> anyhow::Result<()> {
         let mut stdout = io::stdout();
 
         let rendered_prompt = prompt.render_prompt().replace('\n', "\r\n");
         let prompt_lines = rendered_prompt.matches("\r\n").count();
+        let buffer_lines = old_buffer.matches('\n').count();
+        let total_lines = prompt_lines + buffer_lines;
 
         // Move cursor up to first line of prompt
-        if prompt_lines > 0 {
-            execute!(stdout, MoveUp(prompt_lines as u16))?;
+        if total_lines > 0 {
+            execute!(stdout, MoveUp(total_lines as u16))?;
         }
 
         // Now move to beginning of line and clear everything below
@@ -226,9 +262,171 @@ impl Console {
 
         // Re-render prompt + buffer
         print!("{}", rendered_prompt);
-        print!("{}", buffer);
+        print!("{}", buffer.replace('\n', "\r\n"));
 
         stdout.flush()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use fake::{Fake, Faker};
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn test_history_entry_serialization() {
+        let entry = HistoryEntry {
+            timestamp: "2024-01-14T12:00:00Z".to_string(),
+            text: "test command".to_string(),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+        let deserialized: HistoryEntry = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(entry.timestamp, deserialized.timestamp);
+        assert_eq!(entry.text, deserialized.text);
+    }
+
+    #[test]
+    fn test_history_entry_with_newlines() {
+        let entry = HistoryEntry {
+            timestamp: "2024-01-14T12:00:00Z".to_string(),
+            text: "line 1\nline 2\nline 3".to_string(),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+        let deserialized: HistoryEntry = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(entry.text, deserialized.text);
+        assert_eq!(deserialized.text.lines().count(), 3);
+    }
+
+    #[test]
+    fn test_load_and_save_history() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        let history_path = temp_dir.path().join(".paws_history");
+
+        // Write a multi-line entry
+        let entry1 = HistoryEntry {
+            timestamp: "2024-01-14T12:00:00Z".to_string(),
+            text: "first command\nsecond line".to_string(),
+        };
+
+        let entry2 = HistoryEntry {
+            timestamp: "2024-01-14T12:01:00Z".to_string(),
+            text: "simple command".to_string(),
+        };
+
+        fs::write(
+            &history_path,
+            format!(
+                "{}\n{}\n",
+                serde_json::to_string(&entry1).unwrap(),
+                serde_json::to_string(&entry2).unwrap()
+            ),
+        )
+        .unwrap();
+
+        let history = console.load_history();
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0], "first command\nsecond line");
+        assert_eq!(history[1], "simple command");
+    }
+
+    #[test]
+    fn test_append_history_creates_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        console.append_history("single line");
+        console.append_history("line 1\nline 2");
+
+        let history_path = temp_dir.path().join(".paws_history");
+        let content = fs::read_to_string(&history_path).unwrap();
+
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2);
+
+        let entry1: HistoryEntry = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(entry1.text, "single line");
+        assert!(chrono::DateTime::parse_from_rfc3339(&entry1.timestamp).is_ok());
+
+        let entry2: HistoryEntry = serde_json::from_str(lines[1]).unwrap();
+        assert_eq!(entry2.text, "line 1\nline 2");
+    }
+
+    #[test]
+    fn test_duplicate_prevention() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        console.append_history("test command");
+        console.append_history("test command"); // Duplicate
+        console.append_history("test command"); // Another duplicate
+
+        let history = console.load_history();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0], "test command");
+    }
+
+    #[test]
+    fn test_empty_commands_filtered() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        console.append_history("");
+        console.append_history("   ");
+        console.append_history("valid command");
+
+        let history = console.load_history();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0], "valid command");
+    }
+
+    #[test]
+    fn test_multiline_history_newlines_preserved() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut env: Environment = Faker.fake();
+        env.base_path = temp_dir.path().to_path_buf();
+        env.custom_history_path = None;
+
+        let command = Arc::new(PawsCommandManager::default());
+        let console = Console::new(env, command);
+
+        let multiline = "line 1\nline 2\nline 3";
+        console.append_history(multiline);
+
+        let history = console.load_history();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0], multiline);
+        assert_eq!(history[0].lines().count(), 3);
     }
 }

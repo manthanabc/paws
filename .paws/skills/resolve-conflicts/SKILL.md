@@ -358,7 +358,7 @@ Key decisions:
 - Regenerated lock files
 - [other significant decisions from plan]
 
-Co-Authored-By: ForgeCode <noreply@forgecode.dev>"
+Co-Authored-By: Paws <noreply@pawscode.dev>
 ```
 
 ## Decision Tracking

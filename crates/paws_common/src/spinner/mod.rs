@@ -104,7 +104,7 @@ impl SpinnerManager {
                                 cursor::MoveToColumn(0),
                                 Clear(ClearType::CurrentLine)
                             ));
-                            println!("{}", s);
+                            println!("\r{}", s);
                             if !hidden {
                                 let elapsed = start_time.elapsed().as_secs();
                                 render_spinner_line(spinner_frames[idx], &status_text, elapsed);
@@ -112,7 +112,7 @@ impl SpinnerManager {
                                 let _ = io::stdout().flush();
                             }
                         } else {
-                            println!("{}", s);
+                            println!("\r{}", s);
                         }
                     }
                     Ok(Cmd::Hide) => {

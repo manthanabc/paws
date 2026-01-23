@@ -105,7 +105,7 @@ workspace = true
 workspace = true
 
 [dependencies.rust-embed]
-version = "8.5"
+version = "8.11"
 features = [ "interpolate-folder-path",]
 
 [dependencies.indexmap]
@@ -131,11 +131,10 @@ workspace = true
 workspace = true
 
 [dev-dependencies.fake]
-version = "4.4.0"
-features = [ "derive",]
+workspace = true
 
 [dev-dependencies.paws_domain]
-path = "../paws_domain"
+workspace = true
 
 [target."cfg(not(target_os = \"android\"))".dependencies]
 arboard = "3.4"

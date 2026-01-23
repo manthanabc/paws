@@ -1,13 +1,34 @@
+
+[![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
+[![Discord](https://img.shields.io/discord/1450204700212199616?style=for-the-badge&cacheSeconds=120&logo=discord)](
+https://discord.gg/9EGrd4s9fe)
+
+
 <h1 align="center">Paws</h1>
 <p align="center">Simplified wersion of forge</p>
 
 Do check original ![forge](https://github.com/antimonyhq/forge)
 
-[![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
-[![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
- 
+<img width="901" height="592" alt="screenshot" src="https://github.com/user-attachments/assets/8f6dd4ee-fe36-4078-8eec-35acfd5c5198" />
+
 [![asciicast](https://asciinema.org/a/Ahhq0trN61YSHssd.svg)](https://asciinema.org/a/Ahhq0trN61YSHssd)
 ---
+
+## Quickstart
+
+To get started with Paws, run the command below:
+
+```bash
+npx pawscode@latest
+```
+
+Or install globally:
+
+```bash
+npm install -g pawscode
+```
+
 <summary>About fork</summary>
 
 Difference so far-

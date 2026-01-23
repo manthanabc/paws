@@ -124,8 +124,7 @@ jobs:
     strategy:
       matrix:
         repository:
-        - antinomyhq/npm-code-paws
-        - antinomyhq/npm-pawscode
+        - manthanabc/npm-paws
     steps:
     - name: Checkout Code
       uses: actions/checkout@v6
@@ -148,7 +147,7 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v6
       with:
-        repository: antinomyhq/homebrew-code-paws
+        repository: pawscode/homebrew-paws
         ref: main
         token: ${{ secrets.HOMEBREW_ACCESS }}
     - name: Update Homebrew Formula
