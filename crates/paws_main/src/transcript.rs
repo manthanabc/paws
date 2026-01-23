@@ -408,7 +408,7 @@ impl TranscriptRenderer {
         // Create temp file
         let mut temp_file = NamedTempFile::new()?;
         for line in lines {
-            writeln!(temp_file, "{}", line)?;
+            writeln!(temp_file, "{}", console::strip_ansi_codes(line))?;
         }
 
         let path = temp_file.path().to_path_buf();
@@ -418,21 +418,25 @@ impl TranscriptRenderer {
         execute!(
             std::io::stdout(),
             DisableMouseCapture,
-            terminal::LeaveAlternateScreen
+            terminal::LeaveAlternateScreen,
+            cursor::Show
         )?;
+        terminal::disable_raw_mode()?;
 
         let status = Command::new(&editor)
             .arg(&path)
-            // Add read-only flag for common editors if possible, or just open normal
-            // vim -R, nano -v, etc.
-            // For now, simple open is fine.
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::null())
             .status();
+
+        terminal::enable_raw_mode()?;
 
         // Restore alternate screen
         execute!(
             std::io::stdout(),
             terminal::EnterAlternateScreen,
-            EnableMouseCapture
+            EnableMouseCapture,
+            cursor::Hide
         )?;
 
         if let Err(e) = status {
@@ -466,7 +470,8 @@ impl TranscriptRenderer {
         execute!(
             std::io::stdout(),
             terminal::EnterAlternateScreen,
-            EnableMouseCapture
+            EnableMouseCapture,
+            cursor::Hide
         )?;
 
         let mut lines = self.render_content(&conversation);
@@ -774,7 +779,8 @@ impl TranscriptRenderer {
         execute!(
             std::io::stdout(),
             DisableMouseCapture,
-            terminal::LeaveAlternateScreen
+            terminal::LeaveAlternateScreen,
+            cursor::Show
         )?;
         Ok(())
     }
