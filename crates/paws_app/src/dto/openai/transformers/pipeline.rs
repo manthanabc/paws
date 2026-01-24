@@ -5,6 +5,7 @@ use super::drop_tool_call::DropToolCalls;
 use super::github_copilot_reasoning::GitHubCopilotReasoning;
 use super::make_cerebras_compat::MakeCerebrasCompat;
 use super::make_openai_compat::MakeOpenAiCompat;
+use super::minimax::SetMinimaxParams;
 use super::normalize_tool_schema::NormalizeToolSchema;
 use super::set_cache::SetCache;
 use super::tool_choice::SetToolChoice;
@@ -47,11 +48,15 @@ impl Transformer for ProviderPipeline<'_> {
 
         let cerebras_compat = MakeCerebrasCompat.when(move |_| provider.id == ProviderId::CEREBRAS);
 
+        let minimax_params =
+            SetMinimaxParams.when(move |_| provider.id.as_ref().to_lowercase().contains("minimax"));
+
         let mut combined = zai_thinking
             .pipe(or_transformers)
             .pipe(open_ai_compat)
             .pipe(github_copilot_reasoning)
             .pipe(cerebras_compat)
+            .pipe(minimax_params)
             .pipe(NormalizeToolSchema);
         combined.transform(request)
     }

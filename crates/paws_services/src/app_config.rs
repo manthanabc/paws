@@ -138,6 +138,7 @@ mod tests {
                             tools_supported: Some(true),
                             supports_parallel_tool_calls: Some(true),
                             supports_reasoning: Some(false),
+                            input_modalities: vec![paws_domain::InputModality::Text],
                         }])),
                     },
                     Provider {
@@ -162,6 +163,7 @@ mod tests {
                             tools_supported: Some(true),
                             supports_parallel_tool_calls: Some(true),
                             supports_reasoning: Some(true),
+                            input_modalities: vec![paws_domain::InputModality::Text],
                         }])),
                     },
                 ],

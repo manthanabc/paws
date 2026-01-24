@@ -4,7 +4,6 @@ expression: tools
 ---
 {
   "title": "FSRead",
-  "description": "Reads file contents from the specified absolute path. Ideal for analyzing code, configuration files, documentation, or textual data. Returns the content as a string with line number prefixes by default. For files larger than 2,000 lines, the tool automatically returns only the first 2,000 lines. You should always rely on this default behavior and avoid specifying custom ranges unless absolutely necessary. If needed, specify a range with the start_line and end_line parameters, ensuring the total range does not exceed 2,000 lines. Specifying a range exceeding this limit will result in an error. Binary files are automatically detected and rejected.",
   "type": "object",
   "required": [
     "path"
@@ -34,22 +33,7 @@ expression: tools
   }
 }
 {
-  "title": "ReadImage",
-  "description": "Reads image files from the file system and returns them in base64-encoded format for vision-capable models. Supports common image formats: JPEG, PNG, WebP, and GIF. The path must be absolute and point to an existing file. Use this tool when you need to process, analyze, or display images with vision models. Do NOT use this for text files - use the `read` tool instead. Do NOT use for other binary files like PDFs, videos, or archives. The tool will fail if the file doesn't exist or if the format is unsupported. Returns the image content encoded in base64 format ready for vision model consumption.",
-  "type": "object",
-  "required": [
-    "path"
-  ],
-  "properties": {
-    "path": {
-      "description": "The absolute path to the image file (e.g., /home/user/image.png). Relative paths are not supported. The file must exist and be readable.",
-      "type": "string"
-    }
-  }
-}
-{
   "title": "FSWrite",
-  "description": "Use it to create a new file at a specified path with the provided content.\n\nAlways provide absolute paths for file locations. The tool automatically handles the creation of any missing intermediary directories in the specified path. IMPORTANT: DO NOT attempt to use this tool to move or rename files, use the shell tool instead.",
   "type": "object",
   "required": [
     "content",
@@ -72,7 +56,6 @@ expression: tools
 }
 {
   "title": "FSSearch",
-  "description": "Recursively searches directories for files by content (regex) and/or name (glob pattern). Provides context-rich results with line numbers for content matches. Two modes: content search (when regex provided) or file finder (when regex omitted). Uses case-insensitive Rust regex syntax. Requires absolute paths. Avoids binary files and excluded directories. Best for code exploration, API usage discovery, configuration settings, or finding patterns across projects. For large pages, returns the first 200 lines and stores the complete content in a temporary file for subsequent access.",
   "type": "object",
   "required": [
     "path"
@@ -108,7 +91,6 @@ expression: tools
 }
 {
   "title": "FSRemove",
-  "description": "Request to remove a file at the specified path. Use this when you need to delete an existing file. The path must be absolute. This operation cannot be undone, so use it carefully.",
   "type": "object",
   "required": [
     "path"
@@ -122,7 +104,6 @@ expression: tools
 }
 {
   "title": "FSPatch",
-  "description": "Modifies files with targeted line operations on matched patterns. Supports prepend, append, replace, replace_all, swap operations. Ideal for precise changes to configs, code, or docs while preserving context. Not suitable for complex refactoring or modifying all pattern occurrences - use `write` instead for complete rewrites and `undo` for undoing the last operation. Fails if search pattern isn't found.\\n\\nUsage Guidelines:\\n-When editing text from Read tool output, ensure you preserve new lines and the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: line number + ':'. Everything after that is the actual file content to match. Never include any part of the line number prefix in the search or content",
   "type": "object",
   "required": [
     "content",
@@ -158,7 +139,6 @@ expression: tools
 }
 {
   "title": "FSUndo",
-  "description": "Reverts the most recent file operation (create/modify/delete) on a specific file. Use this tool when you need to recover from incorrect file changes or if a revert is requested by the user.",
   "type": "object",
   "required": [
     "path"
@@ -172,11 +152,9 @@ expression: tools
 }
 {
   "title": "Shell",
-  "description": "Executes shell commands with safety measures using restricted bash (rbash). Prevents potentially harmful operations like absolute path execution and directory changes. Use for file system interaction, running utilities, installing packages, or executing build commands. For operations requiring unrestricted access, advise users to run paws CLI with '-u' flag. Returns complete output including stdout, stderr, and exit code for diagnostic purposes.",
   "type": "object",
   "required": [
-    "command",
-    "cwd"
+    "command"
   ],
   "properties": {
     "command": {
@@ -184,8 +162,9 @@ expression: tools
       "type": "string"
     },
     "cwd": {
-      "description": "The working directory where the command should be executed.",
-      "type": "string"
+      "description": "The working directory where the command should be executed. If not specified, defaults to the current working directory from the environment.",
+      "type": "string",
+      "nullable": true
     },
     "env": {
       "description": "Environment variable names to pass to command execution (e.g., [\"PATH\", \"HOME\", \"USER\"]). The system automatically reads the specified values and applies them during command execution.",
@@ -222,7 +201,6 @@ expression: tools
 }
 {
   "title": "Followup",
-  "description": "Use this tool when you encounter ambiguities, need clarification, or require more details to proceed effectively. Use this tool judiciously to maintain a balance between gathering necessary information and avoiding excessive back-and-forth.",
   "type": "object",
   "required": [
     "question"
@@ -266,7 +244,6 @@ expression: tools
 }
 {
   "title": "PlanCreate",
-  "description": "Creates a new plan file with the specified name, version, and content. Use this tool to create structured project plans, task breakdowns, or implementation strategies that can be tracked and referenced throughout development sessions.",
   "type": "object",
   "required": [
     "content",
@@ -290,7 +267,6 @@ expression: tools
 }
 {
   "title": "SkillFetch",
-  "description": "Fetches detailed information about a specific skill. Use this tool to load skill content and instructions when you need to understand how to perform a specialized task. Skills provide domain-specific knowledge, workflows, and best practices. Only invoke skills that are listed in the available skills section. Do not invoke a skill that is already active.",
   "type": "object",
   "required": [
     "name"

@@ -205,8 +205,12 @@ impl<S> ToolRegistry<S> {
         ToolCatalog::iter()
             .map(|tool| {
                 let mut def = tool.definition();
-                if let Ok(rendered) = handlebars.render_template(&def.description, &ctx) {
-                    def.description = rendered;
+                match handlebars.render_template(&def.description, &ctx) {
+                    Ok(rendered) => def.description = rendered,
+                    Err(_e) => {
+                        #[cfg(test)]
+                        eprintln!("Failed to render template for {}: {}", def.name, _e);
+                    }
                 }
                 def
             })
@@ -491,45 +495,28 @@ mod tests {
     }
 
     #[test]
-    fn test_sem_search_included_when_supported() {
+    fn test_template_rendering_in_tool_descriptions() {
         use fake::{Fake, Faker};
-        let env: Environment = Faker.fake();
-        let actual = ToolRegistry::<()>::get_system_tools(true, &env);
-        assert!(actual.iter().any(|t| t.name.as_str() == "sem_search"));
+
+        let mut env: Environment = Faker.fake();
+        env.stdout_max_line_length = 5000;
+
+        let actual = ToolRegistry::<()>::get_system_tools(&env);
+        let shell_tool = actual.iter().find(|t| t.name.as_str() == "shell").unwrap();
+
+        // The description should have the template variable rendered
+        // Note: The template uses {{env.stdoutMaxLineLength}} which matches the
+        // camelCase serialization of stdout_max_line_length field
+        assert!(
+            shell_tool.description.contains("5000"),
+            "Description should contain the rendered stdout_max_line_length value: {}",
+            shell_tool.description
+        );
+        assert!(
+            !shell_tool
+                .description
+                .contains("{{env.stdoutMaxLineLength}}"),
+            "Description should not contain unrendered template variable"
+        );
     }
-
-    #[test]
-    fn test_sem_search_filtered_when_not_supported() {
-        use fake::{Fake, Faker};
-        let env: Environment = Faker.fake();
-        let actual = ToolRegistry::<()>::get_system_tools(false, &env);
-        assert!(actual.iter().all(|t| t.name.as_str() != "sem_search"));
-    }
-}
-
-#[test]
-fn test_template_rendering_in_tool_descriptions() {
-    use fake::{Fake, Faker};
-
-    let mut env: Environment = Faker.fake();
-    env.max_search_lines = 1000;
-
-    let actual = ToolRegistry::<()>::get_system_tools(true, &env);
-    let fs_search_tool = actual
-        .iter()
-        .find(|t| t.name.as_str() == "fs_search")
-        .unwrap();
-
-    // The description should have the template variable rendered
-    assert!(
-        fs_search_tool.description.contains("1000"),
-        "Description should contain the rendered max_search_lines value: {}",
-        fs_search_tool.description
-    );
-    assert!(
-        !fs_search_tool
-            .description
-            .contains("{{env.maxSearchLines}}"),
-        "Description should not contain unrendered template variable"
-    );
 }

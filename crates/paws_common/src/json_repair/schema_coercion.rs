@@ -1,5 +1,4 @@
 use schemars::schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec};
-use serde::de::Error as _;
 use serde_json::Value;
 
 /// Coerces a JSON value to match the expected types defined in a JSON schema.
@@ -227,17 +226,9 @@ fn try_coerce_string(s: &str, target_type: &InstanceType) -> Option<Value> {
     }
 }
 
-/// Attempts to parse a string as JSON, handling both valid JSON and JSON5
-/// (Python-style) syntax
+/// Attempts to parse a string as JSON
 fn try_parse_json_string(s: &str) -> Result<Value, serde_json::Error> {
-    // First try parsing as-is (valid JSON)
-    if let Ok(parsed) = serde_json::from_str::<Value>(s) {
-        return Ok(parsed);
-    }
-
-    // If that fails, try parsing as JSON5 (handles single quotes, comments, etc.)
-    // Convert serde_json5::Error to serde_json::Error
-    serde_json::from_str::<Value>(s).map_err(|e| serde_json::Error::custom(e.to_string()))
+    serde_json::from_str::<Value>(s)
 }
 
 #[cfg(test)]
@@ -419,24 +410,6 @@ mod tests {
     #[allow(dead_code)]
     struct ItemsArray {
         items: Vec<serde_json::Value>,
-    }
-
-    #[derive(JsonSchema)]
-    #[allow(dead_code)]
-    struct ConfigWithComments {
-        config: std::collections::BTreeMap<String, serde_json::Value>,
-    }
-
-    #[derive(JsonSchema)]
-    #[allow(dead_code)]
-    struct ItemsTrailingComma {
-        items: Vec<serde_json::Value>,
-    }
-
-    #[derive(JsonSchema)]
-    #[allow(dead_code)]
-    struct MultiPatchData {
-        edits: Vec<serde_json::Value>,
     }
 
     #[test]
@@ -722,26 +695,6 @@ mod tests {
     }
 
     #[test]
-    fn test_coerce_python_style_string_to_array() {
-        // Test coercing a Python-style array string to an actual array
-        let fixture = json!({"edits": "[{'content': 'test', 'operation': 'replace'}]"});
-        let schema = schema_for!(EditsData);
-        let actual = coerce_to_schema(fixture, &schema);
-        let expected = json!({"edits": [{"content": "test", "operation": "replace"}]});
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_coerce_python_style_string_to_object() {
-        // Test coercing a Python-style object string to an actual object
-        let fixture = json!({"config": "{'key': 'value', 'number': 42}"});
-        let schema = schema_for!(ConfigData);
-        let actual = coerce_to_schema(fixture, &schema);
-        let expected = json!({"config": {"key": "value", "number": 42}});
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
     fn test_preserve_invalid_json_string() {
         // Test that invalid JSON strings are preserved
         let fixture = json!({"data": "[invalid json"});
@@ -749,67 +702,5 @@ mod tests {
         let actual = coerce_to_schema(fixture, &schema);
         let expected = json!({"data": "[invalid json"});
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_coerce_json5_with_comments() {
-        // Test coercing JSON5 with comments
-        let fixture = json!({"config": r#"{
-            // This is a comment
-            "key": "value",
-            "number": 42,
-        }"#});
-        let schema = schema_for!(ConfigWithComments);
-        let actual = coerce_to_schema(fixture, &schema);
-        let expected = json!({"config": {"key": "value", "number": 42}});
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_coerce_json5_with_trailing_commas() {
-        // Test coercing JSON5 with trailing commas
-        let fixture = json!({"items": "[1, 2, 3,]"});
-        let schema = schema_for!(ItemsTrailingComma);
-        let actual = coerce_to_schema(fixture, &schema);
-        let expected = json!({"items": [1, 2, 3]});
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_coerce_multi_patch_python_style() {
-        // Test coercing exact Python-style input from error
-        // This matches multi_patch tool call format with nested objects
-        let python_style = r#"[{'content': 'use schemars::schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec};', 'operation': 'replace', 'path': 'crates/forge_json_repair/src/schema_coercion.rs'}, {'content': 'fn coerce_value_with_schema(value: Value, schema: &Schema) -> Value {', 'operation': 'replace', 'path': 'crates/forge_json_repair/src/schema_coercion.rs'}]"#;
-
-        let fixture = json!({"edits": python_style});
-        let schema = schema_for!(MultiPatchData);
-        let actual = coerce_to_schema(fixture, &schema);
-
-        // Should coerce string to an array of objects
-        assert!(actual["edits"].is_array());
-        let edits = actual["edits"].as_array().unwrap();
-        assert_eq!(edits.len(), 2);
-
-        // Verify first edit object
-        assert_eq!(
-            edits[0]["content"],
-            "use schemars::schema::{InstanceType, RootSchema, Schema, SchemaObject, SingleOrVec};"
-        );
-        assert_eq!(edits[0]["operation"], "replace");
-        assert_eq!(
-            edits[0]["path"],
-            "crates/forge_json_repair/src/schema_coercion.rs"
-        );
-
-        // Verify second edit object
-        assert_eq!(
-            edits[1]["content"],
-            "fn coerce_value_with_schema(value: Value, schema: &Schema) -> Value {"
-        );
-        assert_eq!(edits[1]["operation"], "replace");
-        assert_eq!(
-            edits[1]["path"],
-            "crates/forge_json_repair/src/schema_coercion.rs"
-        );
     }
 }

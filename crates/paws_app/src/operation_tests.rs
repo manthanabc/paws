@@ -188,7 +188,7 @@ fn test_fs_create_basic() {
         output: FsCreateOutput {
             path: "/home/user/new_file.txt".to_string(),
             before: None,
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -217,7 +217,7 @@ fn test_fs_create_overwrite() {
         output: FsCreateOutput {
             path: "/home/user/existing_file.txt".to_string(),
             before: Some("Old content".to_string()),
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -519,7 +519,7 @@ fn test_fs_search_output() {
     let env = fixture_environment(); // max_search_lines is 25
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -559,7 +559,7 @@ fn test_fs_search_max_output() {
     env.max_search_lines = 10;
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -601,7 +601,7 @@ fn test_fs_search_min_lines_but_max_line_length() {
     env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -646,7 +646,7 @@ fn test_fs_search_very_lengthy_one_line_match() {
     env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -671,7 +671,7 @@ fn test_fs_search_no_matches() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -692,7 +692,7 @@ fn test_fs_create_with_warning() {
         output: FsCreateOutput {
             path: "/home/user/file_with_warning.txt".to_string(),
             before: None,
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -761,7 +761,7 @@ fn test_fs_search_with_results() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -786,7 +786,7 @@ fn test_fs_search_no_results() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::Search,
+        ToolKind::FsSearch,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -806,6 +806,7 @@ fn test_fs_patch_basic() {
             content: "universe".to_string(),
         },
         output: PatchOutput {
+            errors: vec![],
             before: "Hello world\nThis is a test".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),
@@ -835,6 +836,7 @@ fn test_fs_patch_with_warning() {
             content: "\nnew line".to_string(),
         },
         output: PatchOutput {
+            errors: vec![],
             before: "line1\nline2".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),

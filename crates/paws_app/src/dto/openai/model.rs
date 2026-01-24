@@ -109,6 +109,7 @@ impl From<Model> for paws_domain::Model {
             tools_supported,
             supports_parallel_tool_calls,
             supports_reasoning,
+            input_modalities: vec![],
         }
     }
 }

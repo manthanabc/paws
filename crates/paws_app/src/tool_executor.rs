@@ -185,10 +185,6 @@ impl<
                     .await?;
                 (input, output).into()
             }
-            ToolCatalog::SemSearch(_) => {
-                // Semantic search is not implemented in Paws yet
-                anyhow::bail!("Semantic search is not yet supported")
-            }
             ToolCatalog::Remove(input) => {
                 let normalized_path = self.normalize_path(input.path.clone());
                 let output = self.services.remove(normalized_path).await?;

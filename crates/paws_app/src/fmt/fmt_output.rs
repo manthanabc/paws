@@ -34,9 +34,20 @@ impl FormatContent for ToolOperation {
                 ));
                 title.into()
             }),
+            ToolOperation::FsCreate { input, output } => {
+                // Show diff when overwriting an existing file
+                if let Some(before) = &output.before {
+                    Some(ChatResponseContent::PlainText(
+                        DiffFormat::format(before, &input.content)
+                            .diff()
+                            .to_string(),
+                    ))
+                } else {
+                    None
+                }
+            }
             ToolOperation::FsRead { input: _, output: _ }
             | ToolOperation::ImageRead { output: _ }
-            | ToolOperation::FsCreate { .. }
             | ToolOperation::FsRemove { .. }
             | ToolOperation::FsSearch { .. }
             | ToolOperation::FsUndo { .. }

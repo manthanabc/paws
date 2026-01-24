@@ -1597,7 +1597,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.handle_delete_conversation().await?;
             }
             SlashCommand::Dump { html } => {
-                self.spinner.start(Some("Dumping"))?;
                 self.on_dump(html).await?;
             }
             SlashCommand::New => {

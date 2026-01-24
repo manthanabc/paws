@@ -150,7 +150,9 @@
   },
   {
     "id": "antigravity-proxy",
-    "url_param_vars": ["ANTIGRAVITY_PROXY_PORT"],
+    "url_param_vars": [
+      "ANTIGRAVITY_PROXY_PORT"
+    ],
     "response_type": "Anthropic",
     "url": "http://localhost:{{ANTIGRAVITY_PROXY_PORT}}/v1/messages",
     "models": [
@@ -161,7 +163,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "gpt-oss-120b-medium",
@@ -170,7 +173,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "gemini-3-pro-low",
@@ -179,7 +183,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "gemini-2.5-flash-thinking",
@@ -188,7 +193,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "gemini-2.5-flash-lite",
@@ -197,7 +203,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "claude-sonnet-4-5-thinking",
@@ -206,7 +213,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "gemini-3-flash",
@@ -215,7 +223,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "claude-sonnet-4-5",
@@ -224,7 +233,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "gemini-3-pro-image",
@@ -233,7 +243,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "rev19-uic3-1p",
@@ -242,7 +253,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "claude-opus-4-5-thinking",
@@ -251,7 +263,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "gemini-2.5-pro",
@@ -260,7 +273,11 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": [
+          "text",
+          "image"
+        ]
       },
       {
         "id": "gemini-3-pro-high",
@@ -269,11 +286,15 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": [
+          "text",
+          "image"
+        ]
       }
     ],
     "auth_methods": [
-       "api_key" 
+      "api_key"
     ]
   },
   {
@@ -341,7 +362,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.6",
@@ -350,7 +372,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5",
@@ -359,7 +382,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-air",
@@ -368,7 +392,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-x",
@@ -377,7 +402,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-airx",
@@ -386,7 +412,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-flash",
@@ -395,7 +422,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4-32b-0414-128k",
@@ -404,7 +432,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       }
     ],
     "auth_methods": [
@@ -425,7 +454,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.6",
@@ -434,7 +464,8 @@
         "context_length": 200000,
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5",
@@ -443,7 +474,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-air",
@@ -452,7 +484,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-x",
@@ -461,7 +494,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-airx",
@@ -470,7 +504,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4.5-flash",
@@ -479,7 +514,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": true
+        "supports_reasoning": true,
+        "input_modalities": []
       },
       {
         "id": "glm-4-32b-0414-128k",
@@ -488,7 +524,8 @@
         "context_length": 128000,
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       }
     ],
     "auth_methods": [
@@ -645,7 +682,8 @@
         "description": "Anthropic's most intelligent model",
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "anthropic.claude-3-5-haiku-20241022-v1:0",
@@ -658,7 +696,8 @@
         "description": "Anthropic's fastest model",
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "anthropic.claude-3-opus-20240229-v1:0",
@@ -671,7 +710,8 @@
         "description": "Anthropic's most powerful model",
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "anthropic.claude-3-sonnet-20240229-v1:0",
@@ -684,7 +724,8 @@
         "description": "Anthropic's balanced model",
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "anthropic.claude-3-haiku-20240307-v1:0",
@@ -697,7 +738,8 @@
         "description": "Anthropic's fastest model",
         "tools_supported": true,
         "supports_parallel_tool_calls": true,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "meta.llama3-1-405b-instruct-v1:0",
@@ -710,7 +752,8 @@
         "description": "Meta's most capable model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "meta.llama3-1-70b-instruct-v1:0",
@@ -723,7 +766,8 @@
         "description": "Meta's balanced model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "meta.llama3-1-8b-instruct-v1:0",
@@ -736,7 +780,8 @@
         "description": "Meta's fastest model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "amazon.titan-text-express-v1",
@@ -749,7 +794,8 @@
         "description": "Amazon's balanced model",
         "tools_supported": false,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "amazon.titan-text-lite-v1",
@@ -762,7 +808,8 @@
         "description": "Amazon's fastest model",
         "tools_supported": false,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "mistral.mistral-large-2402-v1:0",
@@ -775,7 +822,8 @@
         "description": "Mistral's most capable model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "mistral.mistral-small-2402-v1:0",
@@ -788,7 +836,8 @@
         "description": "Mistral's balanced model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "cohere.command-r-plus-v1:0",
@@ -801,7 +850,8 @@
         "description": "Cohere's most capable model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       },
       {
         "id": "cohere.command-r-v1:0",
@@ -814,7 +864,8 @@
         "description": "Cohere's balanced model",
         "tools_supported": true,
         "supports_parallel_tool_calls": false,
-        "supports_reasoning": false
+        "supports_reasoning": false,
+        "input_modalities": []
       }
     ],
     "auth_methods": [

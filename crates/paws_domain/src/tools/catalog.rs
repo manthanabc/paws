@@ -43,7 +43,6 @@ pub enum ToolCatalog {
     #[serde(alias = "Write")]
     Write(FSWrite),
     FsSearch(FSSearch),
-    SemSearch(SemanticSearch),
     Remove(FSRemove),
     Patch(FSPatch),
     Undo(FSUndo),
@@ -142,56 +141,6 @@ pub struct FSSearch {
     /// If not provided, it will search all files (*).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_pattern: Option<String>,
-}
-
-/// A paired query and use_case for semantic search. Each query must have a
-/// corresponding use_case for document reranking.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SearchQuery {
-    /// Describe WHAT the code does or its purpose. Include domain-specific
-    /// terms and technical context. Good: "retry mechanism with exponential
-    /// backoff", "streaming responses from LLM API", "OAuth token refresh
-    /// flow". Bad: generic terms like "retry" or "auth" without context. Think
-    /// about the behavior and functionality you're looking for.
-    pub query: String,
-
-    /// A short natural-language description of what you are trying to find.
-    /// This is the query used for document reranking. The query MUST:
-    /// - express a single, focused information need
-    /// - describe exactly what the agent is searching for
-    /// - should not be the query verbatim
-    /// - be concise (1–2 sentences)
-    ///
-    /// Examples:
-    /// - "Why is `select_model()` returning a Pin<Box<Result>> in Rust?"
-    /// - "How to fix error E0277 for the ? operator on a pinned boxed result?"
-    /// - "Steps to run Diesel migrations in Rust without exposing the DB."
-    /// - "How to design a clean architecture service layer with typed errors?"
-    pub use_case: String,
-}
-
-impl SearchQuery {
-    /// Creates a new search query with the given query and use_case
-    pub fn new(query: impl Into<String>, use_case: impl Into<String>) -> Self {
-        Self { query: query.into(), use_case: use_case.into() }
-    }
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/paws_domain/src/tools/descriptions/semantic_search.md"]
-pub struct SemanticSearch {
-    /// List of search queries to execute in parallel. Using multiple queries
-    /// (2-3) with varied phrasings significantly improves results - each query
-    /// captures different aspects of what you're looking for. Each query pairs
-    /// a search term with a use_case for reranking. Example: for
-    /// authentication, try "user login verification", "token generation",
-    /// "OAuth flow".
-    pub queries: Vec<SearchQuery>,
-
-    /// File extension filters (e.g., [".rs", ".ts", ".py"]). Only files with
-    /// these extensions will be included in the search results. At least one
-    /// extension must be provided.
-    pub extensions: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
@@ -478,7 +427,6 @@ impl ToolDescription for ToolCatalog {
             ToolCatalog::Followup(v) => v.description(),
             ToolCatalog::Fetch(v) => v.description(),
             ToolCatalog::FsSearch(v) => v.description(),
-            ToolCatalog::SemSearch(v) => v.description(),
             ToolCatalog::Read(v) => v.description(),
             ToolCatalog::Remove(v) => v.description(),
             ToolCatalog::Undo(v) => v.description(),
@@ -524,7 +472,6 @@ impl ToolCatalog {
             ToolCatalog::Followup(_) => r#gen.into_root_schema_for::<Followup>(),
             ToolCatalog::Fetch(_) => r#gen.into_root_schema_for::<NetFetch>(),
             ToolCatalog::FsSearch(_) => r#gen.into_root_schema_for::<FSSearch>(),
-            ToolCatalog::SemSearch(_) => r#gen.into_root_schema_for::<SemanticSearch>(),
             ToolCatalog::Read(_) => r#gen.into_root_schema_for::<FSRead>(),
             ToolCatalog::Remove(_) => r#gen.into_root_schema_for::<FSRemove>(),
             ToolCatalog::Undo(_) => r#gen.into_root_schema_for::<FSUndo>(),
@@ -628,8 +575,7 @@ impl ToolCatalog {
                 message: format!("Fetch content from URL: {}", input.url),
             }),
             // Operations that don't require permission checks
-            ToolCatalog::SemSearch(_)
-            | ToolCatalog::Undo(_)
+            ToolCatalog::Undo(_)
             | ToolCatalog::Followup(_)
             | ToolCatalog::Plan(_)
             | ToolCatalog::Skill(_) => None,
@@ -689,17 +635,6 @@ impl ToolCatalog {
             path: path.to_string(),
             regex: regex.map(|r| r.to_string()),
             ..Default::default()
-        }))
-    }
-
-    /// Creates a Semantic Search tool call with the specified queries
-    pub fn tool_call_semantic_search(
-        queries: Vec<SearchQuery>,
-        extensions: Vec<String>,
-    ) -> ToolCallFull {
-        ToolCallFull::from(ToolCatalog::SemSearch(SemanticSearch {
-            queries,
-            extensions,
         }))
     }
 

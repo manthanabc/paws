@@ -225,7 +225,30 @@ img {
   color: #28a745;
   font-weight: 600;
 }
-</style>
+
+/* Tool Call Error Styles */
+.tool-call-error {
+  background-color: #fff5f5;
+  border-left: 4px solid #ef4444;
+  padding: 16px;
+  margin: 12px 0;
+  border-radius: 4px;
+}
+
+.tool-call-error .error-cause {
+  color: #dc2626;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.tool-call-error .error-reflection {
+  background-color: #fee2e2;
+  padding: 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: #7f1d1d;
+}</style>
 </head>
 <body>
 <div
@@ -330,8 +353,6 @@ img {
 ## Tool Selection:
 
 Choose tools based on the nature of the task:
-
-- **Semantic Search**: When you need to discover code locations or understand implementations. Particularly useful when you don't know exact file names or when exploring unfamiliar codebases. Understands concepts rather than requiring exact text matches.
 
 - **Regex Search**: For finding exact strings, patterns, or when you know precisely what text you're looking for (e.g., TODO comments, specific function names).
 
@@ -1133,54 +1154,6 @@ What would you like to work on today?</pre>
       "type": "integer",
       "format": "int32",
       "nullable": true
-    }
-  }
-}</pre>
-</div>
-</details>
-<details
-  class="message-card message-tool"
->
-<summary>
-<span>sem_search</span>
-</summary>
-<div
-  class="main-content"
->
-<pre>{
-  "title": "SemanticSearch",
-  "description": "AI-powered semantic code search. YOUR DEFAULT TOOL for code discovery tasks. Use this when you need to find code locations, understand implementations, or explore functionality - it works with natural language about behavior and concepts, not just keyword matching.\n\nStart with sem_search when: locating code to modify, understanding how features work, finding patterns/examples, or exploring unfamiliar areas. Understands queries like \"authentication flow\" (finds login), \"retry logic\" (finds backoff), \"validation\" (finds checking/sanitization).\n\nReturns file:line locations with code context, ranked by relevance. Use multiple varied queries (2-3) for best coverage. For exact string matching (TODO comments, specific function names), use regex search instead.",
-  "type": "object",
-  "required": [
-    "queries"
-  ],
-  "properties": {
-    "file_extension": {
-      "description": "Optional file extension filter (e.g., \".rs\", \".ts\", \".py\"). If provided, only files with this extension will be included in the search results.",
-      "type": "string",
-      "nullable": true
-    },
-    "queries": {
-      "description": "List of search queries to execute in parallel. Using multiple queries (2-3) with varied phrasings significantly improves results - each query captures different aspects of what you're looking for. Each query pairs a search term with a use_case for reranking. Example: for authentication, try \"user login verification\", \"token generation\", \"OAuth flow\".",
-      "type": "array",
-      "items": {
-        "description": "A paired query and use_case for semantic search. Each query must have a corresponding use_case for document reranking.",
-        "type": "object",
-        "required": [
-          "query",
-          "use_case"
-        ],
-        "properties": {
-          "query": {
-            "description": "Describe WHAT the code does or its purpose. Include domain-specific terms and technical context. Good: \"retry mechanism with exponential backoff\", \"streaming responses from LLM API\", \"OAuth token refresh flow\". Bad: generic terms like \"retry\" or \"auth\" without context. Think about the behavior and functionality you're looking for.",
-            "type": "string"
-          },
-          "use_case": {
-            "description": "A short natural-language description of what you are trying to find. This is the query used for document reranking. The query MUST: - express a single, focused information need - describe exactly what the agent is searching for - should not be the query verbatim - be concise (1–2 sentences)\n\nExamples: - \"Why is `select_model()` returning a Pin&lt;Box&lt;Result&gt;&gt; in Rust?\" - \"How to fix error E0277 for the ? operator on a pinned boxed result?\" - \"Steps to run Diesel migrations in Rust without exposing the DB.\" - \"How to design a clean architecture service layer with typed errors?\"",
-            "type": "string"
-          }
-        }
-      }
     }
   }
 }</pre>

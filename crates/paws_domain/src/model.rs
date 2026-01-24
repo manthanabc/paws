@@ -15,6 +15,16 @@ pub struct Model {
     pub supports_parallel_tool_calls: Option<bool>,
     /// Whether the model supports reasoning
     pub supports_reasoning: Option<bool>,
+    /// Input modalities supported by the model
+    pub input_modalities: Vec<InputModality>,
+}
+
+/// Input modality for model capabilities
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum InputModality {
+    Text,
+    Image,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

@@ -89,8 +89,6 @@ impl PawsEnvironmentInfra {
             paws_api_url,
             custom_history_path,
             max_conversations: parse_env::<usize>("FORGE_MAX_CONVERSATIONS").unwrap_or(100),
-            sem_search_limit: parse_env::<usize>("FORGE_SEM_SEARCH_LIMIT").unwrap_or(100),
-            sem_search_top_k: parse_env::<usize>("FORGE_SEM_SEARCH_TOP_K").unwrap_or(10),
             override_model,
             override_provider,
             enable_permissions,

@@ -7,7 +7,6 @@ reasoning:
 tools:
   - read
   - fetch
-  - read_image
   - search
 user_prompt: |-
   <{{event.name}}>{{event.value}}</{{event.name}}>

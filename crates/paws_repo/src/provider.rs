@@ -623,6 +623,10 @@ mod env_tests {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect()
         }
+
+        fn is_restricted(&self) -> bool {
+            false
+        }
     }
 
     #[async_trait::async_trait]
@@ -1042,6 +1046,10 @@ mod env_tests {
                     .iter()
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect()
+            }
+
+            fn is_restricted(&self) -> bool {
+                false
             }
         }
 
