@@ -6,7 +6,6 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use chrono::Utc;
 use colored::Colorize;
-use console;
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, EventStream, KeyCode, KeyModifiers,
     MouseEventKind,
@@ -22,6 +21,17 @@ use crate::info::Info;
 use crate::prompt::PawsPrompt;
 use crate::title_display::TitleDisplayExt;
 
+#[derive(Debug)]
+struct DrawViewportArgs<'a> {
+    lines: &'a [String],
+    offset: usize,
+    height: usize,
+    search_query: Option<&'a str>,
+    match_info: Option<(usize, usize)>,
+    is_searching: bool,
+    show_thinking: bool,
+}
+
 pub struct TranscriptRenderer {
     cwd: PathBuf,
     environment: Environment,
@@ -34,6 +44,7 @@ impl TranscriptRenderer {
     }
 
     /// Sets whether to show thinking/reasoning in the transcript
+    #[allow(dead_code)]
     pub fn show_thinking(mut self, show: bool) -> Self {
         self.show_thinking = show;
         self
@@ -172,43 +183,40 @@ impl TranscriptRenderer {
                     }
                     Role::Assistant => {
                         // Show full thinking/reasoning if enabled
-                        if show_thinking {
-                            if let Some(reasoning) = &text_message.reasoning_details {
-                                for (_idx, detail) in reasoning.iter().enumerate() {
-                                    // Try text field first, then decode data field if it's base64
-                                    let decoded_data = detail.data.as_ref().and_then(|data| {
-                                        STANDARD
-                                            .decode(data)
-                                            .ok()
-                                            .and_then(|bytes| String::from_utf8(bytes).ok())
-                                    });
+                        if show_thinking && let Some(reasoning) = &text_message.reasoning_details {
+                            for detail in reasoning.iter() {
+                                // Try text field first, then decode data field if it's base64
+                                let decoded_data = detail.data.as_ref().and_then(|data| {
+                                    STANDARD
+                                        .decode(data)
+                                        .ok()
+                                        .and_then(|bytes| String::from_utf8(bytes).ok())
+                                });
 
-                                    let reasoning_text =
-                                        detail.text.as_ref().or(decoded_data.as_ref());
+                                let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
 
-                                    if let Some(text) = reasoning_text {
-                                        // Show reasoning type header if available
-                                        if let Some(type_of) = &detail.type_of {
-                                            lines.push(format!(
-                                                "{}: {}",
-                                                "Reasoning".dimmed(),
-                                                type_of.dimmed()
-                                            ));
-                                        }
-                                        let rendered = renderer.render(text, Some(Attribute::Dim));
-                                        for line in rendered.lines() {
-                                            lines.push(line.to_string());
-                                        }
-                                    } else if detail.data.is_some() {
-                                        // Show placeholder for encrypted/undecodable reasoning
-                                        if let Some(type_of) = &detail.type_of {
-                                            lines.push(format!(
-                                                "{}: {} (encrypted, {} bytes)",
-                                                "Reasoning".dimmed(),
-                                                type_of.dimmed(),
-                                                detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
-                                            ));
-                                        }
+                                if let Some(text) = reasoning_text {
+                                    // Show reasoning type header if available
+                                    if let Some(type_of) = &detail.type_of {
+                                        lines.push(format!(
+                                            "{}: {}",
+                                            "Reasoning".dimmed(),
+                                            type_of.dimmed()
+                                        ));
+                                    }
+                                    let rendered = renderer.render(text, Some(Attribute::Dim));
+                                    for line in rendered.lines() {
+                                        lines.push(line.to_string());
+                                    }
+                                } else if detail.data.is_some() {
+                                    // Show placeholder for encrypted/undecodable reasoning
+                                    if let Some(type_of) = &detail.type_of {
+                                        lines.push(format!(
+                                            "{}: {} (encrypted, {} bytes)",
+                                            "Reasoning".dimmed(),
+                                            type_of.dimmed(),
+                                            detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
+                                        ));
                                     }
                                 }
                             }
@@ -364,16 +372,7 @@ impl TranscriptRenderer {
         info_string.lines().map(|s| s.to_string()).collect()
     }
 
-    fn draw_viewport(
-        &self,
-        lines: &[String],
-        offset: usize,
-        height: usize,
-        search_query: Option<&str>,
-        match_info: Option<(usize, usize)>,
-        is_searching: bool,
-        show_thinking: bool,
-    ) -> Result<()> {
+    fn draw_viewport(&self, args: DrawViewportArgs<'_>) -> Result<()> {
         let mut stdout = std::io::stdout();
         execute!(
             stdout,
@@ -381,21 +380,21 @@ impl TranscriptRenderer {
             cursor::MoveTo(0, 0)
         )?;
 
-        let content_height = height.saturating_sub(1);
-        let end = (offset + content_height).min(lines.len());
-        for i in offset..end {
-            write!(stdout, "{}\r\n", lines[i])?;
+        let content_height = args.height.saturating_sub(1);
+        let end = (args.offset + content_height).min(args.lines.len());
+        for line in args.lines.iter().take(end).skip(args.offset) {
+            write!(stdout, "{}\r\n", line)?;
         }
 
-        execute!(stdout, cursor::MoveTo(0, (height - 1) as u16))?;
+        execute!(stdout, cursor::MoveTo(0, (args.height - 1) as u16))?;
 
         let width = 80;
         let _separator = "─".repeat(width);
 
-        let status = if is_searching {
-            format!("/{}", search_query.unwrap_or(""))
-        } else if let Some(query) = search_query {
-            if let Some((current, total)) = match_info {
+        let status = if args.is_searching {
+            format!("/{}", args.search_query.unwrap_or(""))
+        } else if let Some(query) = args.search_query {
+            if let Some((current, total)) = args.match_info {
                 format!("/{} [{}/{}] (n/N: next/prev)", query, current, total)
             } else {
                 format!("/{} [0/0]", query)
@@ -403,9 +402,9 @@ impl TranscriptRenderer {
         } else {
             format!(
                 " {}/{} | j/k: scroll | /: search | t: {} | e: edit | q/Esc: exit ",
-                offset + 1,
-                lines.len(),
-                if show_thinking {
+                args.offset + 1,
+                args.lines.len(),
+                if args.show_thinking {
                     "hide thinking"
                 } else {
                     "show thinking"
@@ -544,19 +543,19 @@ impl TranscriptRenderer {
         };
 
         // Initial draw
-        self.draw_viewport(
-            &lines,
-            scroll_offset,
-            height as usize,
-            if !search_query.is_empty() || is_searching {
+        self.draw_viewport(DrawViewportArgs {
+            lines: &lines,
+            offset: scroll_offset,
+            height: height as usize,
+            search_query: if !search_query.is_empty() || is_searching {
                 Some(&search_query)
             } else {
                 None
             },
-            None,
+            match_info: None,
             is_searching,
             show_thinking,
-        )?;
+        })?;
 
         let mut reader = EventStream::new();
         loop {
@@ -624,25 +623,25 @@ impl TranscriptRenderer {
                                 }
                             }
                             KeyCode::Char('n') => {
-                                if !matches.is_empty() {
-                                    if let Some(curr) = current_match_idx {
-                                        let next = (curr + 1) % matches.len();
-                                        current_match_idx = Some(next);
-                                        scroll_offset = matches[next].saturating_sub(2);
-                                    }
+                                if !matches.is_empty()
+                                    && let Some(curr) = current_match_idx
+                                {
+                                    let next = (curr + 1) % matches.len();
+                                    current_match_idx = Some(next);
+                                    scroll_offset = matches[next].saturating_sub(2);
                                 }
                             }
                             KeyCode::Char('N') => {
-                                if !matches.is_empty() {
-                                    if let Some(curr) = current_match_idx {
-                                        let prev = if curr == 0 {
-                                            matches.len() - 1
-                                        } else {
-                                            curr - 1
-                                        };
-                                        current_match_idx = Some(prev);
-                                        scroll_offset = matches[prev].saturating_sub(2);
-                                    }
+                                if !matches.is_empty()
+                                    && let Some(curr) = current_match_idx
+                                {
+                                    let prev = if curr == 0 {
+                                        matches.len() - 1
+                                    } else {
+                                        curr - 1
+                                    };
+                                    current_match_idx = Some(prev);
+                                    scroll_offset = matches[prev].saturating_sub(2);
                                 }
                             }
                             KeyCode::Char('p') | KeyCode::Char('P') => {
@@ -651,28 +650,26 @@ impl TranscriptRenderer {
                             KeyCode::Char('e') => {
                                 self.open_in_editor(&lines).await?;
                                 // Need to redraw immediately
-                                self.draw_viewport(
-                                    &lines,
-                                    scroll_offset,
-                                    height as usize,
-                                    if !search_query.is_empty() || is_searching {
+                                self.draw_viewport(DrawViewportArgs {
+                                    lines: &lines,
+                                    offset: scroll_offset,
+                                    height: height as usize,
+                                    search_query: if !search_query.is_empty() || is_searching {
                                         Some(&search_query)
                                     } else {
                                         None
                                     },
-                                    if !matches.is_empty() {
+                                    match_info: if !matches.is_empty() {
                                         Some((current_match_idx.unwrap_or(0) + 1, matches.len()))
                                     } else {
                                         None
                                     },
                                     is_searching,
                                     show_thinking,
-                                )?;
+                                })?;
                             }
                             KeyCode::Up | KeyCode::Char('k') => {
-                                if scroll_offset > 0 {
-                                    scroll_offset -= 1;
-                                }
+                                scroll_offset = scroll_offset.saturating_sub(1);
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
                                 let content_height = height.saturating_sub(1) as usize;
@@ -728,11 +725,11 @@ impl TranscriptRenderer {
                         None
                     };
 
-                    self.draw_viewport(
-                        &lines,
-                        scroll_offset,
-                        height as usize,
-                        if !search_query.is_empty() || is_searching {
+                    self.draw_viewport(DrawViewportArgs {
+                        lines: &lines,
+                        offset: scroll_offset,
+                        height: height as usize,
+                        search_query: if !search_query.is_empty() || is_searching {
                             Some(&search_query)
                         } else {
                             None
@@ -740,7 +737,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
-                    )?;
+                    })?;
                 }
                 Some(Ok(event::Event::Mouse(mouse_event))) => {
                     let content_height = height.saturating_sub(1) as usize;
@@ -766,11 +763,11 @@ impl TranscriptRenderer {
                         None
                     };
 
-                    self.draw_viewport(
-                        &lines,
-                        scroll_offset,
-                        height as usize,
-                        if !search_query.is_empty() || is_searching {
+                    self.draw_viewport(DrawViewportArgs {
+                        lines: &lines,
+                        offset: scroll_offset,
+                        height: height as usize,
+                        search_query: if !search_query.is_empty() || is_searching {
                             Some(&search_query)
                         } else {
                             None
@@ -778,7 +775,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
-                    )?;
+                    })?;
                 }
                 Some(Ok(event::Event::Resize(_w, h))) => {
                     height = h;
@@ -812,11 +809,11 @@ impl TranscriptRenderer {
                         None
                     };
 
-                    self.draw_viewport(
-                        &lines,
-                        scroll_offset,
-                        height as usize,
-                        if !search_query.is_empty() || is_searching {
+                    self.draw_viewport(DrawViewportArgs {
+                        lines: &lines,
+                        offset: scroll_offset,
+                        height: height as usize,
+                        search_query: if !search_query.is_empty() || is_searching {
                             Some(&search_query)
                         } else {
                             None
@@ -824,7 +821,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
-                    )?;
+                    })?;
                 }
                 _ => {}
             }
