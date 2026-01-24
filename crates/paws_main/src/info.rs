@@ -715,7 +715,7 @@ pub fn format_reset_time(seconds: u64) -> String {
 }
 
 /// Extracts the first line of raw content from a context message.
-fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
+pub(crate) fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
     let content = msg
         .as_value()
         .and_then(|v| v.as_user_prompt())

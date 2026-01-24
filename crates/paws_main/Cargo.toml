@@ -9,6 +9,7 @@ edition = "2024"
 
 [dependencies]
 atty = "0.2"
+base64 = "0.22"
 crossterm = { version = "0.28", features = ["event-stream"] }
 futures.workspace = true
 paws_services.workspace = true
@@ -33,6 +34,9 @@ workspace = true
 workspace = true
 
 [dependencies.merge]
+workspace = true
+
+[dependencies.tempfile]
 workspace = true
 
 [dependencies.tokio]

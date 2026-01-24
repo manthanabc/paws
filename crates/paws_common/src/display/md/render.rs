@@ -4,6 +4,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
+pub use termimad::crossterm;
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
 use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};

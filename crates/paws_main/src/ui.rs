@@ -42,6 +42,7 @@ use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
+use crate::transcript::TranscriptRenderer;
 use crate::update::on_update;
 
 // File-specific constants
@@ -1716,6 +1717,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 // Handled in the main loop, but we need to handle it here to satisfy the match
                 return Ok(false);
             }
+            SlashCommand::Transcript => {
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Some(conversation) = self.api.conversation(&conversation_id).await?
+                {
+                    let mut renderer = TranscriptRenderer::new(
+                        self.state.cwd.clone(),
+                        self.api.environment().clone(),
+                    );
+                    renderer.run(conversation).await?;
+                }
+            }
         }
 
         Ok(false)
@@ -2876,6 +2888,41 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
+    fn format_user_message(&self, message: &TextMessage) -> Vec<String> {
+        let content = &message.content;
+        let content_to_show = message
+            .raw_content
+            .as_ref()
+            .and_then(|v| v.as_user_prompt())
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| content.clone());
+
+        let paws_prompt = PawsPrompt {
+            cwd: self.state.cwd.clone(),
+            agent_id: AgentId::default(),
+            model: message.model.clone(),
+            git_branch: None,
+        };
+        let full_prompt = paws_prompt.render_prompt();
+
+        let mut lines = Vec::new();
+        lines.push("".to_string());
+        if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+            lines.push(header.to_string());
+            for line in content_to_show.lines() {
+                lines.push(format!("{}{}", prefix, line));
+            }
+        } else {
+            lines.push(full_prompt);
+            for line in content_to_show.lines() {
+                lines.push(format!("{} {}", "┃".white().bold(), line));
+            }
+        }
+        lines
+    }
+
+    /// Renders a header for the transcript view showing conversation metadata
+    /// and controls.
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
         let Some(context) = conversation.context else {
@@ -2886,45 +2933,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.markdown = MarkdownWriter::new();
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
-                    match role {
+                ContextMessage::Text(text_message) => {
+                    match text_message.role {
                         Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str().to_string())
-                                .unwrap_or_else(|| content.clone());
-
-                            let paws_prompt = PawsPrompt {
-                                cwd: self.state.cwd.clone(),
-                                agent_id: AgentId::default(),
-                                model: model.clone(),
-                                git_branch: None,
-                            };
-                            let full_prompt = paws_prompt.render_prompt();
-
-                            self.writeln("")?;
-                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
-                                self.writeln(header)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}", prefix, line))?;
-                                }
-                            } else {
-                                self.writeln(full_prompt)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
-                                }
+                            let lines = self.format_user_message(text_message);
+                            for line in lines {
+                                self.writeln(line)?;
                             }
                             self.writeln("")?;
                         }
                         Role::Assistant => {
-                            if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner)?;
+                            if !text_message.content.is_empty() {
+                                self.markdown
+                                    .add_chunk(&text_message.content, &mut self.spinner)?;
                                 self.markdown.reset();
                             }
 
                             // Show tool calls if any
-                            if let Some(calls) = tool_calls {
+                            if let Some(calls) = &text_message.tool_calls {
                                 for call in calls {
                                     if let Ok(catalog) = ToolCatalog::try_from(call.clone())
                                         && let Some(content) =
