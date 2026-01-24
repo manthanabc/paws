@@ -25,11 +25,18 @@ use crate::title_display::TitleDisplayExt;
 pub struct TranscriptRenderer {
     cwd: PathBuf,
     environment: Environment,
+    show_thinking: bool,
 }
 
 impl TranscriptRenderer {
     pub fn new(cwd: PathBuf, environment: Environment) -> Self {
-        Self { cwd, environment }
+        Self { cwd, environment, show_thinking: true }
+    }
+
+    /// Sets whether to show thinking/reasoning in the transcript
+    pub fn show_thinking(mut self, show: bool) -> Self {
+        self.show_thinking = show;
+        self
     }
 
     fn format_user_message(&self, message: &TextMessage) -> Vec<String> {
@@ -138,6 +145,16 @@ impl TranscriptRenderer {
 
     /// Renders the transcript of the conversation to a list of lines
     pub fn render_content(&self, conversation: &Conversation) -> Vec<String> {
+        self.render_content_with_thinking(conversation, self.show_thinking)
+    }
+
+    /// Renders the transcript of the conversation to a list of lines
+    /// with the specified thinking visibility setting
+    fn render_content_with_thinking(
+        &self,
+        conversation: &Conversation,
+        show_thinking: bool,
+    ) -> Vec<String> {
         let mut lines = Vec::new();
         let Some(context) = conversation.context.as_ref() else {
             return lines;
@@ -154,41 +171,44 @@ impl TranscriptRenderer {
                         lines.extend(user_lines);
                     }
                     Role::Assistant => {
-                        // Show full thinking/reasoning
-                        if let Some(reasoning) = &text_message.reasoning_details {
-                            for (_idx, detail) in reasoning.iter().enumerate() {
-                                // Try text field first, then decode data field if it's base64
-                                let decoded_data = detail.data.as_ref().and_then(|data| {
-                                    STANDARD
-                                        .decode(data)
-                                        .ok()
-                                        .and_then(|bytes| String::from_utf8(bytes).ok())
-                                });
+                        // Show full thinking/reasoning if enabled
+                        if show_thinking {
+                            if let Some(reasoning) = &text_message.reasoning_details {
+                                for (_idx, detail) in reasoning.iter().enumerate() {
+                                    // Try text field first, then decode data field if it's base64
+                                    let decoded_data = detail.data.as_ref().and_then(|data| {
+                                        STANDARD
+                                            .decode(data)
+                                            .ok()
+                                            .and_then(|bytes| String::from_utf8(bytes).ok())
+                                    });
 
-                                let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
+                                    let reasoning_text =
+                                        detail.text.as_ref().or(decoded_data.as_ref());
 
-                                if let Some(text) = reasoning_text {
-                                    // Show reasoning type header if available
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {}",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed()
-                                        ));
-                                    }
-                                    let rendered = renderer.render(text, Some(Attribute::Dim));
-                                    for line in rendered.lines() {
-                                        lines.push(line.to_string());
-                                    }
-                                } else if detail.data.is_some() {
-                                    // Show placeholder for encrypted/undecodable reasoning
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {} (encrypted, {} bytes)",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed(),
-                                            detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
-                                        ));
+                                    if let Some(text) = reasoning_text {
+                                        // Show reasoning type header if available
+                                        if let Some(type_of) = &detail.type_of {
+                                            lines.push(format!(
+                                                "{}: {}",
+                                                "Reasoning".dimmed(),
+                                                type_of.dimmed()
+                                            ));
+                                        }
+                                        let rendered = renderer.render(text, Some(Attribute::Dim));
+                                        for line in rendered.lines() {
+                                            lines.push(line.to_string());
+                                        }
+                                    } else if detail.data.is_some() {
+                                        // Show placeholder for encrypted/undecodable reasoning
+                                        if let Some(type_of) = &detail.type_of {
+                                            lines.push(format!(
+                                                "{}: {} (encrypted, {} bytes)",
+                                                "Reasoning".dimmed(),
+                                                type_of.dimmed(),
+                                                detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
+                                            ));
+                                        }
                                     }
                                 }
                             }
@@ -248,7 +268,8 @@ impl TranscriptRenderer {
         if let Some(task) = task
             && let Some(task) = crate::info::format_user_message(task)
         {
-            info = info.add_key_value("Tasks", task);
+            info = info.add_title("TASKS");
+            info = info.add_value(task);
 
             for feedback in user_messages {
                 if let Some(feedback) = crate::info::format_user_message(feedback) {
@@ -259,7 +280,7 @@ impl TranscriptRenderer {
 
         // File operations from metrics
         if !conversation.metrics.file_operations.is_empty() {
-            info = info.add_key_value("File Operations", "");
+            info = info.add_title("FILE OPERATIONS");
 
             // Collect and sort operations
             let mut operations: Vec<_> = conversation.metrics.file_operations.iter().collect();
@@ -351,6 +372,7 @@ impl TranscriptRenderer {
         search_query: Option<&str>,
         match_info: Option<(usize, usize)>,
         is_searching: bool,
+        show_thinking: bool,
     ) -> Result<()> {
         let mut stdout = std::io::stdout();
         execute!(
@@ -380,9 +402,14 @@ impl TranscriptRenderer {
             }
         } else {
             format!(
-                " {}/{} | j/k: scroll | /: search | e: edit | q/Esc: exit ",
+                " {}/{} | j/k: scroll | /: search | t: {} | e: edit | q/Esc: exit ",
                 offset + 1,
-                lines.len()
+                lines.len(),
+                if show_thinking {
+                    "hide thinking"
+                } else {
+                    "show thinking"
+                }
             )
         };
 
@@ -486,6 +513,9 @@ impl TranscriptRenderer {
         let mut scroll_offset = 0;
         let (_width, mut height) = terminal::size()?;
 
+        // Thinking visibility state
+        let mut show_thinking = self.show_thinking;
+
         // Search state
         let mut is_searching = false;
         let mut search_query = String::new();
@@ -525,6 +555,7 @@ impl TranscriptRenderer {
             },
             None,
             is_searching,
+            show_thinking,
         )?;
 
         let mut reader = EventStream::new();
@@ -573,6 +604,25 @@ impl TranscriptRenderer {
                                 matches.clear();
                                 current_match_idx = None;
                             }
+                            KeyCode::Char('t') => {
+                                // Toggle thinking visibility
+                                show_thinking = !show_thinking;
+                                // Re-render content with new thinking visibility
+                                lines =
+                                    self.render_content_with_thinking(&conversation, show_thinking);
+                                let header = self.render_header(&conversation);
+                                lines.splice(0..0, header);
+                                lines.push(String::new());
+                                lines.extend(self.render_summary(&conversation));
+                                // Adjust scroll offset if needed
+                                let content_height = height.saturating_sub(1) as usize;
+                                if lines.len() > content_height {
+                                    scroll_offset = scroll_offset
+                                        .min(lines.len().saturating_sub(content_height));
+                                } else {
+                                    scroll_offset = 0;
+                                }
+                            }
                             KeyCode::Char('n') => {
                                 if !matches.is_empty() {
                                     if let Some(curr) = current_match_idx {
@@ -616,6 +666,7 @@ impl TranscriptRenderer {
                                         None
                                     },
                                     is_searching,
+                                    show_thinking,
                                 )?;
                             }
                             KeyCode::Up | KeyCode::Char('k') => {
@@ -688,6 +739,7 @@ impl TranscriptRenderer {
                         },
                         match_info,
                         is_searching,
+                        show_thinking,
                     )?;
                 }
                 Some(Ok(event::Event::Mouse(mouse_event))) => {
@@ -725,6 +777,7 @@ impl TranscriptRenderer {
                         },
                         match_info,
                         is_searching,
+                        show_thinking,
                     )?;
                 }
                 Some(Ok(event::Event::Resize(_w, h))) => {
@@ -770,6 +823,7 @@ impl TranscriptRenderer {
                         },
                         match_info,
                         is_searching,
+                        show_thinking,
                     )?;
                 }
                 _ => {}
