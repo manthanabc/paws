@@ -305,6 +305,11 @@ fn extract_tool_info(call: &ToolCallFull) -> Option<SummaryTool> {
                 .or(input.regex)
                 .map(|pattern| SummaryTool::Search { pattern }),
             ToolCatalog::Undo(input) => Some(SummaryTool::Undo { path: input.path }),
+            ToolCatalog::ReadImage(input) => Some(SummaryTool::FileRead { path: input.path }),
+            ToolCatalog::SemSearch(input) => input
+                .extensions
+                .first()
+                .map(|ext| SummaryTool::Search { pattern: ext.clone() }),
             ToolCatalog::Fetch(input) => Some(SummaryTool::Fetch { url: input.url }),
             ToolCatalog::Followup(input) => {
                 Some(SummaryTool::Followup { question: input.question })

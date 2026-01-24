@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use convert_case::{Case, Casing};
 use derive_more::From;
 use eserde::Deserialize;
-use forge_tool_macros::ToolDescription;
+use paws_tool_macros::ToolDescription;
 use schemars::JsonSchema;
 use schemars::schema::RootSchema;
 use serde::Serialize;
@@ -72,7 +72,7 @@ fn default_true() -> bool {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_read.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_read.md"]
 pub struct FSRead {
     /// The path of the file to read, always provide absolute paths.
     pub path: String,
@@ -94,7 +94,7 @@ pub struct FSRead {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/read_image.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/read_image.md"]
 pub struct ReadImage {
     /// The absolute path to the image file (e.g., /home/user/image.png).
     /// Relative paths are not supported. The file must exist and be readable.
@@ -102,7 +102,7 @@ pub struct ReadImage {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_write.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_write.md"]
 pub struct FSWrite {
     /// The path of the file to write to (absolute path required)
     pub path: String,
@@ -121,7 +121,7 @@ pub struct FSWrite {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_search.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_search.md"]
 pub struct FSSearch {
     /// The absolute path of the directory or file to search in. If it's a
     /// directory, it will be searched recursively. If it's a file path,
@@ -180,7 +180,7 @@ impl SearchQuery {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/semantic_search.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/semantic_search.md"]
 pub struct SemanticSearch {
     /// List of search queries to execute in parallel. Using multiple queries
     /// (2-3) with varied phrasings significantly improves results - each query
@@ -197,7 +197,7 @@ pub struct SemanticSearch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_remove.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_remove.md"]
 pub struct FSRemove {
     /// The path of the file to remove (absolute path required)
     pub path: String,
@@ -257,7 +257,7 @@ impl JsonSchema for PatchOperation {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_patch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_patch.md"]
 pub struct FSPatch {
     /// The path to the file to modify
     pub path: String,
@@ -285,14 +285,14 @@ pub struct FSPatch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/fs_undo.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/fs_undo.md"]
 pub struct FSUndo {
     /// The absolute path of the file to revert to its previous state.
     pub path: String,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/shell.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/shell.md"]
 pub struct Shell {
     /// The shell command to execute.
     pub command: String,
@@ -316,7 +316,7 @@ pub struct Shell {
 
 /// Input type for the net fetch tool
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/net_fetch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/net_fetch.md"]
 pub struct NetFetch {
     /// URL to fetch
     pub url: String,
@@ -328,7 +328,7 @@ pub struct NetFetch {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/followup.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/followup.md"]
 pub struct Followup {
     /// Question to ask the user
     pub question: String,
@@ -360,7 +360,7 @@ pub struct Followup {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/plan_create.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/plan_create.md"]
 pub struct PlanCreate {
     /// The name of the plan (will be used in the filename)
     pub plan_name: String,
@@ -374,7 +374,7 @@ pub struct PlanCreate {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
-#[tool_description_file = "crates/forge_domain/src/tools/descriptions/skill_fetch.md"]
+#[tool_description_file = "crates/paws_domain/src/tools/descriptions/skill_fetch.md"]
 pub struct SkillFetch {
     /// The name of the skill to fetch (e.g., "pdf", "code_review")
     pub name: String,
@@ -494,6 +494,16 @@ lazy_static::lazy_static! {
         .collect();
 }
 
+/// Normalizes tool names for backward compatibility
+/// Maps capitalized aliases to their lowercase canonical forms
+fn normalize_tool_name(name: &ToolName) -> ToolName {
+    match name.as_str() {
+        "Read" => ToolName::new("read"),
+        "Write" => ToolName::new("write"),
+        _ => name.clone(),
+    }
+}
+
 impl ToolCatalog {
     pub fn schema(&self) -> RootSchema {
         use schemars::r#gen::SchemaSettings;
@@ -530,20 +540,23 @@ impl ToolCatalog {
             .input_schema(self.schema())
     }
     pub fn contains(tool_name: &ToolName) -> bool {
-        FORGE_TOOLS.contains(tool_name)
+        let normalized = normalize_tool_name(tool_name);
+        FORGE_TOOLS.contains(&normalized)
     }
     pub fn should_yield(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
+        let normalized = normalize_tool_name(tool_name);
         [ToolKind::Followup]
             .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+            .any(|v| v.to_string().to_case(Case::Snake).eq(normalized.as_str()))
     }
 
     pub fn requires_stdout(tool_name: &ToolName) -> bool {
         // Tools that require direct stdout/stderr access
+        let normalized = normalize_tool_name(tool_name);
         [ToolKind::Shell]
             .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+            .any(|v| v.to_string().to_case(Case::Snake).eq(normalized.as_str()))
     }
 
     /// Convert a tool input to its corresponding domain operation for policy
@@ -773,12 +786,14 @@ impl TryFrom<ToolCallFull> for ToolCatalog {
         // Parse the arguments
         let parsed_args = value.arguments.parse()?;
 
+        // Normalize the tool name for comparison
+        let normalized_name = normalize_tool_name(&value.name);
         // Try to find the tool definition and coerce types based on schema
         let coerced_args = ToolCatalog::iter()
-            .find(|tool| tool.definition().name == value.name)
+            .find(|tool| tool.definition().name == normalized_name)
             .map(|tool| {
                 let schema = tool.definition().input_schema;
-                forge_json_repair::coerce_to_schema(parsed_args.clone(), &schema)
+                paws_common::json_repair::coerce_to_schema(parsed_args.clone(), &schema)
             })
             .unwrap_or(parsed_args);
 
@@ -1026,6 +1041,26 @@ mod tests {
         );
 
         matches!(actual.unwrap(), ToolCatalog::Write(_));
+    }
+
+    #[test]
+    fn test_contains_with_lowercase() {
+        assert!(ToolCatalog::contains(&ToolName::new("read")));
+        assert!(ToolCatalog::contains(&ToolName::new("write")));
+        assert!(!ToolCatalog::contains(&ToolName::new("nonexistent")));
+    }
+
+    #[test]
+    fn test_contains_with_capitalized() {
+        // Test that capitalized versions are also found
+        assert!(
+            ToolCatalog::contains(&ToolName::new("Read")),
+            "Should contain capitalized 'Read'"
+        );
+        assert!(
+            ToolCatalog::contains(&ToolName::new("Write")),
+            "Should contain capitalized 'Write'"
+        );
     }
 
     #[test]

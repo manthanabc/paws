@@ -93,6 +93,7 @@ features = [ "derive",]
 
 [dependencies.paws_common]
 workspace = true
+features = ["json"]
 
 [dev-dependencies.insta]
 workspace = true
