@@ -209,7 +209,10 @@ impl<
                 (input, output).into()
             }
             ToolCatalog::Shell(input) => {
-                let cwd = input.cwd.unwrap_or_else(|| PathBuf::from("."));
+                // When cwd is not specified, default to the current working directory from the environment
+                let cwd = input
+                    .cwd
+                    .unwrap_or_else(|| self.services.get_environment().cwd.clone());
                 let normalized_cwd = self.normalize_path(cwd.display().to_string());
                 let output = self
                     .services
