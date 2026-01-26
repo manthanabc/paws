@@ -133,9 +133,9 @@ impl<F: FileInfoInfra + EnvironmentInfra + InfraFsReadService> FsReadService for
             // max_file_size)
             assert_file_size(&*self.0, path, env.max_image_size).await.with_context(|| {
                 if mime_type == "application/pdf" {
-                    "PDF exceeds size limit. Use a smaller PDF or increase FORGE_MAX_IMAGE_SIZE."
+                    "PDF exceeds size limit. Use a smaller PDF or increase PAWS_MAX_IMAGE_SIZE."
                 } else {
-                    "Image exceeds size limit. Compress the image or increase FORGE_MAX_IMAGE_SIZE."
+                    "Image exceeds size limit. Compress the image or increase PAWS_MAX_IMAGE_SIZE."
                 }
             })?;
 
