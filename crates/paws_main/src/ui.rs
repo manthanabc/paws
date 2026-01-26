@@ -2615,6 +2615,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.spinner.stop(None)?;
         self.writeln(info)?;
 
+        // Add hint about transcript mode
+        self.writeln("")?;
+        self.writeln("Hint: Press Ctrl+O to view this conversation in transcript mode".dimmed())?;
+
         Ok(())
     }
 

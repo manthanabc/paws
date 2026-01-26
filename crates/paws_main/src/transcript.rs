@@ -14,7 +14,7 @@ use crossterm::{cursor, execute, terminal};
 use paws_api::{AgentId, Conversation, Environment, TextMessage, TokenCount, ToolCatalog};
 use paws_app::fmt::content::FormatContent;
 use paws_common::display::md::render::{MarkdownRenderer, crossterm as md_crossterm};
-use paws_domain::{ChatResponseContent, ContextMessage, Role};
+use paws_domain::{ChatResponseContent, ContextMessage, Role, ToolValue};
 use tokio_stream::StreamExt;
 
 use crate::info::Info;
@@ -30,17 +30,19 @@ struct DrawViewportArgs<'a> {
     match_info: Option<(usize, usize)>,
     is_searching: bool,
     show_thinking: bool,
+    show_tool_outputs: bool,
 }
 
 pub struct TranscriptRenderer {
     cwd: PathBuf,
     environment: Environment,
     show_thinking: bool,
+    show_tool_outputs: bool,
 }
 
 impl TranscriptRenderer {
     pub fn new(cwd: PathBuf, environment: Environment) -> Self {
-        Self { cwd, environment, show_thinking: true }
+        Self { cwd, environment, show_thinking: true, show_tool_outputs: false }
     }
 
     /// Sets whether to show thinking/reasoning in the transcript
@@ -156,15 +158,16 @@ impl TranscriptRenderer {
 
     /// Renders the transcript of the conversation to a list of lines
     pub fn render_content(&self, conversation: &Conversation) -> Vec<String> {
-        self.render_content_with_thinking(conversation, self.show_thinking)
+        self.render_content_with_options(conversation, self.show_thinking, self.show_tool_outputs)
     }
 
     /// Renders the transcript of the conversation to a list of lines
-    /// with the specified thinking visibility setting
-    fn render_content_with_thinking(
+    /// with the specified thinking and tool outputs visibility settings
+    fn render_content_with_options(
         &self,
         conversation: &Conversation,
         show_thinking: bool,
+        show_tool_outputs: bool,
     ) -> Vec<String> {
         let mut lines = Vec::new();
         let Some(context) = conversation.context.as_ref() else {
@@ -175,83 +178,111 @@ impl TranscriptRenderer {
         let renderer = MarkdownRenderer::default();
 
         for message in &context.messages {
-            if let ContextMessage::Text(text_message) = &**message {
-                match text_message.role {
-                    Role::User => {
-                        let user_lines = self.format_user_message(text_message);
-                        lines.extend(user_lines);
-                    }
-                    Role::Assistant => {
-                        // Show full thinking/reasoning if enabled
-                        if show_thinking && let Some(reasoning) = &text_message.reasoning_details {
-                            for detail in reasoning.iter() {
-                                // Try text field first, then decode data field if it's base64
-                                let decoded_data = detail.data.as_ref().and_then(|data| {
-                                    STANDARD
-                                        .decode(data)
-                                        .ok()
-                                        .and_then(|bytes| String::from_utf8(bytes).ok())
-                                });
+            match &**message {
+                ContextMessage::Text(text_message) => {
+                    match text_message.role {
+                        Role::User => {
+                            let user_lines = self.format_user_message(text_message);
+                            lines.extend(user_lines);
+                        }
+                        Role::Assistant => {
+                            // Show full thinking/reasoning if enabled
+                            if show_thinking && let Some(reasoning) = &text_message.reasoning_details {
+                                for detail in reasoning.iter() {
+                                    // Try text field first, then decode data field if it's base64
+                                    let decoded_data = detail.data.as_ref().and_then(|data| {
+                                        STANDARD
+                                            .decode(data)
+                                            .ok()
+                                            .and_then(|bytes| String::from_utf8(bytes).ok())
+                                    });
 
-                                let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
+                                    let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
 
-                                if let Some(text) = reasoning_text {
-                                    // Show reasoning type header if available
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {}",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed()
-                                        ));
-                                    }
-                                    let rendered = renderer.render(text, Some(Attribute::Dim));
-                                    for line in rendered.lines() {
-                                        lines.push(line.to_string());
-                                    }
-                                } else if detail.data.is_some() {
-                                    // Show placeholder for encrypted/undecodable reasoning
-                                    if let Some(type_of) = &detail.type_of {
-                                        lines.push(format!(
-                                            "{}: {} (encrypted, {} bytes)",
-                                            "Reasoning".dimmed(),
-                                            type_of.dimmed(),
-                                            detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
-                                        ));
+                                    if let Some(text) = reasoning_text {
+                                        // Show reasoning type header if available
+                                        if let Some(type_of) = &detail.type_of {
+                                            lines.push(format!(
+                                                "{}: {}",
+                                                "Reasoning".dimmed(),
+                                                type_of.dimmed()
+                                            ));
+                                        }
+                                        let rendered = renderer.render(text, Some(Attribute::Dim));
+                                        for line in rendered.lines() {
+                                            lines.push(line.to_string());
+                                        }
+                                    } else if detail.data.is_some() {
+                                        // Show placeholder for encrypted/undecodable reasoning
+                                        if let Some(type_of) = &detail.type_of {
+                                            lines.push(format!(
+                                                "{}: {} (encrypted, {} bytes)",
+                                                "Reasoning".dimmed(),
+                                                type_of.dimmed(),
+                                                detail.data.as_ref().map(|d| d.len()).unwrap_or(0)
+                                            ));
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if !text_message.content.is_empty() {
-                            let rendered = renderer.render(&text_message.content, None);
-                            for line in rendered.lines() {
-                                lines.push(line.to_string());
+                            if !text_message.content.is_empty() {
+                                let rendered = renderer.render(&text_message.content, None);
+                                for line in rendered.lines() {
+                                    lines.push(line.to_string());
+                                }
                             }
-                        }
 
-                        // Show tool calls using the same formatting as normal mode
-                        if let Some(calls) = &text_message.tool_calls {
-                            for call in calls {
-                                if let Ok(catalog) = ToolCatalog::try_from(call.clone())
-                                    && let Some(content) = catalog.to_content(&self.environment)
-                                {
-                                    match content {
-                                        ChatResponseContent::Title(title) => {
-                                            lines.push(title.display().to_string());
-                                        }
-                                        ChatResponseContent::PlainText(text)
-                                        | ChatResponseContent::Markdown(text) => {
-                                            for line in text.lines() {
-                                                lines.push(line.to_string());
+                            // Show tool calls using the same formatting as normal mode
+                            if let Some(calls) = &text_message.tool_calls {
+                                for call in calls {
+                                    if let Ok(catalog) = ToolCatalog::try_from(call.clone())
+                                        && let Some(content) = catalog.to_content(&self.environment)
+                                    {
+                                        match content {
+                                            ChatResponseContent::Title(title) => {
+                                                lines.push(title.display().to_string());
+                                            }
+                                            ChatResponseContent::PlainText(text)
+                                            | ChatResponseContent::Markdown(text) => {
+                                                for line in text.lines() {
+                                                    lines.push(line.to_string());
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
+                ContextMessage::Tool(tool_result) => {
+                    // Render tool results to show tool outputs in place (only if enabled)
+                    if show_tool_outputs {
+                        lines.push(format!("{}: {}", "Tool Result".dimmed(), tool_result.name));
+                        for value in &tool_result.output.values {
+                            match value {
+                                ToolValue::Text(text) => {
+                                    for line in text.lines() {
+                                        lines.push(line.dimmed().to_string());
+                                    }
+                                }
+                                ToolValue::Image(image) => {
+                                    lines.push(format!("[Image: {}]", image.mime_type()).dimmed().to_string());
+                                }
+                                ToolValue::AI { value, conversation_id } => {
+                                    lines.push(format!("AI Result ({conversation_id}):").dimmed().to_string());
+                                    for line in value.lines() {
+                                        lines.push(line.dimmed().to_string());
+                                    }
+                                }
+                                ToolValue::Empty => {}
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -401,13 +432,18 @@ impl TranscriptRenderer {
             }
         } else {
             format!(
-                " {}/{} | j/k: scroll | /: search | t: {} | e: edit | q/Esc: exit ",
+                " {}/{} | j/k: scroll | /: search | t: {} | o: {} | e: edit | q/Esc: exit ",
                 args.offset + 1,
                 args.lines.len(),
                 if args.show_thinking {
                     "hide thinking"
                 } else {
                     "show thinking"
+                },
+                if args.show_tool_outputs {
+                    "hide tool outputs"
+                } else {
+                    "show tool outputs"
                 }
             )
         };
@@ -515,6 +551,9 @@ impl TranscriptRenderer {
         // Thinking visibility state
         let mut show_thinking = self.show_thinking;
 
+        // Tool outputs visibility state
+        let mut show_tool_outputs = self.show_tool_outputs;
+
         // Search state
         let mut is_searching = false;
         let mut search_query = String::new();
@@ -555,6 +594,7 @@ impl TranscriptRenderer {
             match_info: None,
             is_searching,
             show_thinking,
+            show_tool_outputs,
         })?;
 
         let mut reader = EventStream::new();
@@ -608,7 +648,26 @@ impl TranscriptRenderer {
                                 show_thinking = !show_thinking;
                                 // Re-render content with new thinking visibility
                                 lines =
-                                    self.render_content_with_thinking(&conversation, show_thinking);
+                                    self.render_content_with_options(&conversation, show_thinking, show_tool_outputs);
+                                let header = self.render_header(&conversation);
+                                lines.splice(0..0, header);
+                                lines.push(String::new());
+                                lines.extend(self.render_summary(&conversation));
+                                // Adjust scroll offset if needed
+                                let content_height = height.saturating_sub(1) as usize;
+                                if lines.len() > content_height {
+                                    scroll_offset = scroll_offset
+                                        .min(lines.len().saturating_sub(content_height));
+                                } else {
+                                    scroll_offset = 0;
+                                }
+                            }
+                            KeyCode::Char('o') => {
+                                // Toggle tool outputs visibility
+                                show_tool_outputs = !show_tool_outputs;
+                                // Re-render content with new tool outputs visibility
+                                lines =
+                                    self.render_content_with_options(&conversation, show_thinking, show_tool_outputs);
                                 let header = self.render_header(&conversation);
                                 lines.splice(0..0, header);
                                 lines.push(String::new());
@@ -666,6 +725,7 @@ impl TranscriptRenderer {
                                     },
                                     is_searching,
                                     show_thinking,
+                                    show_tool_outputs,
                                 })?;
                             }
                             KeyCode::Up | KeyCode::Char('k') => {
@@ -737,6 +797,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
+                        show_tool_outputs,
                     })?;
                 }
                 Some(Ok(event::Event::Mouse(mouse_event))) => {
@@ -775,6 +836,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
+                        show_tool_outputs,
                     })?;
                 }
                 Some(Ok(event::Event::Resize(_w, h))) => {
@@ -821,6 +883,7 @@ impl TranscriptRenderer {
                         match_info,
                         is_searching,
                         show_thinking,
+                        show_tool_outputs,
                     })?;
                 }
                 _ => {}
