@@ -2553,7 +2553,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         self.thinking_start = Some(std::time::Instant::now());
                         let max_h = (self.markdown.height() as f64 * 0.4) as usize;
                         self.markdown.set_max_height(Some(max_h));
-                        self.markdown.set_header(Some("Thinking..".to_string()));
+                        self.markdown.set_header(Some(
+                            TitleFormat::info("Thinking..").display().to_string(),
+                        ));
                     }
                     self.markdown
                         .add_chunk_dimmed(&content, &mut self.spinner)?;

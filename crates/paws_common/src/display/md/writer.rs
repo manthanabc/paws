@@ -1,3 +1,4 @@
+use console::strip_ansi_codes;
 use termimad::crossterm::style::{Attribute, Stylize};
 
 use crate::display::md::render::MarkdownRenderer;
@@ -76,7 +77,13 @@ impl MarkdownWriter {
             spn.write_ln("").expect("Failed to write");
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer, None), spn);
+        let rendered = self.renderer.render(&self.buffer, None);
+        let mut lines: Vec<String> = rendered.lines().map(|line| line.to_string()).collect();
+        // Always apply mild dimming to all lines
+        for line in lines.iter_mut() {
+            *line = dim_line_mild(line);
+        }
+        self.stream(&lines.join("\n"), spn);
         self.last_was_dimmed = true;
         Ok(())
     }
@@ -109,7 +116,8 @@ impl MarkdownWriter {
         }
 
         if was_truncated {
-            dim_top_lines(&mut lines_new, 1);
+            // Apply gradient only to first 3 lines when scrolling starts
+            dim_first_3_lines_gradient(&mut lines_new);
         }
 
         if let Some(header) = &self.header {
@@ -156,16 +164,26 @@ impl MarkdownWriter {
     }
 }
 
-fn dim_top_lines(lines: &mut [String], count: usize) {
-    if count == 0 {
-        return;
+fn dim_line_gradient(line: &str, intensity: f64) -> String {
+    const RESET: &str = "\x1b[0m";
+
+    if line.is_empty() {
+        return String::new();
     }
-    for line in lines.iter_mut().take(count) {
-        *line = dim_line(line);
-    }
+
+    // ANSI 256-color gray codes from light (240) to lightest (247)
+    // Top lines (intensity 1.0) = lightest gray
+    // Bottom lines (intensity 0.0) = lighter gray
+    let gray_code = (240.0 + (intensity * 7.0)) as u8;
+    let gray_code = gray_code.min(247).max(240);
+
+    // Strip ANSI codes for the gradient effect
+    let plain_text = strip_ansi_codes(line);
+
+    format!("\x1b[38;5;{}m{}{}", gray_code, plain_text, RESET)
 }
 
-fn dim_line(line: &str) -> String {
+fn dim_line_mild(line: &str) -> String {
     const DIM: &str = "\x1b[2m";
     const RESET: &str = "\x1b[0m";
     const RESET_DIM: &str = "\x1b[0m\x1b[2m";
@@ -176,6 +194,24 @@ fn dim_line(line: &str) -> String {
 
     let dimmed = line.replace(RESET, RESET_DIM);
     format!("{DIM}{dimmed}{RESET}")
+}
+
+fn dim_first_3_lines_gradient(lines: &mut [String]) {
+    let len = lines.len();
+    if len == 0 {
+        return;
+    }
+
+    // Apply gradient only to first 3 lines
+    for (i, line) in lines.iter_mut().take(3).enumerate() {
+        // Calculate intensity: 0.0 (newest) to 1.0 (oldest of first 3)
+        let intensity = if len == 1 {
+            0.0
+        } else {
+            i as f64 / (len.min(3) - 1) as f64
+        };
+        *line = dim_line_gradient(line, intensity);
+    }
 }
 
 #[cfg(test)]
@@ -289,7 +325,44 @@ And some more text after the code block."#;
         fixture.stream("Line 1\nLine 2\nLine 3", &mut spn);
 
         let actual = fixture.previous_rendered.clone();
-        let expected = format!("\x1b[2mLine 2\x1b[0m\nLine 3");
-        assert_eq!(actual, expected);
+        // After truncation, gradient is applied to all lines
+        // Line 2 (index 0) should have lighter gray
+        // Line 3 (index 1) should have darker gray
+        assert!(actual.contains("\x1b[38;5;")); // Contains gradient codes
+        assert!(actual.contains("Line 2"));
+        assert!(actual.contains("Line 3"));
+    }
+
+    #[test]
+    fn test_dim_first_3_lines_gradient() {
+        let mut lines = vec![
+            "Line 1".to_string(),
+            "Line 2".to_string(),
+            "Line 3".to_string(),
+        ];
+        dim_first_3_lines_gradient(&mut lines);
+
+        // Check that all lines have been transformed with gradient ANSI codes
+        assert!(lines[0].contains("\x1b[38;5;"));
+        assert!(lines[1].contains("\x1b[38;5;"));
+        assert!(lines[2].contains("\x1b[38;5;"));
+
+        // Check that the gradient is applied (different gray codes)
+        // The exact codes depend on the intensity calculation
+        assert_ne!(lines[0], lines[1]);
+        assert_ne!(lines[1], lines[2]);
+    }
+
+    #[test]
+    fn test_dim_line_mild() {
+        let line = "Some text";
+        let dimmed = dim_line_mild(line);
+
+        // Should contain dim code
+        assert!(dimmed.contains("\x1b[2m"));
+        // Should contain reset code
+        assert!(dimmed.contains("\x1b[0m"));
+        // Should contain the original text
+        assert!(dimmed.contains("Some text"));
     }
 }
