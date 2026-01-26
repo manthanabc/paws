@@ -42,7 +42,12 @@ pub struct TranscriptRenderer {
 
 impl TranscriptRenderer {
     pub fn new(cwd: PathBuf, environment: Environment) -> Self {
-        Self { cwd, environment, show_thinking: true, show_tool_outputs: false }
+        Self {
+            cwd,
+            environment,
+            show_thinking: true,
+            show_tool_outputs: false,
+        }
     }
 
     /// Sets whether to show thinking/reasoning in the transcript
@@ -187,7 +192,9 @@ impl TranscriptRenderer {
                         }
                         Role::Assistant => {
                             // Show full thinking/reasoning if enabled
-                            if show_thinking && let Some(reasoning) = &text_message.reasoning_details {
+                            if show_thinking
+                                && let Some(reasoning) = &text_message.reasoning_details
+                            {
                                 for detail in reasoning.iter() {
                                     // Try text field first, then decode data field if it's base64
                                     let decoded_data = detail.data.as_ref().and_then(|data| {
@@ -197,7 +204,8 @@ impl TranscriptRenderer {
                                             .and_then(|bytes| String::from_utf8(bytes).ok())
                                     });
 
-                                    let reasoning_text = detail.text.as_ref().or(decoded_data.as_ref());
+                                    let reasoning_text =
+                                        detail.text.as_ref().or(decoded_data.as_ref());
 
                                     if let Some(text) = reasoning_text {
                                         // Show reasoning type header if available
@@ -269,10 +277,18 @@ impl TranscriptRenderer {
                                     }
                                 }
                                 ToolValue::Image(image) => {
-                                    lines.push(format!("[Image: {}]", image.mime_type()).dimmed().to_string());
+                                    lines.push(
+                                        format!("[Image: {}]", image.mime_type())
+                                            .dimmed()
+                                            .to_string(),
+                                    );
                                 }
                                 ToolValue::AI { value, conversation_id } => {
-                                    lines.push(format!("AI Result ({conversation_id}):").dimmed().to_string());
+                                    lines.push(
+                                        format!("AI Result ({conversation_id}):")
+                                            .dimmed()
+                                            .to_string(),
+                                    );
                                     for line in value.lines() {
                                         lines.push(line.dimmed().to_string());
                                     }
@@ -647,8 +663,11 @@ impl TranscriptRenderer {
                                 // Toggle thinking visibility
                                 show_thinking = !show_thinking;
                                 // Re-render content with new thinking visibility
-                                lines =
-                                    self.render_content_with_options(&conversation, show_thinking, show_tool_outputs);
+                                lines = self.render_content_with_options(
+                                    &conversation,
+                                    show_thinking,
+                                    show_tool_outputs,
+                                );
                                 let header = self.render_header(&conversation);
                                 lines.splice(0..0, header);
                                 lines.push(String::new());
@@ -666,8 +685,11 @@ impl TranscriptRenderer {
                                 // Toggle tool outputs visibility
                                 show_tool_outputs = !show_tool_outputs;
                                 // Re-render content with new tool outputs visibility
-                                lines =
-                                    self.render_content_with_options(&conversation, show_thinking, show_tool_outputs);
+                                lines = self.render_content_with_options(
+                                    &conversation,
+                                    show_thinking,
+                                    show_tool_outputs,
+                                );
                                 let header = self.render_header(&conversation);
                                 lines.splice(0..0, header);
                                 lines.push(String::new());
