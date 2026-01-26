@@ -289,7 +289,7 @@ And some more text after the code block."#;
         fixture.stream("Line 1\nLine 2\nLine 3", &mut spn);
 
         let actual = fixture.previous_rendered.clone();
-        let expected = format!("\x1b[2mLine 2\x1b[0m\nLine 3");
+        let expected = "\x1b[2mLine 2\x1b[0m\nLine 3".to_string();
         assert_eq!(actual, expected);
     }
 }
