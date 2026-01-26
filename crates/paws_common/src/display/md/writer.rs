@@ -9,6 +9,7 @@ pub struct MarkdownWriter {
     previous_rendered: String,
     last_was_dimmed: bool,
     max_height: Option<usize>,
+    header: Option<String>,
 }
 
 impl MarkdownWriter {
@@ -19,11 +20,20 @@ impl MarkdownWriter {
             previous_rendered: String::new(),
             last_was_dimmed: false,
             max_height: None,
+            header: None,
         }
     }
 
     pub fn set_max_height(&mut self, max_height: Option<usize>) {
         self.max_height = max_height;
+    }
+
+    /// Sets an optional header line rendered above the buffer.
+    ///
+    /// # Arguments
+    /// - `header`: Header text to display, or `None` to clear it.
+    pub fn set_header(&mut self, header: Option<String>) {
+        self.header = header;
     }
 
     pub fn height(&self) -> usize {
@@ -66,10 +76,7 @@ impl MarkdownWriter {
             spn.write_ln("").expect("Failed to write");
         }
         self.buffer.push_str(chunk);
-        self.stream(
-            &self.renderer.render(&self.buffer, Some(Attribute::Dim)),
-            spn,
-        );
+        self.stream(&self.renderer.render(&self.buffer, None), spn);
         self.last_was_dimmed = true;
         Ok(())
     }
@@ -84,7 +91,7 @@ impl MarkdownWriter {
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
-        let mut lines_new: Vec<&str> = content.lines().collect();
+        let mut lines_new: Vec<String> = content.lines().map(|line| line.to_string()).collect();
         let lines_prev: Vec<String> = self
             .previous_rendered
             .lines()
@@ -92,20 +99,33 @@ impl MarkdownWriter {
             .collect();
 
         // Apply max_height truncation if set
+        let mut was_truncated = false;
         if let Some(max_h) = self.max_height
             && lines_new.len() > max_h
         {
-            // Keep only the last max_h lines
             let start = lines_new.len() - max_h;
             lines_new = lines_new[start..].to_vec();
+            was_truncated = true;
+        }
+
+        if was_truncated {
+            dim_top_lines(&mut lines_new, 1);
+        }
+
+        if let Some(header) = &self.header {
+            let mut header_lines = header
+                .lines()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>();
+            header_lines.append(&mut lines_new);
+            lines_new = header_lines;
         }
 
         // Compute common prefix to minimize redraw
         let common = lines_prev
             .iter()
-            .map(|s| s.as_str())
             .zip(&lines_new)
-            .take_while(|(p, n)| p == *n)
+            .take_while(|(p, n)| p == n)
             .count();
 
         let lines_to_update = self.renderer.height;
@@ -134,6 +154,28 @@ impl MarkdownWriter {
         let _ = spn.write_ln(out);
         self.previous_rendered = lines_new.join("\n");
     }
+}
+
+fn dim_top_lines(lines: &mut [String], count: usize) {
+    if count == 0 {
+        return;
+    }
+    for line in lines.iter_mut().take(count) {
+        *line = dim_line(line);
+    }
+}
+
+fn dim_line(line: &str) -> String {
+    const DIM: &str = "\x1b[2m";
+    const RESET: &str = "\x1b[0m";
+    const RESET_DIM: &str = "\x1b[0m\x1b[2m";
+
+    if line.is_empty() {
+        return String::new();
+    }
+
+    let dimmed = line.replace(RESET, RESET_DIM);
+    format!("{DIM}{dimmed}{RESET}")
 }
 
 #[cfg(test)]
@@ -223,5 +265,31 @@ And some more text after the code block."#;
         assert!(fixture.buffer.contains("println!"));
         assert!(fixture.buffer.contains("Hello, world!"));
         assert!(fixture.buffer.contains("more text"));
+    }
+
+    #[test]
+    fn test_markdown_writer_header_line() {
+        let mut fixture = MarkdownWriter::new();
+        let mut spn = SpinnerManager::new();
+
+        fixture.set_header(Some("Thinking..".to_string()));
+        fixture.stream("Line 1", &mut spn);
+
+        let actual = fixture.previous_rendered.clone();
+        let expected = "Thinking..\nLine 1";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_markdown_writer_truncation_dims_top_line() {
+        let mut fixture = MarkdownWriter::new();
+        let mut spn = SpinnerManager::new();
+
+        fixture.set_max_height(Some(2));
+        fixture.stream("Line 1\nLine 2\nLine 3", &mut spn);
+
+        let actual = fixture.previous_rendered.clone();
+        let expected = format!("\x1b[2mLine 2\x1b[0m\nLine 3");
+        assert_eq!(actual, expected);
     }
 }

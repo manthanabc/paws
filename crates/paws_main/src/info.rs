@@ -89,11 +89,12 @@ impl Section {
 #[derive(Default)]
 pub struct Info {
     sections: Vec<Section>,
+    hint: Option<String>,
 }
 
 impl Info {
     pub fn new() -> Self {
-        Info { sections: Vec::new() }
+        Info { sections: Vec::new(), hint: None }
     }
 
     /// Returns a reference to the sections
@@ -232,6 +233,12 @@ impl Info {
 
     pub fn extend(mut self, other: impl Into<Info>) -> Self {
         self.sections.extend(other.into().sections);
+        self
+    }
+
+    /// Adds a hint to be displayed at the end of the info
+    pub fn with_hint(mut self, hint: impl ToString) -> Self {
+        self.hint = Some(hint.to_string());
         self
     }
 }
@@ -459,7 +466,7 @@ impl From<&Metrics> for Info {
             }
         }
 
-        info
+        info.with_hint("Ctrl+O to view transcript")
     }
 }
 
@@ -540,6 +547,13 @@ impl fmt::Display for Info {
                 },
             }
         }
+
+        // Display hint at the end if present
+        if let Some(hint) = &self.hint {
+            writeln!(f)?;
+            writeln!(f, "{} {}", "·".dimmed(), hint.dimmed())?;
+        }
+
         Ok(())
     }
 }
@@ -963,6 +977,9 @@ mod tests {
         assert!(expected_display.contains("−2 +8"));
         assert!(expected_display.contains("test_agent.rs"));
         assert!(expected_display.contains("0 +5"));
+
+        // Verify it contains the hint
+        assert!(expected_display.contains("Ctrl+O to view transcript"));
     }
 
     #[test]

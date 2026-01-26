@@ -18,7 +18,7 @@ fn term(_res: std::io::Result<()>) {
 
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
-    // Clear current line, then render spinner + message + timer + hint
+    // Clear current line, then render spinner + message + timer
     eprint!("\r\x1b[2K");
     let line = format!(
         "\r{}  {} {}s · Ctrl+C to interrupt",
