@@ -121,7 +121,7 @@ impl<S: Services> ToolRegistry<S> {
                 ));
             }
 
-            self.call_with_timeout(&tool_name, || self.tool_executor.execute(input, context))
+            self.call_with_timeout(&tool_name, || self.tool_executor.execute(tool_input, context))
                 .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
             // Handle agent delegation tool calls

@@ -3,24 +3,25 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use aws_sdk_bedrockruntime::Client;
 use aws_sdk_bedrockruntime::config::Token;
-use forge_app::domain::RetryConfig;
-use forge_domain::{
-    AuthDetails, ChatCompletionMessage, ChatRepository, Context, Model, ModelId, Provider,
+use paws_app::domain::RetryConfig;
+use paws_app::ProviderService;
+use paws_domain::{
+    AnyProvider, AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider,
     ResultStream, Transformer,
 };
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tokio_stream::StreamExt;
 
-use crate::provider::bedrock_cache::SetCache;
+use crate::provider::bedrock::set_cache::SetCache;
 use crate::provider::retry::into_retry;
-use crate::provider::{FromDomain, IntoDomain};
+use crate::{FromDomain, IntoDomain};
 
 /// Provider implementation for Amazon Bedrock using Bearer token authentication
 ///
 /// This provider uses the AWS SDK with Bearer token authentication instead of
 /// AWS SigV4 signing, allowing it to work with Bedrock Access Gateway.
-struct BedrockProvider {
+pub struct BedrockProvider {
     provider: Provider<Url>,
     region: String,
     client: OnceCell<Client>,
@@ -46,7 +47,7 @@ impl BedrockProvider {
         }
 
         // Extract region from URL params
-        let region_param: forge_domain::URLParam = "AWS_REGION".to_string().into();
+        let region_param: paws_domain::URLParam = "AWS_REGION".to_string().into();
         let region = credential
             .url_params
             .get(&region_param)
@@ -232,7 +233,7 @@ impl BedrockProvider {
                 let source = sdk_error.into_source().unwrap();
 
                 if is_retryable {
-                    forge_domain::Error::Retryable(anyhow::anyhow!("{}", source)).into()
+                    paws_domain::Error::Retryable(anyhow::anyhow!("{}", source)).into()
                 } else {
                     anyhow::anyhow!("{}", source)
                 }
@@ -258,7 +259,7 @@ impl BedrockProvider {
                     };
 
                     let error = if is_retryable {
-                        forge_domain::Error::Retryable(anyhow::anyhow!(
+                        paws_domain::Error::Retryable(anyhow::anyhow!(
                             "Bedrock stream error: {:?}",
                             stream_error
                         ))
@@ -279,19 +280,27 @@ impl BedrockProvider {
         // Bedrock doesn't have a models list API
         // Return hardcoded models from configuration
         match &self.provider.models {
-            Some(forge_domain::ModelSource::Hardcoded(models)) => Ok(models.clone()),
+            Some(paws_domain::ModelSource::Hardcoded(models)) => Ok(models.clone()),
             _ => Ok(vec![]),
         }
     }
 }
 
+/// Creates a Bedrock client from a provider configuration
+pub fn create_bedrock_client(
+    provider: &Provider<Url>,
+    retry_config: Arc<RetryConfig>,
+) -> anyhow::Result<BedrockProvider> {
+    BedrockProvider::new(provider.clone())
+}
+
 /// Converts Bedrock stream events to ChatCompletionMessage
 impl IntoDomain for aws_sdk_bedrockruntime::types::ConverseStreamOutput {
-    type Domain = forge_domain::ChatCompletionMessage;
+    type Domain = paws_domain::ChatCompletionMessage;
 
     fn into_domain(self) -> Self::Domain {
         use aws_sdk_bedrockruntime::types::ConverseStreamOutput;
-        use forge_domain::{
+        use paws_domain::{
             ChatCompletionMessage, Content, FinishReason, ToolCallId, ToolCallPart, ToolName,
         };
 
@@ -323,8 +332,8 @@ impl IntoDomain for aws_sdk_bedrockruntime::types::ConverseStreamOutput {
                                     // Reasoning text - add to both reasoning field and as detail part
                                     ChatCompletionMessage::default()
                                         .reasoning(Content::part(text.clone()))
-                                        .add_reasoning_detail(forge_domain::Reasoning::Part(vec![
-                                            forge_domain::ReasoningPart {
+                                        .add_reasoning_detail(paws_domain::Reasoning::Part(vec![
+                                            paws_domain::ReasoningPart {
                                                 text: Some(text),
                                                 signature: None,
                                                 ..Default::default()
@@ -336,8 +345,8 @@ impl IntoDomain for aws_sdk_bedrockruntime::types::ConverseStreamOutput {
                                 ) => {
                                     // Signature for reasoning - add as reasoning detail part
                                     ChatCompletionMessage::default().add_reasoning_detail(
-                                        forge_domain::Reasoning::Part(vec![
-                                            forge_domain::ReasoningPart {
+                                        paws_domain::Reasoning::Part(vec![
+                                            paws_domain::ReasoningPart {
                                                 text: None,
                                                 signature: Some(sig),
                                                 ..Default::default()
@@ -402,13 +411,13 @@ impl IntoDomain for aws_sdk_bedrockruntime::types::ConverseStreamOutput {
                         .unwrap_or(0)
                         .saturating_add(u.cache_write_input_tokens.unwrap_or(0));
 
-                    forge_domain::Usage {
-                        prompt_tokens: forge_domain::TokenCount::Actual(u.total_tokens as usize),
-                        completion_tokens: forge_domain::TokenCount::Actual(
+                    paws_domain::Usage {
+                        prompt_tokens: paws_domain::TokenCount::Actual(u.total_tokens as usize),
+                        completion_tokens: paws_domain::TokenCount::Actual(
                             u.output_tokens as usize,
                         ),
-                        total_tokens: forge_domain::TokenCount::Actual(u.total_tokens as usize),
-                        cached_tokens: forge_domain::TokenCount::Actual(cached_tokens as usize),
+                        total_tokens: paws_domain::TokenCount::Actual(u.total_tokens as usize),
+                        cached_tokens: paws_domain::TokenCount::Actual(cached_tokens as usize),
                         ..Default::default()
                     }
                 });
@@ -428,10 +437,10 @@ impl IntoDomain for aws_sdk_bedrockruntime::types::ConverseStreamOutput {
 }
 
 /// Converts domain Context to Bedrock ConverseStreamInput
-impl FromDomain<forge_domain::Context>
+impl FromDomain<paws_domain::Context>
     for aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput
 {
-    fn from_domain(context: forge_domain::Context) -> anyhow::Result<Self> {
+    fn from_domain(context: paws_domain::Context) -> anyhow::Result<Self> {
         use aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput;
         use aws_sdk_bedrockruntime::types::{InferenceConfiguration, Message, SystemContentBlock};
 
@@ -440,8 +449,8 @@ impl FromDomain<forge_domain::Context>
             .messages
             .iter()
             .filter_map(|msg| match &msg.message {
-                forge_domain::ContextMessage::Text(text_msg)
-                    if text_msg.has_role(forge_domain::Role::System) =>
+                paws_domain::ContextMessage::Text(text_msg)
+                    if text_msg.has_role(paws_domain::Role::System) =>
                 {
                     Some(SystemContentBlock::Text(text_msg.content.clone()))
                 }
@@ -454,15 +463,15 @@ impl FromDomain<forge_domain::Context>
         // Bedrock API
         let messages: Vec<Message> = {
             let mut result = Vec::new();
-            let mut pending_tool_results: Vec<forge_domain::ContextMessage> = Vec::new();
+            let mut pending_tool_results: Vec<paws_domain::ContextMessage> = Vec::new();
 
             for message in context.messages.into_iter() {
-                if message.has_role(forge_domain::Role::System) {
+                if message.has_role(paws_domain::Role::System) {
                     continue;
                 }
 
                 match &message.message {
-                    forge_domain::ContextMessage::Tool(_) => {
+                    paws_domain::ContextMessage::Tool(_) => {
                         // Accumulate tool results
                         pending_tool_results.push(message.message);
                     }
@@ -502,7 +511,7 @@ impl FromDomain<forge_domain::Context>
 
             let choice = context
                 .tool_choice
-                .filter(|c| !matches!(c, forge_domain::ToolChoice::None))
+                .filter(|c| !matches!(c, paws_domain::ToolChoice::None))
                 .map(ToolChoice::from_domain)
                 .transpose()?;
 
@@ -529,7 +538,7 @@ impl FromDomain<forge_domain::Context>
             context.top_p.map(|p| {
                 let value = p.value();
                 if value < 0.95 {
-                    forge_domain::TopP::new(0.95).unwrap()
+                    paws_domain::TopP::new(0.95).unwrap()
                 } else {
                     p
                 }
@@ -613,8 +622,8 @@ impl FromDomain<forge_domain::Context>
 ///
 /// Bedrock requires all tool results for a given assistant message's tool calls
 /// to be in a single User message with multiple ToolResult content blocks.
-impl FromDomain<Vec<forge_domain::ContextMessage>> for aws_sdk_bedrockruntime::types::Message {
-    fn from_domain(tool_results: Vec<forge_domain::ContextMessage>) -> anyhow::Result<Self> {
+impl FromDomain<Vec<paws_domain::ContextMessage>> for aws_sdk_bedrockruntime::types::Message {
+    fn from_domain(tool_results: Vec<paws_domain::ContextMessage>) -> anyhow::Result<Self> {
         use aws_sdk_bedrockruntime::types::{
             ContentBlock, ConversationRole, Message, ToolResultBlock, ToolResultContentBlock,
             ToolResultStatus,
@@ -628,7 +637,7 @@ impl FromDomain<Vec<forge_domain::ContextMessage>> for aws_sdk_bedrockruntime::t
 
         for msg in tool_results {
             match msg {
-                forge_domain::ContextMessage::Tool(tool_result) => {
+                paws_domain::ContextMessage::Tool(tool_result) => {
                     let is_error = tool_result.is_error();
                     let tool_result_block = ToolResultBlock::builder()
                         .tool_use_id(
@@ -667,8 +676,8 @@ impl FromDomain<Vec<forge_domain::ContextMessage>> for aws_sdk_bedrockruntime::t
 }
 
 /// Converts a domain ContextMessage to a Bedrock Message
-impl FromDomain<forge_domain::ContextMessage> for aws_sdk_bedrockruntime::types::Message {
-    fn from_domain(msg: forge_domain::ContextMessage) -> anyhow::Result<Self> {
+impl FromDomain<paws_domain::ContextMessage> for aws_sdk_bedrockruntime::types::Message {
+    fn from_domain(msg: paws_domain::ContextMessage) -> anyhow::Result<Self> {
         use anyhow::Context as _;
         use aws_sdk_bedrockruntime::primitives::Blob;
         use aws_sdk_bedrockruntime::types::{
@@ -677,13 +686,13 @@ impl FromDomain<forge_domain::ContextMessage> for aws_sdk_bedrockruntime::types:
         };
 
         match msg {
-            forge_domain::ContextMessage::Text(text_msg) => {
+            paws_domain::ContextMessage::Text(text_msg) => {
                 let mut content_blocks = Vec::new();
 
                 // Add reasoning blocks FIRST if present (required by AWS when extended thinking
                 // is enabled) AWS requires that when thinking is enabled,
                 // assistant messages MUST start with thinking blocks
-                if text_msg.role == forge_domain::Role::Assistant
+                if text_msg.role == paws_domain::Role::Assistant
                     && let Some(reasoning_details) = &text_msg.reasoning_details
                 {
                     for reasoning in reasoning_details {
@@ -738,9 +747,9 @@ impl FromDomain<forge_domain::ContextMessage> for aws_sdk_bedrockruntime::types:
 
                 // Map role
                 let role = match text_msg.role {
-                    forge_domain::Role::User => ConversationRole::User,
-                    forge_domain::Role::Assistant => ConversationRole::Assistant,
-                    forge_domain::Role::System => {
+                    paws_domain::Role::User => ConversationRole::User,
+                    paws_domain::Role::Assistant => ConversationRole::Assistant,
+                    paws_domain::Role::System => {
                         anyhow::bail!("System messages should be filtered out before conversion")
                     }
                 };
@@ -751,7 +760,7 @@ impl FromDomain<forge_domain::ContextMessage> for aws_sdk_bedrockruntime::types:
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build message: {}", e))
             }
-            forge_domain::ContextMessage::Tool(tool_result) => {
+            paws_domain::ContextMessage::Tool(tool_result) => {
                 let is_error = tool_result.is_error();
                 let tool_result_block = ToolResultBlock::builder()
                     .tool_use_id(
@@ -781,7 +790,7 @@ impl FromDomain<forge_domain::ContextMessage> for aws_sdk_bedrockruntime::types:
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build tool result message: {}", e))
             }
-            forge_domain::ContextMessage::Image(img) => {
+            paws_domain::ContextMessage::Image(img) => {
                 let image_block = ImageBlock::builder()
                     .source(ImageSource::Bytes(Blob::new(
                         base64::Engine::decode(
@@ -819,11 +828,11 @@ impl FromDomain<schemars::schema::RootSchema> for aws_sdk_bedrockruntime::types:
 }
 
 /// Converts ToolCallArguments to AWS Smithy Document
-impl FromDomain<forge_domain::ToolCallArguments> for aws_smithy_types::Document {
-    fn from_domain(args: forge_domain::ToolCallArguments) -> anyhow::Result<Self> {
+impl FromDomain<paws_domain::ToolCallArguments> for aws_smithy_types::Document {
+    fn from_domain(args: paws_domain::ToolCallArguments) -> anyhow::Result<Self> {
         use anyhow::Context as _;
 
-        // Parse the arguments to get a serde_json::Value
+        // Parse arguments to get a serde_json::Value
         let json_value = args
             .parse()
             .with_context(|| "Failed to parse tool call arguments")?;
@@ -866,8 +875,8 @@ fn json_value_to_document(value: serde_json::Value) -> aws_smithy_types::Documen
 }
 
 /// Converts domain ToolDefinition to Bedrock Tool
-impl FromDomain<forge_domain::ToolDefinition> for aws_sdk_bedrockruntime::types::Tool {
-    fn from_domain(tool: forge_domain::ToolDefinition) -> anyhow::Result<Self> {
+impl FromDomain<paws_domain::ToolDefinition> for aws_sdk_bedrockruntime::types::Tool {
+    fn from_domain(tool: paws_domain::ToolDefinition) -> anyhow::Result<Self> {
         use aws_sdk_bedrockruntime::types::{Tool, ToolInputSchema, ToolSpecification};
 
         let spec = ToolSpecification::builder()
@@ -882,23 +891,23 @@ impl FromDomain<forge_domain::ToolDefinition> for aws_sdk_bedrockruntime::types:
 }
 
 /// Converts domain ToolChoice to Bedrock ToolChoice
-impl FromDomain<forge_domain::ToolChoice> for aws_sdk_bedrockruntime::types::ToolChoice {
-    fn from_domain(choice: forge_domain::ToolChoice) -> anyhow::Result<Self> {
+impl FromDomain<paws_domain::ToolChoice> for aws_sdk_bedrockruntime::types::ToolChoice {
+    fn from_domain(choice: paws_domain::ToolChoice) -> anyhow::Result<Self> {
         use aws_sdk_bedrockruntime::types::{
             AnyToolChoice, AutoToolChoice, SpecificToolChoice, ToolChoice,
         };
 
         let bedrock_choice = match choice {
-            forge_domain::ToolChoice::Auto => ToolChoice::Auto(AutoToolChoice::builder().build()),
-            forge_domain::ToolChoice::Required => ToolChoice::Any(AnyToolChoice::builder().build()),
-            forge_domain::ToolChoice::Call(tool_name) => ToolChoice::Tool(
+            paws_domain::ToolChoice::Auto => ToolChoice::Auto(AutoToolChoice::builder().build()),
+            paws_domain::ToolChoice::Required => ToolChoice::Any(AnyToolChoice::builder().build()),
+            paws_domain::ToolChoice::Call(tool_name) => ToolChoice::Tool(
                 SpecificToolChoice::builder()
                     .name(tool_name.to_string())
                     .build()
                     .map_err(|e| anyhow::anyhow!("Failed to build tool choice: {}", e))?,
             ),
-            forge_domain::ToolChoice::None => {
-                // For None, we'll return a default Auto choice, but the caller should handle
+            paws_domain::ToolChoice::None => {
+                // For None, we'll return a default Auto choice, but caller should handle
                 // this by not setting tool_choice at all
                 ToolChoice::Auto(AutoToolChoice::builder().build())
             }
@@ -908,59 +917,15 @@ impl FromDomain<forge_domain::ToolChoice> for aws_sdk_bedrockruntime::types::Too
     }
 }
 
-/// Repository for AWS Bedrock provider responses
-pub struct BedrockResponseRepository {
-    retry_config: Arc<RetryConfig>,
-}
-
-impl BedrockResponseRepository {
-    pub fn new(retry_config: Arc<RetryConfig>) -> Self {
-        Self { retry_config }
-    }
-}
-
-#[async_trait::async_trait]
-impl ChatRepository for BedrockResponseRepository {
-    async fn chat(
-        &self,
-        model_id: &ModelId,
-        context: Context,
-        provider: Provider<Url>,
-    ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
-        let retry_config = self.retry_config.clone();
-        let provider_client =
-            BedrockProvider::new(provider).map_err(|e| into_retry(e, &retry_config))?;
-
-        let stream = provider_client
-            .chat(model_id, context)
-            .await
-            .map_err(|e| into_retry(e, &retry_config))?;
-
-        Ok(Box::pin(stream.map(move |item| {
-            item.map_err(|e| into_retry(e, &retry_config))
-        })))
-    }
-
-    async fn models(&self, provider: Provider<Url>) -> anyhow::Result<Vec<Model>> {
-        let retry_config = self.retry_config.clone();
-        let provider_client = BedrockProvider::new(provider)?;
-        provider_client
-            .models()
-            .await
-            .map_err(|e| into_retry(e, &retry_config))
-            .context("Failed to fetch models from Bedrock provider")
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use forge_domain::InputModality;
+    use paws_domain::InputModality;
     use pretty_assertions::assert_eq;
 
     use super::*;
 
     fn provider_fixture(token: &str, region: Option<&str>) -> Provider<Url> {
-        use forge_domain::{
+        use paws_domain::{
             ApiKey, AuthCredential, AuthDetails, ProviderId, ProviderResponse, ProviderType,
             URLParam, URLParamValue,
         };
@@ -1238,7 +1203,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_models_returns_hardcoded() {
-        use forge_domain::{Model, ModelId, ModelSource};
+        use paws_domain::{Model, ModelId, ModelSource};
 
         let mut fixture_provider = provider_fixture("token", None);
         let fixture_models = vec![
@@ -1293,7 +1258,7 @@ mod tests {
     #[test]
     fn test_into_domain_content_block_delta_text() {
         use aws_sdk_bedrockruntime::types::{ContentBlockDelta, ConverseStreamOutput};
-        use forge_domain::{ChatCompletionMessage, Content};
+        use paws_domain::{ChatCompletionMessage, Content};
 
         let fixture = ConverseStreamOutput::ContentBlockDelta(
             aws_sdk_bedrockruntime::types::ContentBlockDeltaEvent::builder()
@@ -1314,7 +1279,7 @@ mod tests {
         use aws_sdk_bedrockruntime::types::{
             ContentBlockStart, ConverseStreamOutput, ToolUseBlockStart,
         };
-        use forge_domain::{ChatCompletionMessage, Content, ToolCallId, ToolCallPart, ToolName};
+        use paws_domain::{ChatCompletionMessage, Content, ToolCallId, ToolCallPart, ToolName};
 
         let fixture = ConverseStreamOutput::ContentBlockStart(
             aws_sdk_bedrockruntime::types::ContentBlockStartEvent::builder()
@@ -1344,7 +1309,7 @@ mod tests {
     #[test]
     fn test_into_domain_message_stop_end_turn() {
         use aws_sdk_bedrockruntime::types::{ConverseStreamOutput, StopReason};
-        use forge_domain::{ChatCompletionMessage, Content, FinishReason};
+        use paws_domain::{ChatCompletionMessage, Content, FinishReason};
 
         let fixture = ConverseStreamOutput::MessageStop(
             aws_sdk_bedrockruntime::types::MessageStopEvent::builder()
@@ -1363,7 +1328,7 @@ mod tests {
     #[test]
     fn test_into_domain_message_stop_tool_use() {
         use aws_sdk_bedrockruntime::types::{ConverseStreamOutput, StopReason};
-        use forge_domain::{ChatCompletionMessage, Content, FinishReason};
+        use paws_domain::{ChatCompletionMessage, Content, FinishReason};
 
         let fixture = ConverseStreamOutput::MessageStop(
             aws_sdk_bedrockruntime::types::MessageStopEvent::builder()
@@ -1382,7 +1347,7 @@ mod tests {
     #[test]
     fn test_into_domain_metadata_with_usage() {
         use aws_sdk_bedrockruntime::types::ConverseStreamOutput;
-        use forge_domain::{ChatCompletionMessage, Content, TokenCount};
+        use paws_domain::{ChatCompletionMessage, Content, TokenCount};
 
         let fixture = ConverseStreamOutput::Metadata(
             aws_sdk_bedrockruntime::types::ConverseStreamMetadataEvent::builder()
@@ -1401,7 +1366,7 @@ mod tests {
 
         let actual = fixture.into_domain();
         let expected =
-            ChatCompletionMessage::assistant(Content::part("")).usage(forge_domain::Usage {
+            ChatCompletionMessage::assistant(Content::part("")).usage(paws_domain::Usage {
                 prompt_tokens: TokenCount::Actual(1000),
                 completion_tokens: TokenCount::Actual(200),
                 total_tokens: TokenCount::Actual(1000),
@@ -1416,7 +1381,7 @@ mod tests {
     fn test_from_domain_tool_choice_auto() {
         use aws_sdk_bedrockruntime::types::{AutoToolChoice, ToolChoice};
 
-        let fixture = forge_domain::ToolChoice::Auto;
+        let fixture = paws_domain::ToolChoice::Auto;
         let actual = ToolChoice::from_domain(fixture).unwrap();
         let expected = ToolChoice::Auto(AutoToolChoice::builder().build());
 
@@ -1427,7 +1392,7 @@ mod tests {
     fn test_from_domain_tool_choice_required() {
         use aws_sdk_bedrockruntime::types::{AnyToolChoice, ToolChoice};
 
-        let fixture = forge_domain::ToolChoice::Required;
+        let fixture = paws_domain::ToolChoice::Required;
         let actual = ToolChoice::from_domain(fixture).unwrap();
         let expected = ToolChoice::Any(AnyToolChoice::builder().build());
 
@@ -1438,7 +1403,7 @@ mod tests {
     fn test_from_domain_tool_choice_call() {
         use aws_sdk_bedrockruntime::types::{SpecificToolChoice, ToolChoice};
 
-        let fixture = forge_domain::ToolChoice::Call(forge_domain::ToolName::new("my_tool"));
+        let fixture = paws_domain::ToolChoice::Call(paws_domain::ToolName::new("my_tool"));
         let actual = ToolChoice::from_domain(fixture).unwrap();
         let expected = ToolChoice::Tool(
             SpecificToolChoice::builder()
@@ -1453,11 +1418,11 @@ mod tests {
     #[test]
     fn test_from_domain_tool_definition() {
         use aws_sdk_bedrockruntime::types::Tool;
-        use forge_domain::ToolDefinition;
+        use paws_domain::ToolDefinition;
         use schemars::schema::{RootSchema, SchemaObject};
 
         let fixture = ToolDefinition {
-            name: forge_domain::ToolName::new("test_tool"),
+            name: paws_domain::ToolName::new("test_tool"),
             description: "A test tool".to_string(),
             input_schema: RootSchema { schema: SchemaObject::default(), ..Default::default() },
         };
@@ -1476,7 +1441,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_message_text_user() {
         use aws_sdk_bedrockruntime::types::{ContentBlock, ConversationRole, Message};
-        use forge_domain::{ContextMessage, Role, TextMessage};
+        use paws_domain::{ContextMessage, Role, TextMessage};
 
         let fixture = ContextMessage::Text(TextMessage::new(Role::User, "Hello!"));
 
@@ -1494,7 +1459,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_message_text_assistant() {
         use aws_sdk_bedrockruntime::types::{ContentBlock, ConversationRole, Message};
-        use forge_domain::{ContextMessage, TextMessage};
+        use paws_domain::{ContextMessage, TextMessage};
 
         let fixture = ContextMessage::Text(TextMessage::assistant("Hi there!", None, None));
 
@@ -1514,7 +1479,7 @@ mod tests {
         use aws_sdk_bedrockruntime::types::{
             ContentBlock, ConversationRole, Message, ToolResultStatus,
         };
-        use forge_domain::{ContextMessage, ToolCallId, ToolResult};
+        use paws_domain::{ContextMessage, ToolCallId, ToolResult};
 
         let fixture = ContextMessage::Tool(
             ToolResult::new("test_tool")
@@ -1539,7 +1504,7 @@ mod tests {
     #[test]
     fn test_from_domain_multiple_tool_results() {
         use aws_sdk_bedrockruntime::types::{ContentBlock, ConversationRole, Message};
-        use forge_domain::{ContextMessage, ToolCallId, ToolResult};
+        use paws_domain::{ContextMessage, ToolCallId, ToolResult};
 
         let fixture = vec![
             ContextMessage::Tool(
@@ -1578,7 +1543,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_with_system_messages() {
         use aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput;
-        use forge_domain::{Context, ContextMessage, Role, TextMessage};
+        use paws_domain::{Context, ContextMessage, Role, TextMessage};
 
         let fixture = Context {
             conversation_id: None,
@@ -1609,7 +1574,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_with_temperature() {
         use aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput;
-        use forge_domain::{Context, Temperature};
+        use paws_domain::{Context, Temperature};
 
         let fixture = Context {
             conversation_id: None,
@@ -1633,7 +1598,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_with_reasoning_adjusts_top_p() {
         use aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput;
-        use forge_domain::{Context, ReasoningConfig, TopP};
+        use paws_domain::{Context, ReasoningConfig, TopP};
 
         let fixture = Context {
             conversation_id: None,
@@ -1665,7 +1630,7 @@ mod tests {
     #[test]
     fn test_from_domain_context_with_reasoning_enabled() {
         use aws_sdk_bedrockruntime::operation::converse_stream::ConverseStreamInput;
-        use forge_domain::{Context, ReasoningConfig};
+        use paws_domain::{Context, ReasoningConfig};
 
         let fixture = Context {
             conversation_id: None,

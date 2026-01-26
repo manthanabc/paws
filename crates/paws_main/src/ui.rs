@@ -867,13 +867,13 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             select_items.extend(
                 suggested
                     .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p))),
+                    .map(|p| SelectItem::Provider(Box::new(p.0))),
             );
             select_items.push(SelectItem::Separator);
             select_items.extend(
                 others
                     .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p))),
+                    .map(|p| SelectItem::Provider(Box::new(p.0))),
             );
 
             // Use the centralized select module
@@ -881,7 +881,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
                 .prompt()?
             {
-                Some(SelectItem::Provider(provider)) => provider.0,
+                Some(SelectItem::Provider(provider)) => *provider,
                 _ => {
                     self.writeln_title(TitleFormat::info("Cancelled"))?;
                     return Ok(());
@@ -1122,7 +1122,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // Add image modality support indicator
             let supports_image = model
                 .input_modalities
-                .contains(&forge_domain::InputModality::Image);
+                .contains(&paws_domain::InputModality::Image);
             info = info.add_key_value(
                 "Image",
                 if supports_image {
@@ -1599,9 +1599,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
-            SlashCommand::Resume => {
-                self.handle_resume_conversation().await?;
-            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1634,8 +1631,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Sage => {
                 self.on_agent_change(AgentId::SAGE).await?;
             }
-            SlashCommand::Paws => {
-                self.on_agent_change(AgentId::PAWS).await?;
+            SlashCommand::Forge => {
+                self.on_agent_change(AgentId::FORGE).await?;
             }
             SlashCommand::Help => {
                 let info = Info::from(self.command.as_ref());
@@ -1647,6 +1644,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             SlashCommand::Update => {
                 on_update(self.api.clone(), None).await;
+            }
+            SlashCommand::Resume => {
+                self.handle_resume_conversation().await?;
             }
             SlashCommand::Exit => {
                 return Ok(true);

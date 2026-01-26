@@ -1,4 +1,4 @@
-use forge_domain::Transformer;
+use paws_domain::Transformer;
 
 use crate::dto::anthropic::Request;
 
@@ -30,7 +30,7 @@ impl Transformer for CapitalizeToolNames {
 
 #[cfg(test)]
 mod tests {
-    use forge_domain::{Context, ContextMessage, ModelId, ToolDefinition, Transformer};
+    use paws_domain::{Context, ContextMessage, ModelId, ToolDefinition, Transformer};
 
     use super::*;
 

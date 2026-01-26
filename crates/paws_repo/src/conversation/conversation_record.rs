@@ -7,6 +7,7 @@
 use anyhow::Context as _;
 use paws_domain::{Context, ConversationId};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Repository-specific representation of ModelId
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -816,6 +817,7 @@ pub(super) enum FileOperationOrArray {
 pub(super) struct MetricsRecord {
     started_at: Option<chrono::DateTime<chrono::Utc>>,
     files_changed: std::collections::HashMap<String, FileOperationOrArray>,
+    files_accessed: std::collections::HashSet<String>,
 }
 
 impl From<&paws_domain::Metrics> for MetricsRecord {
@@ -832,6 +834,7 @@ impl From<&paws_domain::Metrics> for MetricsRecord {
                     )
                 })
                 .collect(),
+            files_accessed: metrics.files_accessed.clone(),
         }
     }
 }
@@ -857,6 +860,7 @@ impl From<MetricsRecord> for paws_domain::Metrics {
                     Some((path, operation))
                 })
                 .collect(),
+            files_accessed: record.files_accessed,
         }
     }
 }

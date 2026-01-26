@@ -1,13 +1,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use paws_common::template::Element;
-use paws_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput};
+use anyhow::anyhow;
+use paws_domain::{ToolCallContext, ToolCatalog, ToolOutput};
 
 use crate::fmt::content::FormatContent;
 use crate::operation::{TempContentFiles, ToolOperation};
 use crate::services::ShellService;
-use crate::utils::format_display_path;
 use crate::{
     ConversationService, EnvironmentService, FollowUpService, FsCreateService, FsPatchService,
     FsReadService, FsRemoveService, FsSearchService, FsUndoService, ImageReadService,
@@ -40,31 +39,26 @@ impl<
         Self { services }
     }
 
-    /// Check if a tool operation is allowed based on the workflow policies
-    async fn check_tool_permission(
+    fn require_prior_read(
         &self,
-        tool_input: &ToolCatalog,
         context: &ToolCallContext,
-    ) -> anyhow::Result<bool> {
-        let cwd = self.services.get_environment().cwd;
-        let operation = tool_input.to_policy_operation(cwd.clone());
-        if let Some(operation) = operation {
-            let decision = self.services.check_operation_permission(&operation).await?;
+        raw_path: &str,
+        action: &str,
+    ) -> anyhow::Result<()> {
+        let target_path = self.normalize_path(raw_path.to_string());
+        let has_read = context.with_metrics(|metrics| {
+            metrics.files_accessed.contains(&target_path)
+                || metrics.files_accessed.contains(raw_path)
+        })?;
 
-            // Send custom policy message to the user when a policy file was created
-            if let Some(policy_path) = decision.path {
-                context
-                    .send_title(
-                        TitleFormat::debug("Permissions Update")
-                            .sub_title(format_display_path(policy_path.as_path(), &cwd)),
-                    )
-                    .await?;
-            }
-            if !decision.allowed {
-                return Ok(true);
-            }
+        if has_read {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "You must read the file with the read tool before attempting to {action}.",
+                action = action
+            ))
         }
-        Ok(false)
     }
 
     async fn dump_operation(&self, operation: &ToolOperation) -> anyhow::Result<TempContentFiles> {
@@ -209,7 +203,7 @@ impl<
                 (input, output).into()
             }
             ToolCatalog::Shell(input) => {
-                let cwd = input.cwd.unwrap_or_else(|| PathBuf::from("."));
+                let cwd = input.cwd.clone();
                 let normalized_cwd = self.normalize_path(cwd.display().to_string());
                 let output = self
                     .services
@@ -261,32 +255,38 @@ impl<
                 let skill = self.services.fetch_skill(input.name.clone()).await?;
                 ToolOperation::Skill { input, output: skill }
             }
+            ToolCatalog::ReadImage(input) => {
+                let normalized_path = self.normalize_path(input.path.clone());
+                let output = self
+                    .services
+                    .read_image(normalized_path)
+                    .await?;
+                ToolOperation::ImageRead { input, output }
+            }
+            ToolCatalog::SemSearch(_) => {
+                anyhow::bail!("SemSearch tool has been removed")
+            }
         })
     }
 
     pub async fn execute(
         &self,
-        input: ToolCallFull,
+        tool_input: ToolCatalog,
         context: &ToolCallContext,
     ) -> anyhow::Result<ToolOutput> {
-        let tool_input: ToolCatalog = ToolCatalog::try_from(input)?;
         let tool_kind = tool_input.kind();
         let env = self.services.get_environment();
-        if let Some(content) = tool_input.to_content(&env) {
-            context.send(content).await?;
+
+        // Enforce read-before-edit for patch
+        if let ToolCatalog::Patch(input) = &tool_input {
+            self.require_prior_read(context, &input.path, "edit it")?;
         }
 
-        // Check permissions before executing the tool (if enabled)
-        if env.enable_permissions && self.check_tool_permission(&tool_input, context).await? {
-            // Send formatted output message for policy denial
-            context
-                .send(TitleFormat::error("Permission Denied"))
-                .await?;
-
-            return Ok(ToolOutput::text(
-                Element::new("permission_denied")
-                    .cdata("User has denied the permission to execute this tool"),
-            ));
+        // Enforce read-before-edit for overwrite writes
+        if let ToolCatalog::Write(input) = &tool_input
+            && input.overwrite
+        {
+            self.require_prior_read(context, &input.path, "overwrite it")?;
         }
 
         let execution_result = self.call_internal(tool_input.clone()).await;

@@ -1,4 +1,4 @@
-use forge_domain::{
+use paws_domain::{
     ChatCompletionMessage, Content, ModelId, Reasoning, ReasoningPart, TokenCount, ToolCallId,
     ToolCallPart, ToolName,
 };
@@ -18,7 +18,7 @@ pub struct Model {
     pub display_name: Option<String>,
 }
 
-impl From<Model> for forge_domain::Model {
+impl From<Model> for paws_domain::Model {
     fn from(value: Model) -> Self {
         let context_length = get_context_length(&value.id);
         let input_modalities = if value.id.contains("claude-3")
@@ -28,11 +28,11 @@ impl From<Model> for forge_domain::Model {
             || value.id.contains("claude-haiku")
         {
             vec![
-                forge_domain::InputModality::Text,
-                forge_domain::InputModality::Image,
+                paws_domain::InputModality::Text,
+                paws_domain::InputModality::Image,
             ]
         } else {
-            vec![forge_domain::InputModality::Text]
+            vec![paws_domain::InputModality::Text]
         };
 
         Self {
@@ -140,7 +140,7 @@ pub struct Usage {
     pub cache_creation_input_tokens: Option<usize>,
 }
 
-impl From<Usage> for forge_domain::Usage {
+impl From<Usage> for paws_domain::Usage {
     fn from(usage: Usage) -> Self {
         // Anthropic token breakdown:
         // - input_tokens: tokens NOT from cache (billed at full price)
@@ -168,7 +168,7 @@ impl From<Usage> for forge_domain::Usage {
 
         let total_tokens = prompt_tokens + completion_tokens;
 
-        forge_domain::Usage {
+        paws_domain::Usage {
             prompt_tokens,
             completion_tokens,
             total_tokens,
@@ -187,13 +187,13 @@ pub enum StopReason {
     ToolUse,
 }
 
-impl From<StopReason> for forge_domain::FinishReason {
+impl From<StopReason> for paws_domain::FinishReason {
     fn from(value: StopReason) -> Self {
         match value {
-            StopReason::EndTurn => forge_domain::FinishReason::Stop,
-            StopReason::MaxTokens => forge_domain::FinishReason::Length,
-            StopReason::StopSequence => forge_domain::FinishReason::Stop,
-            StopReason::ToolUse => forge_domain::FinishReason::ToolCalls,
+            StopReason::EndTurn => paws_domain::FinishReason::Stop,
+            StopReason::MaxTokens => paws_domain::FinishReason::Length,
+            StopReason::StopSequence => paws_domain::FinishReason::Stop,
+            StopReason::ToolUse => paws_domain::FinishReason::ToolCalls,
         }
     }
 }
@@ -510,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_usage_conversion_with_cache_read_tokens() {
-        use forge_domain::TokenCount;
+        use paws_domain::TokenCount;
 
         // Simulate a response with cache reads
         let fixture = Usage {
@@ -520,7 +520,7 @@ mod tests {
             cache_read_input_tokens: Some(300),
         };
 
-        let actual: forge_domain::Usage = fixture.into();
+        let actual: paws_domain::Usage = fixture.into();
 
         // prompt_tokens should include ALL input tokens
         let expected_prompt = TokenCount::Actual(100 + 200 + 300);
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_usage_conversion_without_cache() {
-        use forge_domain::TokenCount;
+        use paws_domain::TokenCount;
 
         let fixture = Usage {
             input_tokens: Some(100),
@@ -551,7 +551,7 @@ mod tests {
             cache_read_input_tokens: None,
         };
 
-        let actual: forge_domain::Usage = fixture.into();
+        let actual: paws_domain::Usage = fixture.into();
 
         let expected_prompt = TokenCount::Actual(100);
         assert_eq!(actual.prompt_tokens, expected_prompt);
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn test_usage_conversion_cache_read_only() {
-        use forge_domain::TokenCount;
+        use paws_domain::TokenCount;
 
         // Scenario: All tokens came from cache (cache hit)
         let fixture = Usage {
@@ -578,7 +578,7 @@ mod tests {
             cache_read_input_tokens: Some(500),
         };
 
-        let actual: forge_domain::Usage = fixture.into();
+        let actual: paws_domain::Usage = fixture.into();
 
         let expected_prompt = TokenCount::Actual(500);
         assert_eq!(actual.prompt_tokens, expected_prompt);
@@ -676,7 +676,7 @@ mod tests {
             display_name: Some("Claude 3.5 Sonnet (New)".to_string()),
         };
 
-        let actual: forge_domain::Model = fixture.into();
+        let actual: paws_domain::Model = fixture.into();
 
         assert_eq!(actual.context_length, Some(200_000));
         assert_eq!(actual.id.as_str(), "claude-sonnet-4-5-20250929");
@@ -690,7 +690,7 @@ mod tests {
             display_name: Some("Unknown Model".to_string()),
         };
 
-        let actual: forge_domain::Model = fixture.into();
+        let actual: paws_domain::Model = fixture.into();
 
         assert_eq!(actual.context_length, None);
         assert_eq!(actual.id.as_str(), "unknown-claude-model");

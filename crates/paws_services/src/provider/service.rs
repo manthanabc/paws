@@ -6,7 +6,7 @@ use paws_app::domain::{
     AnyProvider, ChatCompletionMessage, Context as ChatContext, HttpConfig, Model, ModelId,
     ProviderId, ResultStream, RetryConfig,
 };
-use paws_app::{EnvironmentInfra, HttpInfra, ProviderService};
+use paws_app::{EnvironmentInfra, HttpInfra, HttpClientService, ProviderService};
 use paws_domain::{Provider, ProviderRepository};
 use tokio::sync::Mutex;
 use url::Url;
@@ -14,7 +14,7 @@ use url::Url;
 use crate::http::HttpClient;
 use crate::provider::client::{Client, ClientBuilder};
 #[derive(Clone)]
-pub struct PawsProviderService<I> {
+pub struct PawsProviderService<I: HttpInfra> {
     retry_config: Arc<RetryConfig>,
     cached_clients: Arc<Mutex<HashMap<ProviderId, Client<HttpClient<I>>>>>,
     cached_models: Arc<Mutex<HashMap<ProviderId, Vec<Model>>>>,

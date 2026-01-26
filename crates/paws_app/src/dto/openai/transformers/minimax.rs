@@ -1,4 +1,4 @@
-use forge_domain::Transformer;
+use paws_domain::Transformer;
 
 use crate::dto::openai::Request;
 
@@ -45,7 +45,7 @@ impl Transformer for SetMinimaxParams {
 
 #[cfg(test)]
 mod tests {
-    use forge_domain::ModelId;
+    use paws_domain::ModelId;
     use pretty_assertions::assert_eq;
 
     use super::*;

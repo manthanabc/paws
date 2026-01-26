@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 use colored::Colorize;
-use forge_api::{Agent, AnyProvider, Model, ProviderId, Template};
-use forge_domain::UserCommand;
+use paws_api::{Agent, AnyProvider, Model, ProviderId, Template};
+use paws_domain::UserCommand;
 use strum::{EnumProperty, IntoEnumIterator};
 use strum_macros::{EnumIter, EnumProperty};
 
@@ -128,10 +128,29 @@ pub struct ForgeCommand {
     pub value: Option<String>,
 }
 
+/// Items for selection menus
+#[derive(Debug, Clone)]
+pub enum SelectItem {
+    Provider(Box<AnyProvider>),
+    Separator,
+}
+
+impl std::fmt::Display for SelectItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SelectItem::Provider(provider) => write!(f, "{}", CliProvider(provider.as_ref().clone())),
+            SelectItem::Separator => write!(f, "---"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ForgeCommandManager {
     commands: Arc<Mutex<Vec<ForgeCommand>>>,
 }
+
+/// Type alias for ForgeCommandManager to support renaming from forge to paws
+pub type PawsCommandManager = ForgeCommandManager;
 
 impl Default for ForgeCommandManager {
     fn default() -> Self {
@@ -178,7 +197,6 @@ impl ForgeCommandManager {
                 | "retry"
                 | "conversations"
                 | "list"
-                | "commit"
         )
     }
 
@@ -197,7 +215,7 @@ impl ForgeCommandManager {
     }
 
     /// Registers workflow commands from the API.
-    pub fn register_all(&self, commands: Vec<forge_domain::Command>) {
+    pub fn register_all(&self, commands: Vec<paws_domain::Command>) {
         let mut guard = self.commands.lock().unwrap();
 
         // Remove existing workflow commands (those with ⚙ prefix in description)
@@ -355,14 +373,6 @@ impl ForgeCommandManager {
             "/logout" => Ok(SlashCommand::Logout),
             "/retry" => Ok(SlashCommand::Retry),
             "/conversation" | "/conversations" => Ok(SlashCommand::Conversations),
-            "/commit" => {
-                // Support flexible syntax:
-                // /commit              -> commit with AI message
-                // /commit 5000         -> commit with max-diff of 5000 bytes
-                let max_diff_size = parameters.iter().find_map(|&p| p.parse::<usize>().ok());
-                Ok(SlashCommand::Commit { max_diff_size })
-            }
-            "/index" => Ok(SlashCommand::Index),
             text => {
                 let parts = text.split_ascii_whitespace().collect::<Vec<&str>>();
 
@@ -435,6 +445,9 @@ pub enum SlashCommand {
     /// Exit the application without any further action.
     #[strum(props(usage = "Exit the application"))]
     Exit,
+    /// Resume the last conversation.
+    #[strum(props(usage = "Resume the last conversation"))]
+    Resume,
     /// Updates the forge version
     #[strum(props(usage = "Updates to the latest compatible version of forge"))]
     Update,
@@ -505,19 +518,9 @@ pub enum SlashCommand {
     #[strum(props(usage = "Switch directly to a specific agent"))]
     AgentSwitch(String),
 
-    /// Generate and optionally commit changes with AI-generated message
-    ///
-    /// Examples:
-    /// - `/commit` - Generate message and commit
-    /// - `/commit 5000` - Commit with max diff of 5000 bytes
-    #[strum(props(
-        usage = "Generate AI commit message and commit changes. Format: /commit <max-diff|preview>"
-    ))]
-    Commit { max_diff_size: Option<usize> },
-
-    /// Index the current workspace for semantic code search
-    #[strum(props(usage = "Index the current workspace for semantic search"))]
-    Index,
+    /// Terminal resize event (internal use)
+    #[strum(props(usage = "Handle terminal resize event"))]
+    Resize,
 }
 
 impl SlashCommand {
@@ -531,11 +534,11 @@ impl SlashCommand {
             SlashCommand::Env => "env",
             SlashCommand::Usage => "usage",
             SlashCommand::Exit => "exit",
+            SlashCommand::Resume => "resume",
             SlashCommand::Forge => "forge",
             SlashCommand::Muse => "muse",
             SlashCommand::Sage => "sage",
             SlashCommand::Help => "help",
-            SlashCommand::Commit { .. } => "commit",
             SlashCommand::Dump { .. } => "dump",
             SlashCommand::Model => "model",
             SlashCommand::Provider => "provider",
@@ -549,7 +552,7 @@ impl SlashCommand {
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
-            SlashCommand::Index => "index",
+            SlashCommand::Resize => "resize",
         }
     }
 
@@ -562,8 +565,8 @@ impl SlashCommand {
 #[cfg(test)]
 mod tests {
     use console::strip_ansi_codes;
-    use forge_api::{InputModality, ModelId, ModelSource, ProviderId, ProviderResponse};
-    use forge_domain::{AnyProvider, Provider};
+    use paws_api::{InputModality, ModelId, ModelSource, ProviderId, ProviderResponse};
+    use paws_domain::{AnyProvider, Provider};
     use pretty_assertions::assert_eq;
     use url::Url;
 
@@ -843,8 +846,8 @@ mod tests {
 
     #[test]
     fn test_register_agent_commands() {
-        use forge_api::Agent;
-        use forge_domain::{ModelId, ProviderId};
+        use paws_api::Agent;
+        use paws_domain::{ModelId, ProviderId};
 
         // Setup
         let fixture = ForgeCommandManager::default();
@@ -888,8 +891,8 @@ mod tests {
 
     #[test]
     fn test_parse_agent_switch_command() {
-        use forge_api::Agent;
-        use forge_domain::{ModelId, ProviderId};
+        use paws_api::Agent;
+        use paws_domain::{ModelId, ProviderId};
 
         // Setup
         let fixture = ForgeCommandManager::default();
@@ -1033,10 +1036,10 @@ mod tests {
     fn test_cli_provider_display_minimal() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::OPENAI,
-            provider_type: forge_domain::ProviderType::Llm,
+            provider_type: paws_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("https://api.openai.com/v1/chat/completions").unwrap(),
-            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
+            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1053,10 +1056,10 @@ mod tests {
     fn test_cli_provider_display_with_subdomain() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::OPEN_ROUTER,
-            provider_type: forge_domain::ProviderType::Llm,
+            provider_type: paws_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("https://openrouter.ai/api/v1/chat/completions").unwrap(),
-            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
+            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1073,10 +1076,10 @@ mod tests {
     fn test_cli_provider_display_no_domain() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::FORGE,
-            provider_type: forge_domain::ProviderType::Llm,
+            provider_type: paws_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("http://localhost:8080/chat/completions").unwrap(),
-            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
+            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
@@ -1096,7 +1099,7 @@ mod tests {
             provider_type: Default::default(),
             response: Some(ProviderResponse::Anthropic),
             url: Template::new("https://api.anthropic.com/v1/messages"),
-            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
+            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(Template::new(
@@ -1113,10 +1116,10 @@ mod tests {
     fn test_cli_provider_display_ip_address() {
         let fixture = AnyProvider::Url(Provider {
             id: ProviderId::FORGE,
-            provider_type: forge_domain::ProviderType::Llm,
+            provider_type: paws_domain::ProviderType::Llm,
             response: Some(ProviderResponse::OpenAI),
             url: Url::parse("http://192.168.1.1:8080/chat/completions").unwrap(),
-            auth_methods: vec![forge_domain::AuthMethod::ApiKey],
+            auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: None,
             models: Some(ModelSource::Url(
