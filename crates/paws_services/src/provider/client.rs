@@ -1,4 +1,4 @@
-// Context trait is needed for error handling in the provider implementations
+// Context trait is needed for error handling in provider implementations
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,7 +26,6 @@ use crate::provider::retry::into_retry;
 pub struct ClientBuilder {
     pub retry_config: Arc<RetryConfig>,
     pub timeout_config: HttpConfig,
-    pub use_hickory: bool,
     pub provider: Provider<Url>,
     #[allow(dead_code)]
     pub version: String,
@@ -39,13 +38,12 @@ impl ClientBuilder {
         Self {
             retry_config: Arc::new(RetryConfig::default()),
             timeout_config: HttpConfig::default(),
-            use_hickory: false,
             provider,
             version: version.into(),
         }
     }
 
-    /// Build the client with the configured settings.
+    /// Build client with configured settings.
     pub fn build<T: HttpClientService>(self, http: Arc<T>) -> Result<Client<T>> {
         let provider = self.provider;
         let retry_config = self.retry_config;
@@ -172,7 +170,7 @@ impl<T: HttpClientService> Client<T> {
             InnerClient::Gemini(provider) => provider.models().await,
         })?;
 
-        // Update the cache with all fetched models
+        // Update cache with all fetched models
         {
             let mut cache = self.models_cache.write().await;
             cache.clear(); // Clear existing cache to ensure freshness
@@ -210,7 +208,7 @@ impl<T: HttpClientService> Client<T> {
 
     #[allow(dead_code)]
     pub async fn model(&self, model: &ModelId) -> anyhow::Result<Option<Model>> {
-        // First, check if the model is in the cache
+        // First, check if model is in cache
         {
             let cache = self.models_cache.read().await;
             if let Some(model) = cache.get(model) {
@@ -218,15 +216,15 @@ impl<T: HttpClientService> Client<T> {
             }
         }
 
-        // Cache miss - refresh models (which will populate the cache) and find the
-        // model in the result
+        // Cache miss - refresh models (which will populate cache) and find model in
+        // result
         let models = self.refresh_models().await?;
         Ok(models.into_iter().find(|m| m.id == *model))
     }
 }
 
 pub fn join_url(base_url: &str, path: &str) -> anyhow::Result<Url> {
-    // Validate the path doesn't contain certain patterns
+    // Validate path doesn't contain certain patterns
     if path.contains("://") || path.contains("..") {
         anyhow::bail!("Invalid path: Contains forbidden patterns");
     }
@@ -350,8 +348,7 @@ mod tests {
         // Verify refresh_models method is available (it will fail due to no actual API,
         // but that's expected)
         let result = client.refresh_models().await;
-        assert!(result.is_err()); // Expected to fail since we're not hitting a
-        // real API
+        assert!(result.is_err()); // Expected to fail since we're not hitting a real API
     }
 
     #[tokio::test]
@@ -369,11 +366,10 @@ mod tests {
             )),
         };
 
-        // Test the builder pattern API
+        // Test builder pattern API
         let client = ClientBuilder::new(provider, "dev")
             .retry_config(Arc::new(RetryConfig::default()))
             .timeout_config(HttpConfig::default())
-            .use_hickory(true)
             .build(Arc::new(MockHttpClient))
             .unwrap();
 

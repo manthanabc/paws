@@ -56,7 +56,6 @@ impl<I: EnvironmentInfra + HttpInfra> PawsProviderService<I> {
         let client = ClientBuilder::new(provider, &self.version)
             .retry_config(self.retry_config.clone())
             .timeout_config(self.timeout_config.clone())
-            .use_hickory(false) // use native DNS resolver(GAI)
             .build(Arc::new(HttpClient::new(infra)))?;
 
         // Cache the new client for this provider

@@ -342,7 +342,6 @@ impl From<&Environment> for Info {
             )
             .add_key_value("Pool Max Idle", env.http.pool_max_idle_per_host.to_string())
             .add_key_value("Max Redirects", env.http.max_redirects.to_string())
-            .add_key_value("Use Hickory DNS", env.http.hickory.to_string())
             .add_key_value("TLS Backend", format!("{}", env.http.tls_backend))
             .add_key_value(
                 "Min TLS Version",
