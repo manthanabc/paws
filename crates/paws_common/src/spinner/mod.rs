@@ -66,9 +66,9 @@ impl SpinnerManager {
         let (ctrl_c_tx, ctrl_c_rx) = broadcast::channel(1);
 
         let handle = tokio::spawn(async move {
-            let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let spinner_frames: [&str; 5] = ["⠋", "⠹", "⠼", "⠦", "⠇"];
             let mut idx: usize = 0;
-            let tick = Duration::from_millis(60);
+            let tick = Duration::from_millis(120);
             let mut last = std::time::Instant::now();
             let mut start_time = std::time::Instant::now();
             let mut status_text = String::new();
