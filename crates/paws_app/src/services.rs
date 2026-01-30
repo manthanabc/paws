@@ -222,6 +222,12 @@ pub trait ConversationService: Send + Sync {
 
     /// Permanently deletes a conversation
     async fn delete_conversation(&self, conversation_id: &ConversationId) -> anyhow::Result<()>;
+
+    /// Undoes the last interaction by reverting to a previous snapshot
+    ///
+    /// # Returns
+    /// `true` if undo was successful, `false` if there were no snapshots to undo
+    async fn undo_conversation(&self, conversation_id: &ConversationId) -> anyhow::Result<bool>;
 }
 
 #[async_trait::async_trait]
@@ -571,6 +577,12 @@ impl<I: Services> ConversationService for I {
     async fn delete_conversation(&self, conversation_id: &ConversationId) -> anyhow::Result<()> {
         self.conversation_service()
             .delete_conversation(conversation_id)
+            .await
+    }
+
+    async fn undo_conversation(&self, conversation_id: &ConversationId) -> anyhow::Result<bool> {
+        self.conversation_service()
+            .undo_conversation(conversation_id)
             .await
     }
 }

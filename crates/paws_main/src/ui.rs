@@ -1700,6 +1700,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
+            SlashCommand::Undo => {
+                self.on_undo().await?;
+            }
             SlashCommand::AgentSwitch(agent_id) => {
                 // Validate that the agent exists by checking against loaded agents
                 let agents = self.api.get_agents().await?;
@@ -1762,6 +1765,51 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             "Resumed conversation: {}",
             last_conversation.id
         )))?;
+        Ok(())
+    }
+
+    /// Undoes the last interaction by reverting to a previous snapshot
+    async fn on_undo(&mut self) -> anyhow::Result<()> {
+        let conversation_id = self.init_conversation().await?;
+        
+        // Get the current conversation
+        let conversation = self
+            .api
+            .conversation(&conversation_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Conversation not found"))?;
+        
+        // Check if undo is available
+        if !conversation.can_undo() {
+            self.writeln_title(TitleFormat::error("No more actions to undo"))?;
+            return Ok(());
+        }
+        
+        // Get the summary of what will be undone
+        let summary = conversation
+            .last_snapshot_summary()
+            .unwrap_or("previous interaction");
+        
+        // Perform the undo
+        let success = self.api.undo_conversation(&conversation_id).await?;
+        
+        if success {
+            self.writeln_title(TitleFormat::action(format!(
+                "Undone: {summary}"
+            )))?;
+            
+            // Refresh the conversation display
+            let updated_conversation = self
+                .api
+                .conversation(&conversation_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Conversation not found after undo"))?;
+            
+            self.on_show_conv_info(updated_conversation).await?;
+        } else {
+            self.writeln_title(TitleFormat::error("Failed to undo"))?;
+        }
+        
         Ok(())
     }
 

@@ -70,6 +70,18 @@ pub trait API: Sync + Send {
     /// Returns an error if the operation fails
     async fn delete_conversation(&self, conversation_id: &ConversationId) -> Result<()>;
 
+    /// Undoes the last interaction in a conversation by reverting to the previous snapshot.
+    ///
+    /// # Arguments
+    /// * `conversation_id` - The ID of the conversation to undo
+    ///
+    /// # Returns
+    /// `true` if the undo was successful, `false` if there were no snapshots to undo
+    ///
+    /// # Errors
+    /// Returns an error if the conversation doesn't exist or the operation fails
+    async fn undo_conversation(&self, conversation_id: &ConversationId) -> Result<bool>;
+
     /// Compacts the context of the main agent for the given conversation and
     /// persists it. Returns metrics about the compaction (original vs.
     /// compacted tokens and messages).

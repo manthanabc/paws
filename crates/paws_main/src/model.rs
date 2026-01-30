@@ -198,6 +198,7 @@ impl PawsCommandManager {
                 | "login"
                 | "logout"
                 | "retry"
+                | "undo"
                 | "conversations"
                 | "list"
         )
@@ -375,6 +376,7 @@ impl PawsCommandManager {
             "/login" => Ok(SlashCommand::Login),
             "/logout" => Ok(SlashCommand::Logout),
             "/retry" => Ok(SlashCommand::Retry),
+            "/undo" => Ok(SlashCommand::Undo),
             "/resume" => Ok(SlashCommand::Resume),
             "/conversation" | "/conversations" => Ok(SlashCommand::Conversations),
 
@@ -508,6 +510,9 @@ pub enum SlashCommand {
     /// Retry without modifying model context
     #[strum(props(usage = "Retry the last command"))]
     Retry,
+    /// Undo the last interaction and revert to previous state
+    #[strum(props(usage = "Undo the last interaction"))]
+    Undo,
     /// Resume the last conversation or a specific conversation
     #[strum(props(usage = "Resume the last conversation or a specific conversation"))]
     Resume,
@@ -558,6 +563,7 @@ impl SlashCommand {
             SlashCommand::Login => "login",
             SlashCommand::Logout => "logout",
             SlashCommand::Retry => "retry",
+            SlashCommand::Undo => "undo",
             SlashCommand::Resume => "resume",
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
