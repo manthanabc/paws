@@ -2,7 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
-use crossterm::cursor::{MoveToColumn, MoveUp};
+use crossterm::cursor::{MoveLeft, MoveRight, MoveToColumn, MoveUp};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
@@ -33,6 +33,49 @@ impl Console {
     /// Creates a new instance of `Console`.
     pub fn new(env: Environment, command: Arc<PawsCommandManager>) -> Self {
         Self { env, command }
+    }
+
+    /// Find the start of the previous word
+    fn find_prev_word_start(buffer: &str, position: usize) -> usize {
+        if position == 0 {
+            return 0;
+        }
+        let chars: Vec<char> = buffer.chars().collect();
+        let mut pos = position.saturating_sub(1);
+        
+        // Skip any whitespace
+        while pos > 0 && chars[pos].is_whitespace() {
+            pos -= 1;
+        }
+        
+        // Skip the word
+        while pos > 0 && !chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+        
+        pos
+    }
+    
+    /// Find the end of the next word
+    fn find_next_word_end(buffer: &str, position: usize) -> usize {
+        let chars: Vec<char> = buffer.chars().collect();
+        let len = chars.len();
+        if position >= len {
+            return len;
+        }
+        let mut pos = position;
+        
+        // Skip current word
+        while pos < len && !chars[pos].is_whitespace() {
+            pos += 1;
+        }
+        
+        // Skip any whitespace
+        while pos < len && chars[pos].is_whitespace() {
+            pos += 1;
+        }
+        
+        pos
     }
 
     fn load_history(&self) -> Vec<String> {
@@ -106,6 +149,7 @@ impl Console {
         io::stdout().flush()?;
 
         let mut buffer = String::new();
+        let mut cursor_position = 0; // Track cursor position within buffer
         let mut reader = EventStream::new();
 
         // History state
@@ -135,7 +179,8 @@ impl Console {
 
                             if is_paste {
                                 paste_timer = now;
-                                buffer.push('\n');
+                                buffer.insert(cursor_position, '\n');
+                                cursor_position += 1;
                                 print!("\r\n");
                                 io::stdout().flush()?;
                                 continue;
@@ -157,6 +202,170 @@ impl Console {
                         {
                             return Ok(SlashCommand::Transcript);
                         }
+                        KeyCode::Char('a')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Move cursor to start of line
+                            self.move_cursor_to(&buffer, cursor_position, 0)?;
+                            cursor_position = 0;
+                        }
+                        KeyCode::Char('e')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Move cursor to end of line
+                            let end = buffer.chars().count();
+                            self.move_cursor_to(&buffer, cursor_position, end)?;
+                            cursor_position = end;
+                        }
+                        KeyCode::Char('k')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Kill to end of line
+                            let chars: Vec<char> = buffer.chars().collect();
+                            buffer = chars.iter().take(cursor_position).collect();
+                            // Clear from cursor to end of line
+                            execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                        }
+                        KeyCode::Char('u')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Kill to start of line
+                            let chars: Vec<char> = buffer.chars().collect();
+                            let remaining: String = chars.iter().skip(cursor_position).collect();
+                            
+                            // Move cursor back to start
+                            self.move_cursor_to(&buffer, cursor_position, 0)?;
+                            
+                            // Clear and redraw
+                            execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                            print!("{}", remaining.replace('\n', "\r\n"));
+                            io::stdout().flush()?;
+                            
+                            // Move cursor back to start
+                            if !remaining.is_empty() {
+                                let move_back = remaining.chars().count();
+                                for _ in 0..move_back {
+                                    execute!(io::stdout(), MoveLeft(1))?;
+                                }
+                            }
+                            
+                            buffer = remaining;
+                            cursor_position = 0;
+                        }
+                        KeyCode::Char('w')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Delete word backwards
+                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
+                            if new_pos < cursor_position {
+                                let chars: Vec<char> = buffer.chars().collect();
+                                let before: String = chars.iter().take(new_pos).collect();
+                                let after: String = chars.iter().skip(cursor_position).collect();
+                                
+                                // Move cursor back
+                                self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                                
+                                // Clear and redraw
+                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                                print!("{}", after.replace('\n', "\r\n"));
+                                io::stdout().flush()?;
+                                
+                                // Move cursor back to position
+                                if !after.is_empty() {
+                                    let move_back = after.chars().count();
+                                    for _ in 0..move_back {
+                                        execute!(io::stdout(), MoveLeft(1))?;
+                                    }
+                                }
+                                
+                                buffer = format!("{}{}", before, after);
+                                cursor_position = new_pos;
+                            }
+                        }
+                        KeyCode::Char('l')
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            // Clear screen
+                            execute!(io::stdout(), Clear(ClearType::All))?;
+                            execute!(io::stdout(), MoveToColumn(0))?;
+                            execute!(io::stdout(), crossterm::cursor::MoveTo(0, 0))?;
+                            print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
+                            print!("{}", buffer.replace('\n', "\r\n"));
+                            io::stdout().flush()?;
+                            
+                            // Move cursor to correct position
+                            let total_chars = buffer.chars().count();
+                            if cursor_position < total_chars {
+                                for _ in cursor_position..total_chars {
+                                    execute!(io::stdout(), MoveLeft(1))?;
+                                }
+                            }
+                        }
+                        KeyCode::Left if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                            // Move to start of previous word
+                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Right if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                            // Move to end of next word
+                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Left if key_event.modifiers.contains(KeyModifiers::ALT) => {
+                            // Alt+Left: Move to start of previous word
+                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Right if key_event.modifiers.contains(KeyModifiers::ALT) => {
+                            // Alt+Right: Move to end of next word
+                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Char('b')
+                            if key_event.modifiers.contains(KeyModifiers::ALT) =>
+                        {
+                            // Alt+b: Move back one word (emacs-style)
+                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Char('f')
+                            if key_event.modifiers.contains(KeyModifiers::ALT) =>
+                        {
+                            // Alt+f: Move forward one word (emacs-style)
+                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
+                            cursor_position = new_pos;
+                        }
+                        KeyCode::Left => {
+                            // Move cursor left
+                            if cursor_position > 0 {
+                                cursor_position -= 1;
+                                execute!(io::stdout(), MoveLeft(1))?;
+                            }
+                        }
+                        KeyCode::Right => {
+                            // Move cursor right
+                            if cursor_position < buffer.chars().count() {
+                                cursor_position += 1;
+                                execute!(io::stdout(), MoveRight(1))?;
+                            }
+                        }
+                        KeyCode::Home => {
+                            // Move to start of line
+                            self.move_cursor_to(&buffer, cursor_position, 0)?;
+                            cursor_position = 0;
+                        }
+                        KeyCode::End => {
+                            // Move to end of line
+                            let end = buffer.chars().count();
+                            self.move_cursor_to(&buffer, cursor_position, end)?;
+                            cursor_position = end;
+                        }
                         KeyCode::Up => {
                             if history_index > 0 {
                                 if history_index == history.len() {
@@ -165,6 +374,7 @@ impl Console {
                                 let old_buffer = buffer.clone();
                                 history_index -= 1;
                                 buffer = history[history_index].clone();
+                                cursor_position = buffer.chars().count();
                                 self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
@@ -177,6 +387,7 @@ impl Console {
                                 } else {
                                     buffer = history[history_index].clone();
                                 }
+                                cursor_position = buffer.chars().count();
                                 self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
                         }
@@ -184,6 +395,7 @@ impl Console {
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
                             buffer.clear();
+                            cursor_position = 0;
                             history_index = history.len();
                             print!("\r\n");
                             print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
@@ -203,18 +415,63 @@ impl Console {
                             paste_detected = elapsed < 10;
                             paste_timer = now;
 
-                            // Store the char
-                            buffer.push(c);
-
-                            // Push to stdout
+                            // Insert char at cursor position
+                            let chars: Vec<char> = buffer.chars().collect();
+                            let before: String = chars.iter().take(cursor_position).collect();
+                            let after: String = chars.iter().skip(cursor_position).collect();
+                            buffer = format!("{}{}{}", before, c, after);
+                            
+                            // Print character and redraw rest of line
                             print!("{}", c);
+                            if !after.is_empty() {
+                                print!("{}", after.replace('\n', "\r\n"));
+                                // Move cursor back to position after inserted char
+                                for _ in 0..after.chars().count() {
+                                    execute!(io::stdout(), MoveLeft(1))?;
+                                }
+                            }
                             io::stdout().flush()?;
+                            cursor_position += 1;
                         }
                         KeyCode::Backspace => {
-                            if !buffer.is_empty() {
-                                buffer.pop();
-                                // Move back, print space, move back
-                                print!("\x08 \x08");
+                            if cursor_position > 0 {
+                                let chars: Vec<char> = buffer.chars().collect();
+                                let before: String = chars.iter().take(cursor_position - 1).collect();
+                                let after: String = chars.iter().skip(cursor_position).collect();
+                                buffer = format!("{}{}", before, after);
+                                cursor_position -= 1;
+                                
+                                // Move back one, clear to end, redraw, move back
+                                execute!(io::stdout(), MoveLeft(1))?;
+                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                                print!("{}", after.replace('\n', "\r\n"));
+                                
+                                // Move cursor back to position
+                                if !after.is_empty() {
+                                    for _ in 0..after.chars().count() {
+                                        execute!(io::stdout(), MoveLeft(1))?;
+                                    }
+                                }
+                                io::stdout().flush()?;
+                            }
+                        }
+                        KeyCode::Delete => {
+                            if cursor_position < buffer.chars().count() {
+                                let chars: Vec<char> = buffer.chars().collect();
+                                let before: String = chars.iter().take(cursor_position).collect();
+                                let after: String = chars.iter().skip(cursor_position + 1).collect();
+                                buffer = format!("{}{}", before, after);
+                                
+                                // Clear to end of line and redraw
+                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                                print!("{}", after.replace('\n', "\r\n"));
+                                
+                                // Move cursor back to position
+                                if !after.is_empty() {
+                                    for _ in 0..after.chars().count() {
+                                        execute!(io::stdout(), MoveLeft(1))?;
+                                    }
+                                }
                                 io::stdout().flush()?;
                             }
                         }
@@ -264,6 +521,39 @@ impl Console {
         print!("{}", rendered_prompt);
         print!("{}", buffer.replace('\n', "\r\n"));
 
+        stdout.flush()?;
+        Ok(())
+    }
+
+    fn move_cursor_to(
+        &self,
+        buffer: &str,
+        from_pos: usize,
+        to_pos: usize,
+    ) -> anyhow::Result<()> {
+        if from_pos == to_pos {
+            return Ok(());
+        }
+        
+        let mut stdout = io::stdout();
+        if to_pos < from_pos {
+            // Move left
+            for _ in 0..(from_pos - to_pos) {
+                execute!(stdout, MoveLeft(1))?;
+            }
+        } else {
+            // Move right
+            let chars: Vec<char> = buffer.chars().collect();
+            for i in from_pos..to_pos {
+                if i < chars.len() && chars[i] == '\n' {
+                    // Handle newline
+                    execute!(stdout, MoveToColumn(0))?;
+                    execute!(stdout, crossterm::cursor::MoveDown(1))?;
+                } else {
+                    execute!(stdout, MoveRight(1))?;
+                }
+            }
+        }
         stdout.flush()?;
         Ok(())
     }
@@ -428,5 +718,67 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0], multiline);
         assert_eq!(history[0].lines().count(), 3);
+    }
+
+    #[test]
+    fn test_find_prev_word_start() {
+        let buffer = "hello world test";
+        
+        // From middle of "test"
+        assert_eq!(Console::find_prev_word_start(buffer, 14), 12);
+        
+        // From start of "test"
+        assert_eq!(Console::find_prev_word_start(buffer, 12), 6);
+        
+        // From middle of "world"
+        assert_eq!(Console::find_prev_word_start(buffer, 8), 6);
+        
+        // From start of buffer
+        assert_eq!(Console::find_prev_word_start(buffer, 0), 0);
+        
+        // From position 1
+        assert_eq!(Console::find_prev_word_start(buffer, 1), 0);
+    }
+
+    #[test]
+    fn test_find_prev_word_start_with_whitespace() {
+        let buffer = "hello  world   test";
+        
+        // From "test" through whitespace
+        assert_eq!(Console::find_prev_word_start(buffer, 19), 15);
+        
+        // From whitespace before "test"
+        assert_eq!(Console::find_prev_word_start(buffer, 15), 7);
+    }
+
+    #[test]
+    fn test_find_next_word_end() {
+        let buffer = "hello world test";
+        
+        // From start
+        assert_eq!(Console::find_next_word_end(buffer, 0), 6);
+        
+        // From middle of "hello"
+        assert_eq!(Console::find_next_word_end(buffer, 2), 6);
+        
+        // From start of "world"
+        assert_eq!(Console::find_next_word_end(buffer, 6), 12);
+        
+        // From middle of "world"
+        assert_eq!(Console::find_next_word_end(buffer, 8), 12);
+        
+        // From end
+        assert_eq!(Console::find_next_word_end(buffer, 16), 16);
+    }
+
+    #[test]
+    fn test_find_next_word_end_with_whitespace() {
+        let buffer = "hello  world   test";
+        
+        // From start of "hello" - skip "hello" and whitespace to start of "world"
+        assert_eq!(Console::find_next_word_end(buffer, 0), 7);
+        
+        // From start of "world" - skip "world" and whitespace to start of "test"  
+        assert_eq!(Console::find_next_word_end(buffer, 7), 15);
     }
 }
