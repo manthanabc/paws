@@ -88,8 +88,8 @@ impl Console {
         pos
     }
     
-    /// Find the end of the next word
-    fn find_next_word_end(buffer: &str, position: usize) -> usize {
+    /// Find the start of the next word
+    fn find_next_word_start(buffer: &str, position: usize) -> usize {
         let chars: Vec<char> = buffer.chars().collect();
         let len = chars.len();
         if position >= len {
@@ -274,12 +274,7 @@ impl Console {
                             io::stdout().flush()?;
                             
                             // Move cursor back to start
-                            if !remaining.is_empty() {
-                                let move_back = remaining.chars().count();
-                                for _ in 0..move_back {
-                                    execute!(io::stdout(), MoveLeft(1))?;
-                                }
-                            }
+                            self.move_cursor_to(&remaining, remaining.chars().count(), 0)?;
                             
                             buffer = remaining;
                             cursor_position = 0;
@@ -303,12 +298,7 @@ impl Console {
                                 io::stdout().flush()?;
                                 
                                 // Move cursor back to position
-                                if !after.is_empty() {
-                                    let move_back = after.chars().count();
-                                    for _ in 0..move_back {
-                                        execute!(io::stdout(), MoveLeft(1))?;
-                                    }
-                                }
+                                self.move_cursor_to(&after, after.chars().count(), 0)?;
                                 
                                 buffer = format!("{}{}", before, after);
                                 cursor_position = new_pos;
@@ -328,9 +318,7 @@ impl Console {
                             // Move cursor to correct position
                             let total_chars = buffer.chars().count();
                             if cursor_position < total_chars {
-                                for _ in cursor_position..total_chars {
-                                    execute!(io::stdout(), MoveLeft(1))?;
-                                }
+                                self.move_cursor_to(&buffer, total_chars, cursor_position)?;
                             }
                         }
                         KeyCode::Left if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -340,8 +328,8 @@ impl Console {
                             cursor_position = new_pos;
                         }
                         KeyCode::Right if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                            // Move to end of next word
-                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            // Move to start of next word
+                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
                             self.move_cursor_to(&buffer, cursor_position, new_pos)?;
                             cursor_position = new_pos;
                         }
@@ -352,8 +340,8 @@ impl Console {
                             cursor_position = new_pos;
                         }
                         KeyCode::Right if key_event.modifiers.contains(KeyModifiers::ALT) => {
-                            // Alt+Right: Move to end of next word
-                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            // Alt+Right: Move to start of next word
+                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
                             self.move_cursor_to(&buffer, cursor_position, new_pos)?;
                             cursor_position = new_pos;
                         }
@@ -369,7 +357,7 @@ impl Console {
                             if key_event.modifiers.contains(KeyModifiers::ALT) =>
                         {
                             // Alt+f: Move forward one word (emacs-style)
-                            let new_pos = Self::find_next_word_end(&buffer, cursor_position);
+                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
                             self.move_cursor_to(&buffer, cursor_position, new_pos)?;
                             cursor_position = new_pos;
                         }
@@ -458,9 +446,7 @@ impl Console {
                             if !after.is_empty() {
                                 print!("{}", after.replace('\n', "\r\n"));
                                 // Move cursor back to position after inserted char
-                                for _ in 0..after.chars().count() {
-                                    execute!(io::stdout(), MoveLeft(1))?;
-                                }
+                                self.move_cursor_to(&after, after.chars().count(), 0)?;
                             }
                             io::stdout().flush()?;
                             cursor_position += 1;
@@ -479,11 +465,7 @@ impl Console {
                                 print!("{}", after.replace('\n', "\r\n"));
                                 
                                 // Move cursor back to position
-                                if !after.is_empty() {
-                                    for _ in 0..after.chars().count() {
-                                        execute!(io::stdout(), MoveLeft(1))?;
-                                    }
-                                }
+                                self.move_cursor_to(&after, after.chars().count(), 0)?;
                                 io::stdout().flush()?;
                             }
                         }
@@ -499,11 +481,7 @@ impl Console {
                                 print!("{}", after.replace('\n', "\r\n"));
                                 
                                 // Move cursor back to position
-                                if !after.is_empty() {
-                                    for _ in 0..after.chars().count() {
-                                        execute!(io::stdout(), MoveLeft(1))?;
-                                    }
-                                }
+                                self.move_cursor_to(&after, after.chars().count(), 0)?;
                                 io::stdout().flush()?;
                             }
                         }
@@ -568,14 +546,29 @@ impl Console {
         }
         
         let mut stdout = io::stdout();
+        let chars: Vec<char> = buffer.chars().collect();
+        
         if to_pos < from_pos {
-            // Move left
-            for _ in 0..(from_pos - to_pos) {
-                execute!(stdout, MoveLeft(1))?;
+            // Move left - need to handle newlines when going backwards
+            for i in (to_pos..from_pos).rev() {
+                if i < chars.len() && chars[i] == '\n' {
+                    // Moving back across a newline
+                    execute!(stdout, crossterm::cursor::MoveUp(1))?;
+                    // Find the length of the previous line
+                    let mut line_len = 0;
+                    for j in (0..i).rev() {
+                        if chars[j] == '\n' {
+                            break;
+                        }
+                        line_len += 1;
+                    }
+                    execute!(stdout, crossterm::cursor::MoveToColumn(line_len as u16))?;
+                } else {
+                    execute!(stdout, MoveLeft(1))?;
+                }
             }
         } else {
             // Move right
-            let chars: Vec<char> = buffer.chars().collect();
             for i in from_pos..to_pos {
                 if i < chars.len() && chars[i] == '\n' {
                     // Handle newline
@@ -784,33 +777,33 @@ mod tests {
     }
 
     #[test]
-    fn test_find_next_word_end() {
+    fn test_find_next_word_start() {
         let buffer = "hello world test";
         
         // From start
-        assert_eq!(Console::find_next_word_end(buffer, 0), 6);
+        assert_eq!(Console::find_next_word_start(buffer, 0), 6);
         
         // From middle of "hello"
-        assert_eq!(Console::find_next_word_end(buffer, 2), 6);
+        assert_eq!(Console::find_next_word_start(buffer, 2), 6);
         
         // From start of "world"
-        assert_eq!(Console::find_next_word_end(buffer, 6), 12);
+        assert_eq!(Console::find_next_word_start(buffer, 6), 12);
         
         // From middle of "world"
-        assert_eq!(Console::find_next_word_end(buffer, 8), 12);
+        assert_eq!(Console::find_next_word_start(buffer, 8), 12);
         
         // From end
-        assert_eq!(Console::find_next_word_end(buffer, 16), 16);
+        assert_eq!(Console::find_next_word_start(buffer, 16), 16);
     }
 
     #[test]
-    fn test_find_next_word_end_with_whitespace() {
+    fn test_find_next_word_start_with_whitespace() {
         let buffer = "hello  world   test";
         
         // From start of "hello" - skip "hello" and whitespace to start of "world"
-        assert_eq!(Console::find_next_word_end(buffer, 0), 7);
+        assert_eq!(Console::find_next_word_start(buffer, 0), 7);
         
         // From start of "world" - skip "world" and whitespace to start of "test"  
-        assert_eq!(Console::find_next_word_end(buffer, 7), 15);
+        assert_eq!(Console::find_next_word_start(buffer, 7), 15);
     }
 }
