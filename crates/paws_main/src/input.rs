@@ -23,6 +23,38 @@ struct HistoryEntry {
 }
 
 /// Console implementation for handling user input via command line.
+///
+/// # Terminal-Native Navigation Features
+///
+/// The console supports the following keyboard shortcuts for a native terminal experience:
+///
+/// ## Cursor Movement
+/// - **Left/Right Arrow**: Move cursor left/right one character
+/// - **Home** or **Ctrl+A**: Move cursor to start of line
+/// - **End** or **Ctrl+E**: Move cursor to end of line
+///
+/// ## Word Navigation
+/// - **Ctrl+Left** or **Alt+B**: Move cursor to start of previous word
+/// - **Ctrl+Right** or **Alt+F**: Move cursor to start of next word
+///
+/// ## Editing
+/// - **Backspace**: Delete character before cursor
+/// - **Delete**: Delete character at cursor
+/// - **Ctrl+W**: Delete word before cursor
+/// - **Ctrl+K**: Kill (delete) from cursor to end of line
+/// - **Ctrl+U**: Kill (delete) from start of line to cursor
+///
+/// ## History
+/// - **Up Arrow**: Navigate to previous command in history
+/// - **Down Arrow**: Navigate to next command in history
+///
+/// ## Other
+/// - **Ctrl+C**: Clear current input and start fresh
+/// - **Ctrl+D**: Exit the console
+/// - **Ctrl+L**: Clear screen and redraw prompt
+/// - **Ctrl+O**: Open transcript
+/// - **Enter**: Submit command
+///
 #[derive(Clone)]
 pub struct Console {
     env: Environment,
