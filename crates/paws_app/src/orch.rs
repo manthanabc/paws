@@ -228,6 +228,11 @@ impl<S: AgentService> Orchestrator<S> {
         // TODO: Move into app.rs
         let title = self.generate_title(model_id.clone());
 
+        // Save initial snapshot before starting the interaction
+        // This allows undoing the entire interaction
+        let snapshot_summary = extract_user_message_summary(&event);
+        self.conversation.save_snapshot(snapshot_summary);
+
         while !should_yield {
             // Set context for the current loop iteration
             self.conversation.context = Some(context.clone());
@@ -417,4 +422,27 @@ impl<S: AgentService> Orchestrator<S> {
             tokio::spawn(async { None })
         }
     }
+}
+
+/// Extracts a brief summary from an event's user message for snapshot purposes.
+///
+/// # Arguments
+/// * `event` - The event containing the user message
+///
+/// # Returns
+/// A string summary, truncated to 100 characters
+fn extract_user_message_summary(event: &Event) -> String {
+    event
+        .value
+        .as_ref()
+        .and_then(|v| v.as_user_prompt())
+        .map(|prompt| {
+            let summary = prompt.as_str().trim();
+            if summary.len() > 100 {
+                format!("{}...", &summary[..97])
+            } else {
+                summary.to_string()
+            }
+        })
+        .unwrap_or_else(|| "User interaction".to_string())
 }
