@@ -44,7 +44,7 @@ Difference so far-
  - [WIP] Async input
 
 Planned - 
- - [o] Undo/ Redo controll
+ - [X] Undo/ Redo controll
  - [o] Background tasks
  - [o] Always visible prompt and enque pending tasks
  - [e] Parallel tasks
