@@ -39,6 +39,7 @@ mod shell;
 mod skill;
 mod snapshot;
 mod suggestion;
+pub mod virtual_fs;
 mod system_context;
 mod temperature;
 mod template;

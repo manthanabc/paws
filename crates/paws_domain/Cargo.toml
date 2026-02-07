@@ -91,6 +91,15 @@ workspace = true
 version = "4.4.0"
 features = [ "derive",]
 
+[dependencies.sha2]
+workspace = true
+
+[dependencies.dashmap]
+workspace = true
+
+[dependencies.bytes]
+workspace = true
+
 [dependencies.paws_common]
 workspace = true
 
