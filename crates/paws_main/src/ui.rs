@@ -2294,6 +2294,14 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 is_new = true;
             }
             id
+        } else if self.cli.resume {
+            // Resume the last conversation
+            let last_conversation = self
+                .api
+                .last_conversation()
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+            last_conversation.id
         } else if let Some(ref path) = self.cli.conversation {
             let conversation: Conversation =
                 serde_json::from_str(PawsFS::read_utf8(path.as_os_str()).await?.as_str())
