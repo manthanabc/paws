@@ -237,9 +237,7 @@ mod tests {
             .unwrap();
         assert_eq!(before_undo, Some("v2".to_string()));
 
-        vfs.with_session(&sid, |fs| fs.undo(path))
-            .await
-            .unwrap();
+        vfs.with_session(&sid, |fs| fs.undo(path)).await.unwrap();
 
         let after_undo = vfs
             .with_session_ref(&sid, |fs| fs.read_utf8(path))
@@ -258,9 +256,7 @@ mod tests {
     #[tokio::test]
     async fn test_with_session_nonexistent() {
         let vfs = VirtualFileSystem::new();
-        let result = vfs
-            .with_session(&SessionId::new(), |_fs| Ok(()))
-            .await;
+        let result = vfs.with_session(&SessionId::new(), |_fs| Ok(())).await;
         assert!(result.is_err());
     }
 
@@ -324,9 +320,7 @@ mod tests {
         assert!(!deleted);
 
         // Undo remove → should see "modified"
-        vfs.with_session(&sid, |fs| fs.undo(path))
-            .await
-            .unwrap();
+        vfs.with_session(&sid, |fs| fs.undo(path)).await.unwrap();
         let actual = vfs
             .with_session_ref(&sid, |fs| fs.read_utf8(path))
             .await
@@ -334,9 +328,7 @@ mod tests {
         assert_eq!(actual, Some("modified".to_string()));
 
         // Undo modify → should see "created"
-        vfs.with_session(&sid, |fs| fs.undo(path))
-            .await
-            .unwrap();
+        vfs.with_session(&sid, |fs| fs.undo(path)).await.unwrap();
         let actual = vfs
             .with_session_ref(&sid, |fs| fs.read_utf8(path))
             .await

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use bytes::Bytes;
 
-use super::object_store::ObjectStore;
 use super::ObjectId;
+use super::object_store::ObjectStore;
 
 /// Per-session virtual file system overlay.
 ///
@@ -52,10 +52,10 @@ impl SessionFS {
         }
         match self.files.get(path) {
             Some(id) => {
-                let content = self
-                    .store
-                    .get(id)
-                    .context(format!("Object {id} missing from store for {}", path.display()))?;
+                let content = self.store.get(id).context(format!(
+                    "Object {id} missing from store for {}",
+                    path.display()
+                ))?;
                 Ok(Some(content))
             }
             None => Ok(None),
@@ -225,10 +225,16 @@ mod tests {
         session.snapshot(path).unwrap();
         session.write_utf8(path, "modified");
 
-        assert_eq!(session.read_utf8(path).unwrap(), Some("modified".to_string()));
+        assert_eq!(
+            session.read_utf8(path).unwrap(),
+            Some("modified".to_string())
+        );
 
         session.undo(path).unwrap();
-        assert_eq!(session.read_utf8(path).unwrap(), Some("original".to_string()));
+        assert_eq!(
+            session.read_utf8(path).unwrap(),
+            Some("original".to_string())
+        );
     }
 
     #[test]
@@ -270,7 +276,10 @@ mod tests {
 
         session.undo(path).unwrap();
         assert!(session.exists(path));
-        assert_eq!(session.read_utf8(path).unwrap(), Some("content".to_string()));
+        assert_eq!(
+            session.read_utf8(path).unwrap(),
+            Some("content".to_string())
+        );
     }
 
     #[test]
