@@ -831,5 +831,40 @@
     "auth_methods": [
       "api_key"
     ]
+  },
+  {
+    "id": "qwen",
+    "api_key_vars": "QWEN_API_KEY",
+    "url_param_vars": [],
+    "response_type": "Qwen",
+    "url": "https://portal.qwen.ai/v1/chat/completions",
+    "models": [
+      {
+        "id": "coder-model",
+        "name": "Coder Model",
+        "description": "Qwen Coder model",
+        "context_length": 32768,
+        "tools_supported": false,
+        "supports_parallel_tool_calls": false,
+        "supports_reasoning": false
+      }
+    ],
+    "auth_methods": [
+      "api_key",
+      {
+        "oauth_device": {
+          "auth_url": "https://chat.qwen.ai/api/v1/oauth2/device/code",
+          "token_url": "https://chat.qwen.ai/api/v1/oauth2/token",
+          "client_id": "f0304373b74a44d2b584a3fb70ca9e56",
+          "scopes": [
+            "openid",
+            "profile",
+            "email",
+            "model.completion"
+          ],
+          "use_pkce": true
+        }
+      }
+    ]
   }
 ]

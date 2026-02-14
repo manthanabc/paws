@@ -9,6 +9,31 @@ use paws_domain::{
 
 use crate::auth::error::Error;
 
+/// Generate a random PKCE code verifier
+pub(crate) fn generate_code_verifier() -> String {
+    use rand::Rng;
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const LENGTH: usize = 128;
+
+    let mut rng = rand::thread_rng();
+    (0..LENGTH)
+        .map(|_| {
+            let idx = rng.gen_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
+/// Generate PKCE code challenge from verifier using S256 method
+pub(crate) fn generate_code_challenge(verifier: &str) -> String {
+    use sha2::{Digest, Sha256};
+    use base64::engine::Engine;
+    let mut hasher = Sha256::new();
+    hasher.update(verifier.as_bytes());
+    let result = hasher.finalize();
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(result)
+}
+
 /// Calculate token expiry with fallback duration
 pub(crate) fn calculate_token_expiry(
     expires_in: Option<u64>,
@@ -234,6 +259,31 @@ pub(crate) fn parse_token_response(
     let expires_in = token_response["expires_in"].as_u64();
 
     Ok((access_token, refresh_token, expires_in))
+}
+
+/// Parse token response from JSON with resource_url
+pub(crate) fn parse_token_response_with_resource_url(
+    body: &str,
+) -> Result<(String, Option<String>, Option<u64>, Option<String>), Error> {
+    let token_response: serde_json::Value = serde_json::from_str(body)
+        .map_err(|e| Error::PollFailed(format!("Failed to parse token response: {e}")))?;
+
+    let access_token = token_response["access_token"]
+        .as_str()
+        .ok_or_else(|| Error::PollFailed("Missing access_token in response".to_string()))?
+        .to_string();
+
+    let refresh_token = token_response["refresh_token"]
+        .as_str()
+        .map(|s| s.to_string());
+
+    let expires_in = token_response["expires_in"].as_u64();
+
+    let resource_url = token_response["resource_url"]
+        .as_str()
+        .map(|s| s.to_string());
+
+    Ok((access_token, refresh_token, expires_in, resource_url))
 }
 
 #[cfg(test)]

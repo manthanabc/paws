@@ -11,7 +11,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use url::Url;
 
 use crate::auth::error::Error as AuthError;
-use crate::auth::http::{AnthropicHttpProvider, GithubHttpProvider, StandardHttpProvider};
+use crate::auth::http::{AnthropicHttpProvider, GithubHttpProvider, QwenHttpProvider, StandardHttpProvider};
 use crate::auth::util::*;
 
 /// API Key Strategy - Simple static key authentication
@@ -139,6 +139,18 @@ impl OAuthDeviceStrategy {
     }
 }
 
+/// OAuth Device Strategy for Qwen - Device code flow with PKCE
+pub struct OAuthDeviceQwenStrategy {
+    provider_id: ProviderId,
+    config: OAuthConfig,
+}
+
+impl OAuthDeviceQwenStrategy {
+    pub fn new(provider_id: ProviderId, config: OAuthConfig) -> Self {
+        Self { provider_id, config }
+    }
+}
+
 #[async_trait::async_trait]
 impl AuthStrategy for OAuthDeviceStrategy {
     async fn init(&self) -> anyhow::Result<AuthContextRequest> {
@@ -186,6 +198,7 @@ impl AuthStrategy for OAuthDeviceStrategy {
             expires_in: device_auth_response.expires_in().as_secs(),
             interval: device_auth_response.interval().as_secs(),
             oauth_config: self.config.clone(),
+            pkce_verifier: None,
         }))
     }
 
@@ -202,6 +215,80 @@ impl AuthStrategy for OAuthDeviceStrategy {
                     false,
                 )
                 .await?;
+
+                build_oauth_credential(
+                    self.provider_id.clone(),
+                    token_response,
+                    &self.config,
+                    chrono::Duration::days(365), // Device flow default
+                )
+            }
+            _ => Err(AuthError::InvalidContext("Expected DeviceCode context".to_string()).into()),
+        }
+    }
+
+    async fn refresh(&self, credential: &AuthCredential) -> anyhow::Result<AuthCredential> {
+        refresh_oauth_credential(
+            credential,
+            &self.config,
+            chrono::Duration::days(30),
+            false, // No API key exchange
+        )
+        .await
+    }
+}
+
+#[async_trait::async_trait]
+impl AuthStrategy for OAuthDeviceQwenStrategy {
+    async fn init(&self) -> anyhow::Result<AuthContextRequest> {
+        // Generate PKCE code verifier and challenge
+        let code_verifier = crate::auth::util::generate_code_verifier();
+        let code_challenge = crate::auth::util::generate_code_challenge(&code_verifier);
+
+        // Request device code with PKCE parameters using QwenHttpProvider
+        let device_auth_response = QwenHttpProvider::request_device_code(
+            &self.config,
+            &code_challenge,
+        )
+        .await
+        .map_err(|e| AuthError::InitiationFailed(format!("Device authorization request failed: {e}")))?;
+
+        // Build the type-safe context
+        Ok(AuthContextRequest::DeviceCode(DeviceCodeRequest {
+            user_code: device_auth_response.user_code.to_string().into(),
+            device_code: device_auth_response.device_code.to_string().into(),
+            verification_uri: Url::parse(&device_auth_response.verification_uri)?,
+            verification_uri_complete: device_auth_response
+                .verification_uri_complete
+                .and_then(|u| Url::parse(&u).ok()),
+            expires_in: device_auth_response.expires_in.unwrap_or(600),
+            interval: device_auth_response.interval.unwrap_or(5),
+            oauth_config: self.config.clone(),
+            pkce_verifier: Some(code_verifier.into()),
+        }))
+    }
+
+    async fn complete(
+        &self,
+        context_response: AuthContextResponse,
+    ) -> anyhow::Result<AuthCredential> {
+        match context_response {
+            AuthContextResponse::DeviceCode(ctx) => {
+                let code_verifier = ctx
+                    .request
+                    .pkce_verifier
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("PKCE verifier is required for Qwen OAuth"))?;
+
+                let token_response = QwenHttpProvider::poll_for_token(
+                    &self.config,
+                    &ctx.request.device_code,
+                    code_verifier.as_str(),
+                )
+                .await
+                .map_err(|e| {
+                    AuthError::CompletionFailed(format!("Failed to poll for token: {e}"))
+                })?;
 
                 build_oauth_credential(
                     self.provider_id.clone(),
@@ -288,6 +375,7 @@ impl AuthStrategy for OAuthWithApiKeyStrategy {
             expires_in: device_auth_response.expires_in().as_secs(),
             interval: device_auth_response.interval().as_secs(),
             oauth_config: self.oauth_config.clone(),
+            pkce_verifier: None,
         }))
     }
 
@@ -588,6 +676,7 @@ pub enum AnyAuthStrategy {
     OAuthCodeAnthropic(OAuthCodeStrategy<AnthropicHttpProvider>),
     OAuthCodeGithub(OAuthCodeStrategy<GithubHttpProvider>),
     OAuthDevice(OAuthDeviceStrategy),
+    OAuthDeviceQwen(OAuthDeviceQwenStrategy),
     OAuthWithApiKey(OAuthWithApiKeyStrategy),
 }
 
@@ -600,6 +689,7 @@ impl AuthStrategy for AnyAuthStrategy {
             Self::OAuthCodeAnthropic(s) => s.init().await,
             Self::OAuthCodeGithub(s) => s.init().await,
             Self::OAuthDevice(s) => s.init().await,
+            Self::OAuthDeviceQwen(s) => s.init().await,
             Self::OAuthWithApiKey(s) => s.init().await,
         }
     }
@@ -614,6 +704,7 @@ impl AuthStrategy for AnyAuthStrategy {
             Self::OAuthCodeAnthropic(s) => s.complete(context_response).await,
             Self::OAuthCodeGithub(s) => s.complete(context_response).await,
             Self::OAuthDevice(s) => s.complete(context_response).await,
+            Self::OAuthDeviceQwen(s) => s.complete(context_response).await,
             Self::OAuthWithApiKey(s) => s.complete(context_response).await,
         }
     }
@@ -625,6 +716,7 @@ impl AuthStrategy for AnyAuthStrategy {
             Self::OAuthCodeAnthropic(s) => s.refresh(credential).await,
             Self::OAuthCodeGithub(s) => s.refresh(credential).await,
             Self::OAuthDevice(s) => s.refresh(credential).await,
+            Self::OAuthDeviceQwen(s) => s.refresh(credential).await,
             Self::OAuthWithApiKey(s) => s.refresh(credential).await,
         }
     }
@@ -683,6 +775,13 @@ impl StrategyFactory for PawsAuthStrategyFactory {
                 )))
             }
             paws_domain::AuthMethod::OAuthDevice(config) => {
+                // Check if this is Qwen provider with PKCE enabled
+                if provider_id == ProviderId::QWEN && config.use_pkce {
+                    return Ok(AnyAuthStrategy::OAuthDeviceQwen(
+                        OAuthDeviceQwenStrategy::new(provider_id, config),
+                    ));
+                }
+
                 // Check if this is OAuth-with-API-Key flow (GitHub Copilot pattern)
                 if config.token_refresh_url.is_some() {
                     Ok(AnyAuthStrategy::OAuthWithApiKey(

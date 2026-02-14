@@ -65,6 +65,7 @@ impl ProviderId {
     pub const IO_INTELLIGENCE: ProviderId = ProviderId(Cow::Borrowed("io_intelligence"));
     pub const BEDROCK: ProviderId = ProviderId(Cow::Borrowed("bedrock"));
     pub const GEMINI: ProviderId = ProviderId(Cow::Borrowed("gemini"));
+    pub const QWEN: ProviderId = ProviderId(Cow::Borrowed("qwen"));
 
     /// Returns all built-in provider IDs
     ///
@@ -90,6 +91,7 @@ impl ProviderId {
             ProviderId::IO_INTELLIGENCE,
             ProviderId::BEDROCK,
             ProviderId::GEMINI,
+            ProviderId::QWEN,
         ]
     }
 
@@ -152,6 +154,7 @@ impl std::str::FromStr for ProviderId {
             "io_intelligence" => ProviderId::IO_INTELLIGENCE,
             "gemini" => ProviderId::GEMINI,
             "bedrock" => ProviderId::BEDROCK,
+            "qwen" => ProviderId::QWEN,
             // For custom providers, use Cow::Owned to avoid memory leaks
             custom => ProviderId(Cow::Owned(custom.to_string())),
         };
@@ -171,6 +174,7 @@ pub enum ProviderResponse {
     Anthropic,
     Bedrock,
     Gemini,
+    Qwen,
 }
 
 /// Represents the source of models for a provider
