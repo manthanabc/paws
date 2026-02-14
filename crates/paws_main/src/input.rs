@@ -2,7 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
-use crossterm::cursor::{MoveLeft, MoveRight, MoveToColumn, MoveUp};
+use crossterm::cursor::{MoveDown, MoveToColumn, MoveUp};
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{Clear, ClearType};
@@ -10,6 +10,7 @@ use futures::StreamExt;
 use paws_api::Environment;
 use serde::{Deserialize, Serialize};
 
+use crate::input_state::InputState;
 use crate::model::{PawsCommandManager, SlashCommand};
 use crate::prompt::PawsPrompt;
 
@@ -26,12 +27,12 @@ struct HistoryEntry {
 ///
 /// # Terminal-Native Navigation Features
 ///
-/// The console supports the following keyboard shortcuts for a native terminal experience:
+/// The console uses a state-based input system with proper multi-line support.
 ///
 /// ## Cursor Movement
-/// - **Left/Right Arrow**: Move cursor left/right one character
-/// - **Home** or **Ctrl+A**: Move cursor to start of line
-/// - **End** or **Ctrl+E**: Move cursor to end of line
+/// - **Left/Right Arrow**: Move cursor left/right one character (across lines)
+/// - **Home** or **Ctrl+A**: Move cursor to start of current line
+/// - **End** or **Ctrl+E**: Move cursor to end of current line
 ///
 /// ## Word Navigation
 /// - **Ctrl+Left** or **Alt+B**: Move cursor to start of previous word
@@ -41,8 +42,8 @@ struct HistoryEntry {
 /// - **Backspace**: Delete character before cursor
 /// - **Delete**: Delete character at cursor
 /// - **Ctrl+W**: Delete word before cursor
-/// - **Ctrl+K**: Kill (delete) from cursor to end of line
-/// - **Ctrl+U**: Kill (delete) from start of line to cursor
+/// - **Ctrl+K**: Delete from cursor to end of line
+/// - **Ctrl+U**: Delete from start of line to cursor
 ///
 /// ## History
 /// - **Up Arrow**: Navigate to previous command in history
@@ -67,47 +68,56 @@ impl Console {
         Self { env, command }
     }
 
-    /// Find the start of the previous word
-    fn find_prev_word_start(buffer: &str, position: usize) -> usize {
-        if position == 0 {
-            return 0;
+    /// Renders the current input state to the terminal
+    ///
+    /// This function clears the current display and re-renders the prompt
+    /// and input buffer, positioning the cursor at the correct location.
+    fn render_state(&self, prompt: &PawsPrompt, state: &InputState) -> anyhow::Result<()> {
+        let mut stdout = io::stdout();
+
+        // Calculate total lines occupied (prompt + input lines)
+        let prompt_text = prompt.render_prompt().replace('\n', "\r\n");
+        let prompt_lines = prompt_text.matches("\r\n").count();
+
+        // Clear from start of prompt
+        if prompt_lines + state.lines().len() > 0 {
+            // Move to start of prompt
+            let total_lines = prompt_lines + state.lines().len().saturating_sub(1);
+            if total_lines > 0 {
+                execute!(stdout, MoveUp(total_lines as u16))?;
+            }
         }
-        let chars: Vec<char> = buffer.chars().collect();
-        let mut pos = position.saturating_sub(1);
-        
-        // Skip any whitespace
-        while pos > 0 && chars[pos].is_whitespace() {
-            pos -= 1;
+        execute!(stdout, MoveToColumn(0))?;
+        execute!(stdout, Clear(ClearType::FromCursorDown))?;
+
+        // Render prompt
+        print!("{}", prompt_text);
+
+        // Render each line of input
+        for (i, line) in state.lines().iter().enumerate() {
+            if i > 0 {
+                print!("\r\n");
+            }
+            print!("{}", line);
         }
-        
-        // Skip the word
-        while pos > 0 && !chars[pos - 1].is_whitespace() {
-            pos -= 1;
+
+        // Position cursor at the correct location
+        let (cursor_row, cursor_col) = state.cursor();
+        let current_row = prompt_lines + state.lines().len() - 1;
+        let target_row = prompt_lines + cursor_row;
+
+        // Move vertically to target row
+        if target_row < current_row {
+            execute!(stdout, MoveUp((current_row - target_row) as u16))?;
+        } else if target_row > current_row {
+            execute!(stdout, MoveDown((target_row - current_row) as u16))?;
         }
-        
-        pos
-    }
-    
-    /// Find the start of the next word
-    fn find_next_word_start(buffer: &str, position: usize) -> usize {
-        let chars: Vec<char> = buffer.chars().collect();
-        let len = chars.len();
-        if position >= len {
-            return len;
-        }
-        let mut pos = position;
-        
-        // Skip current word
-        while pos < len && !chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        
-        // Skip any whitespace
-        while pos < len && chars[pos].is_whitespace() {
-            pos += 1;
-        }
-        
-        pos
+
+        // Move horizontally to target column
+        execute!(stdout, MoveToColumn(cursor_col as u16))?;
+
+        stdout.flush()?;
+        Ok(())
     }
 
     fn load_history(&self) -> Vec<String> {
@@ -175,13 +185,8 @@ impl Console {
         // Enable raw mode for character-by-character input
         crossterm::terminal::enable_raw_mode()?;
 
-        // Print the prompt string
-        // We need to use \r\n for newlines in raw mode
-        print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
-        io::stdout().flush()?;
-
-        let mut buffer = String::new();
-        let mut cursor_position = 0; // Track cursor position within buffer
+        // Create input state
+        let mut state = InputState::new();
         let mut reader = EventStream::new();
 
         // History state
@@ -192,6 +197,10 @@ impl Console {
         // Paste detection: track if we're in the middle of a paste operation
         let mut paste_detected = false;
         let mut paste_timer = std::time::Instant::now();
+
+        // Initial render
+        print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
+        io::stdout().flush()?;
 
         loop {
             let event = reader.next().await;
@@ -211,18 +220,16 @@ impl Console {
 
                             if is_paste {
                                 paste_timer = now;
-                                buffer.insert(cursor_position, '\n');
-                                cursor_position += 1;
-                                print!("\r\n");
-                                io::stdout().flush()?;
+                                state.insert_newline();
+                                self.render_state(&prompt, &state)?;
                                 continue;
                             }
 
-                            let trimmed = buffer.trim();
+                            let text = state.to_string();
+                            let trimmed = text.trim();
                             if trimmed.is_empty() {
                                 // Reprint prompt and continue
-                                print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
-                                io::stdout().flush()?;
+                                self.render_state(&prompt, &state)?;
                                 continue;
                             }
                             self.append_history(trimmed);
@@ -232,77 +239,38 @@ impl Console {
                         KeyCode::Char('o')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
+                            crossterm::terminal::disable_raw_mode()?;
                             return Ok(SlashCommand::Transcript);
                         }
                         KeyCode::Char('a')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            // Move cursor to start of line
-                            self.move_cursor_to(&buffer, cursor_position, 0)?;
-                            cursor_position = 0;
+                            state.move_home();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('e')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            // Move cursor to end of line
-                            let end = buffer.chars().count();
-                            self.move_cursor_to(&buffer, cursor_position, end)?;
-                            cursor_position = end;
+                            state.move_end();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('k')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            // Kill to end of line
-                            let chars: Vec<char> = buffer.chars().collect();
-                            buffer = chars.iter().take(cursor_position).collect();
-                            // Clear from cursor to end of line
-                            execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
+                            state.delete_to_end();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('u')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            // Kill to start of line
-                            let chars: Vec<char> = buffer.chars().collect();
-                            let remaining: String = chars.iter().skip(cursor_position).collect();
-                            
-                            // Move cursor back to start
-                            self.move_cursor_to(&buffer, cursor_position, 0)?;
-                            
-                            // Clear and redraw
-                            execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
-                            print!("{}", remaining.replace('\n', "\r\n"));
-                            io::stdout().flush()?;
-                            
-                            // Move cursor back to start
-                            self.move_cursor_to(&remaining, remaining.chars().count(), 0)?;
-                            
-                            buffer = remaining;
-                            cursor_position = 0;
+                            state.delete_to_start();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('w')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            // Delete word backwards
-                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
-                            if new_pos < cursor_position {
-                                let chars: Vec<char> = buffer.chars().collect();
-                                let before: String = chars.iter().take(new_pos).collect();
-                                let after: String = chars.iter().skip(cursor_position).collect();
-                                
-                                // Move cursor back
-                                self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                                
-                                // Clear and redraw
-                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
-                                print!("{}", after.replace('\n', "\r\n"));
-                                io::stdout().flush()?;
-                                
-                                // Move cursor back to position
-                                self.move_cursor_to(&after, after.chars().count(), 0)?;
-                                
-                                buffer = format!("{}{}", before, after);
-                                cursor_position = new_pos;
-                            }
+                            state.delete_word_back();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('l')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -311,111 +279,77 @@ impl Console {
                             execute!(io::stdout(), Clear(ClearType::All))?;
                             execute!(io::stdout(), MoveToColumn(0))?;
                             execute!(io::stdout(), crossterm::cursor::MoveTo(0, 0))?;
-                            print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
-                            print!("{}", buffer.replace('\n', "\r\n"));
-                            io::stdout().flush()?;
-                            
-                            // Move cursor to correct position
-                            let total_chars = buffer.chars().count();
-                            if cursor_position < total_chars {
-                                self.move_cursor_to(&buffer, total_chars, cursor_position)?;
-                            }
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Left if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                            // Move to start of previous word
-                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_left();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Right if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                            // Move to start of next word
-                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_right();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Left if key_event.modifiers.contains(KeyModifiers::ALT) => {
-                            // Alt+Left: Move to start of previous word
-                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_left();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Right if key_event.modifiers.contains(KeyModifiers::ALT) => {
-                            // Alt+Right: Move to start of next word
-                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_right();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('b')
                             if key_event.modifiers.contains(KeyModifiers::ALT) =>
                         {
-                            // Alt+b: Move back one word (emacs-style)
-                            let new_pos = Self::find_prev_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_left();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Char('f')
                             if key_event.modifiers.contains(KeyModifiers::ALT) =>
                         {
-                            // Alt+f: Move forward one word (emacs-style)
-                            let new_pos = Self::find_next_word_start(&buffer, cursor_position);
-                            self.move_cursor_to(&buffer, cursor_position, new_pos)?;
-                            cursor_position = new_pos;
+                            state.move_word_right();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Left => {
-                            // Move cursor left
-                            if cursor_position > 0 {
-                                cursor_position -= 1;
-                                execute!(io::stdout(), MoveLeft(1))?;
-                            }
+                            state.move_left();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Right => {
-                            // Move cursor right
-                            if cursor_position < buffer.chars().count() {
-                                cursor_position += 1;
-                                execute!(io::stdout(), MoveRight(1))?;
-                            }
+                            state.move_right();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Home => {
-                            // Move to start of line
-                            self.move_cursor_to(&buffer, cursor_position, 0)?;
-                            cursor_position = 0;
+                            state.move_home();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::End => {
-                            // Move to end of line
-                            let end = buffer.chars().count();
-                            self.move_cursor_to(&buffer, cursor_position, end)?;
-                            cursor_position = end;
+                            state.move_end();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Up => {
                             if history_index > 0 {
                                 if history_index == history.len() {
-                                    temp_buffer = buffer.clone();
+                                    temp_buffer = state.to_string();
                                 }
-                                let old_buffer = buffer.clone();
                                 history_index -= 1;
-                                buffer = history[history_index].clone();
-                                cursor_position = buffer.chars().count();
-                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
+                                state = InputState::from_text(&history[history_index]);
+                                self.render_state(&prompt, &state)?;
                             }
                         }
                         KeyCode::Down => {
                             if history_index < history.len() {
-                                let old_buffer = buffer.clone();
                                 history_index += 1;
                                 if history_index == history.len() {
-                                    buffer = temp_buffer.clone();
+                                    state = InputState::from_text(&temp_buffer);
                                 } else {
-                                    buffer = history[history_index].clone();
+                                    state = InputState::from_text(&history[history_index]);
                                 }
-                                cursor_position = buffer.chars().count();
-                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
+                                self.render_state(&prompt, &state)?;
                             }
                         }
                         KeyCode::Char('c')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
-                            buffer.clear();
-                            cursor_position = 0;
+                            state.clear();
                             history_index = history.len();
                             print!("\r\n");
                             print!("{}", prompt.render_prompt().replace('\n', "\r\n"));
@@ -435,55 +369,16 @@ impl Console {
                             paste_detected = elapsed < 10;
                             paste_timer = now;
 
-                            // Insert char at cursor position
-                            let chars: Vec<char> = buffer.chars().collect();
-                            let before: String = chars.iter().take(cursor_position).collect();
-                            let after: String = chars.iter().skip(cursor_position).collect();
-                            buffer = format!("{}{}{}", before, c, after);
-                            
-                            // Print character and redraw rest of line
-                            print!("{}", c);
-                            if !after.is_empty() {
-                                print!("{}", after.replace('\n', "\r\n"));
-                                // Move cursor back to position after inserted char
-                                self.move_cursor_to(&after, after.chars().count(), 0)?;
-                            }
-                            io::stdout().flush()?;
-                            cursor_position += 1;
+                            state.insert_char(c);
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Backspace => {
-                            if cursor_position > 0 {
-                                let chars: Vec<char> = buffer.chars().collect();
-                                let before: String = chars.iter().take(cursor_position - 1).collect();
-                                let after: String = chars.iter().skip(cursor_position).collect();
-                                buffer = format!("{}{}", before, after);
-                                cursor_position -= 1;
-                                
-                                // Move back one, clear to end, redraw, move back
-                                execute!(io::stdout(), MoveLeft(1))?;
-                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
-                                print!("{}", after.replace('\n', "\r\n"));
-                                
-                                // Move cursor back to position
-                                self.move_cursor_to(&after, after.chars().count(), 0)?;
-                                io::stdout().flush()?;
-                            }
+                            state.backspace();
+                            self.render_state(&prompt, &state)?;
                         }
                         KeyCode::Delete => {
-                            if cursor_position < buffer.chars().count() {
-                                let chars: Vec<char> = buffer.chars().collect();
-                                let before: String = chars.iter().take(cursor_position).collect();
-                                let after: String = chars.iter().skip(cursor_position + 1).collect();
-                                buffer = format!("{}{}", before, after);
-                                
-                                // Clear to end of line and redraw
-                                execute!(io::stdout(), Clear(ClearType::UntilNewLine))?;
-                                print!("{}", after.replace('\n', "\r\n"));
-                                
-                                // Move cursor back to position
-                                self.move_cursor_to(&after, after.chars().count(), 0)?;
-                                io::stdout().flush()?;
-                            }
+                            state.delete();
+                            self.render_state(&prompt, &state)?;
                         }
                         _ => {}
                     }
@@ -505,83 +400,6 @@ impl Console {
         Ok(SlashCommand::Exit)
     }
 
-    fn redraw_buffer(
-        &self,
-        prompt: &PawsPrompt,
-        buffer: &str,
-        old_buffer: &str,
-    ) -> anyhow::Result<()> {
-        let mut stdout = io::stdout();
-
-        let rendered_prompt = prompt.render_prompt().replace('\n', "\r\n");
-        let prompt_lines = rendered_prompt.matches("\r\n").count();
-        let buffer_lines = old_buffer.matches('\n').count();
-        let total_lines = prompt_lines + buffer_lines;
-
-        // Move cursor up to first line of prompt
-        if total_lines > 0 {
-            execute!(stdout, MoveUp(total_lines as u16))?;
-        }
-
-        // Now move to beginning of line and clear everything below
-        execute!(stdout, MoveToColumn(0))?;
-        execute!(stdout, Clear(ClearType::FromCursorDown))?;
-
-        // Re-render prompt + buffer
-        print!("{}", rendered_prompt);
-        print!("{}", buffer.replace('\n', "\r\n"));
-
-        stdout.flush()?;
-        Ok(())
-    }
-
-    fn move_cursor_to(
-        &self,
-        buffer: &str,
-        from_pos: usize,
-        to_pos: usize,
-    ) -> anyhow::Result<()> {
-        if from_pos == to_pos {
-            return Ok(());
-        }
-        
-        let mut stdout = io::stdout();
-        let chars: Vec<char> = buffer.chars().collect();
-        
-        if to_pos < from_pos {
-            // Move left - need to handle newlines when going backwards
-            for i in (to_pos..from_pos).rev() {
-                if i < chars.len() && chars[i] == '\n' {
-                    // Moving back across a newline
-                    execute!(stdout, crossterm::cursor::MoveUp(1))?;
-                    // Find the length of the previous line
-                    let mut line_len = 0;
-                    for j in (0..i).rev() {
-                        if chars[j] == '\n' {
-                            break;
-                        }
-                        line_len += 1;
-                    }
-                    execute!(stdout, crossterm::cursor::MoveToColumn(line_len as u16))?;
-                } else {
-                    execute!(stdout, MoveLeft(1))?;
-                }
-            }
-        } else {
-            // Move right
-            for i in from_pos..to_pos {
-                if i < chars.len() && chars[i] == '\n' {
-                    // Handle newline
-                    execute!(stdout, MoveToColumn(0))?;
-                    execute!(stdout, crossterm::cursor::MoveDown(1))?;
-                } else {
-                    execute!(stdout, MoveRight(1))?;
-                }
-            }
-        }
-        stdout.flush()?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -743,67 +561,5 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0], multiline);
         assert_eq!(history[0].lines().count(), 3);
-    }
-
-    #[test]
-    fn test_find_prev_word_start() {
-        let buffer = "hello world test";
-        
-        // From middle of "test"
-        assert_eq!(Console::find_prev_word_start(buffer, 14), 12);
-        
-        // From start of "test"
-        assert_eq!(Console::find_prev_word_start(buffer, 12), 6);
-        
-        // From middle of "world"
-        assert_eq!(Console::find_prev_word_start(buffer, 8), 6);
-        
-        // From start of buffer
-        assert_eq!(Console::find_prev_word_start(buffer, 0), 0);
-        
-        // From position 1
-        assert_eq!(Console::find_prev_word_start(buffer, 1), 0);
-    }
-
-    #[test]
-    fn test_find_prev_word_start_with_whitespace() {
-        let buffer = "hello  world   test";
-        
-        // From "test" through whitespace
-        assert_eq!(Console::find_prev_word_start(buffer, 19), 15);
-        
-        // From whitespace before "test"
-        assert_eq!(Console::find_prev_word_start(buffer, 15), 7);
-    }
-
-    #[test]
-    fn test_find_next_word_start() {
-        let buffer = "hello world test";
-        
-        // From start
-        assert_eq!(Console::find_next_word_start(buffer, 0), 6);
-        
-        // From middle of "hello"
-        assert_eq!(Console::find_next_word_start(buffer, 2), 6);
-        
-        // From start of "world"
-        assert_eq!(Console::find_next_word_start(buffer, 6), 12);
-        
-        // From middle of "world"
-        assert_eq!(Console::find_next_word_start(buffer, 8), 12);
-        
-        // From end
-        assert_eq!(Console::find_next_word_start(buffer, 16), 16);
-    }
-
-    #[test]
-    fn test_find_next_word_start_with_whitespace() {
-        let buffer = "hello  world   test";
-        
-        // From start of "hello" - skip "hello" and whitespace to start of "world"
-        assert_eq!(Console::find_next_word_start(buffer, 0), 7);
-        
-        // From start of "world" - skip "world" and whitespace to start of "test"  
-        assert_eq!(Console::find_next_word_start(buffer, 7), 15);
     }
 }

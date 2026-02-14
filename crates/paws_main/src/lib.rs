@@ -4,6 +4,7 @@ mod conversation_selector;
 mod display_constants;
 mod info;
 mod input;
+mod input_state;
 mod model;
 mod porcelain;
 mod prompt;
