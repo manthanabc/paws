@@ -123,9 +123,10 @@ impl QwenHttpProvider {
         if !status.is_success() {
             // Parse OAuth error
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body)
-                && let Some(error) = json.get("error").and_then(|e| e.as_str()) {
-                    return Err(anyhow::anyhow!("OAuth error: {error}"));
-                }
+                && let Some(error) = json.get("error").and_then(|e| e.as_str())
+            {
+                return Err(anyhow::anyhow!("OAuth error: {error}"));
+            }
             anyhow::bail!("Token request failed with status {status}: {body}");
         }
 
