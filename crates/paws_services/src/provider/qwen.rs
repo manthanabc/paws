@@ -45,14 +45,8 @@ impl<H: HttpClientService> QwenProvider<H> {
         }
 
         // Add Qwen-specific headers as per reference script
-        headers.push((
-            "X-DashScope-CacheControl".to_string(),
-            "enable".to_string(),
-        ));
-        headers.push((
-            "X-DashScope-AuthType".to_string(),
-            "qwen-oauth".to_string(),
-        ));
+        headers.push(("X-DashScope-CacheControl".to_string(), "enable".to_string()));
+        headers.push(("X-DashScope-AuthType".to_string(), "qwen-oauth".to_string()));
 
         debug!(
             headers = ?headers,
@@ -172,8 +166,7 @@ mod tests {
             id: paws_domain::ProviderId::QWEN,
             provider_type: paws_domain::ProviderType::Llm,
             response: Some(ProviderResponse::Qwen),
-            url: Url::parse("https://portal.qwen.ai/v1/chat/completions")
-                .unwrap(),
+            url: Url::parse("https://portal.qwen.ai/v1/chat/completions").unwrap(),
             auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
             credential: Some(AuthCredential {
@@ -194,12 +187,16 @@ mod tests {
         let headers = qwen.get_qwen_headers();
 
         // Verify Qwen-specific headers are present
-        assert!(headers
-            .iter()
-            .any(|(k, v)| k == "X-DashScope-CacheControl" && v == "enable"));
-        assert!(headers
-            .iter()
-            .any(|(k, v)| k == "X-DashScope-AuthType" && v == "qwen-oauth"));
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "X-DashScope-CacheControl" && v == "enable")
+        );
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "X-DashScope-AuthType" && v == "qwen-oauth")
+        );
     }
 
     #[test]
@@ -211,8 +208,10 @@ mod tests {
         let headers = qwen.get_qwen_headers();
 
         // Verify Authorization header is present
-        assert!(headers
-            .iter()
-            .any(|(k, v)| k == "authorization" && v.starts_with("Bearer ")));
+        assert!(
+            headers
+                .iter()
+                .any(|(k, v)| k == "authorization" && v.starts_with("Bearer "))
+        );
     }
 }

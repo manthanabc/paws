@@ -26,8 +26,8 @@ pub(crate) fn generate_code_verifier() -> String {
 
 /// Generate PKCE code challenge from verifier using S256 method
 pub(crate) fn generate_code_challenge(verifier: &str) -> String {
-    use sha2::{Digest, Sha256};
     use base64::engine::Engine;
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(verifier.as_bytes());
     let result = hasher.finalize();

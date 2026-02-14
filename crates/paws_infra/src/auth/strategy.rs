@@ -11,7 +11,9 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use url::Url;
 
 use crate::auth::error::Error as AuthError;
-use crate::auth::http::{AnthropicHttpProvider, GithubHttpProvider, QwenHttpProvider, StandardHttpProvider};
+use crate::auth::http::{
+    AnthropicHttpProvider, GithubHttpProvider, QwenHttpProvider, StandardHttpProvider,
+};
 use crate::auth::util::*;
 
 /// API Key Strategy - Simple static key authentication
@@ -246,12 +248,12 @@ impl AuthStrategy for OAuthDeviceQwenStrategy {
         let code_challenge = crate::auth::util::generate_code_challenge(&code_verifier);
 
         // Request device code with PKCE parameters using QwenHttpProvider
-        let device_auth_response = QwenHttpProvider::request_device_code(
-            &self.config,
-            &code_challenge,
-        )
-        .await
-        .map_err(|e| AuthError::InitiationFailed(format!("Device authorization request failed: {e}")))?;
+        let device_auth_response =
+            QwenHttpProvider::request_device_code(&self.config, &code_challenge)
+                .await
+                .map_err(|e| {
+                    AuthError::InitiationFailed(format!("Device authorization request failed: {e}"))
+                })?;
 
         // Build the type-safe context
         Ok(AuthContextRequest::DeviceCode(DeviceCodeRequest {
@@ -274,11 +276,10 @@ impl AuthStrategy for OAuthDeviceQwenStrategy {
     ) -> anyhow::Result<AuthCredential> {
         match context_response {
             AuthContextResponse::DeviceCode(ctx) => {
-                let code_verifier = ctx
-                    .request
-                    .pkce_verifier
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("PKCE verifier is required for Qwen OAuth"))?;
+                let code_verifier =
+                    ctx.request.pkce_verifier.as_ref().ok_or_else(|| {
+                        anyhow::anyhow!("PKCE verifier is required for Qwen OAuth")
+                    })?;
 
                 let token_response = QwenHttpProvider::poll_for_token(
                     &self.config,

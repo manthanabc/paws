@@ -2,7 +2,9 @@ use paws_app::OAuthHttpProvider;
 use paws_domain::{AuthCodeParams, OAuthConfig, OAuthTokenResponse};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::util::{build_http_client, build_token_response, parse_token_response_with_resource_url};
+use crate::auth::util::{
+    build_http_client, build_token_response, parse_token_response_with_resource_url,
+};
 
 /// Qwen Provider - OAuth2 Device Flow with PKCE
 /// Qwen requires PKCE parameters in the device code request, which is not
@@ -43,7 +45,9 @@ impl OAuthHttpProvider for QwenHttpProvider {
     async fn build_auth_url(&self, _config: &OAuthConfig) -> anyhow::Result<AuthCodeParams> {
         // Qwen uses device flow, not authorization code flow
         // This method is not used for Qwen but must be implemented for the trait
-        anyhow::bail!("Qwen uses device flow, not authorization code flow. Use OAuthDeviceStrategy instead.")
+        anyhow::bail!(
+            "Qwen uses device flow, not authorization code flow. Use OAuthDeviceStrategy instead."
+        )
     }
 
     async fn exchange_code(
@@ -118,11 +122,10 @@ impl QwenHttpProvider {
 
         if !status.is_success() {
             // Parse OAuth error
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
-                if let Some(error) = json.get("error").and_then(|e| e.as_str()) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body)
+                && let Some(error) = json.get("error").and_then(|e| e.as_str()) {
                     return Err(anyhow::anyhow!("OAuth error: {error}"));
                 }
-            }
             anyhow::bail!("Token request failed with status {status}: {body}");
         }
 
@@ -194,7 +197,10 @@ mod tests {
 
         let serialized = serde_urlencoded::to_string(&request).unwrap();
         // Note: colons are URL-encoded as %3A
-        assert!(serialized.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"));
+        assert!(
+            serialized
+                .contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
+        );
         assert!(serialized.contains("device_code=test_device_code"));
         assert!(serialized.contains("client_id=test_client"));
         assert!(serialized.contains("code_verifier=test_verifier"));
