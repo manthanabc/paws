@@ -186,7 +186,6 @@ impl EventLog {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
 
