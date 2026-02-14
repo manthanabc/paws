@@ -159,7 +159,7 @@ impl TaskManager {
                     // Mark task as completed or failed based on whether errors occurred
                     if let Some(mut task) = store.get_task(task_id).await {
                         if has_error {
-                            let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
+                            let error_msg = last_error.unwrap();
                             task.fail(error_msg.clone());
                             store.update_task(task.clone()).await;
                             let event = TaskEvent::failed(error_msg);

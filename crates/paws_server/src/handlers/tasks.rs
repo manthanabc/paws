@@ -10,27 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppError;
 use crate::server::AppState;
 use crate::task::TaskId;
-
-/// Parses and validates a task ID from a string.
-///
-/// # Errors
-///
-/// Returns an error if the task ID is "undefined", empty, or not a valid UUID.
-fn parse_task_id(id: &str) -> Result<TaskId, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    id.parse().map_err(|e: uuid::Error| {
-        AppError::bad_request(format!(
-            "Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks",
-            id, e
-        ))
-    })
-}
+use super::parse_task_id;
 
 /// Request to create a new task.
 #[derive(Debug, Deserialize)]
