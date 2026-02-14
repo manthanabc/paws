@@ -1,15 +1,14 @@
 //! Git related handlers.
 
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
-};
-use serde::Serialize;
 use std::path::PathBuf;
 
-use crate::server::AppState;
+use axum::Json;
+use axum::extract::State;
+use axum::response::IntoResponse;
+use serde::Serialize;
+
 use crate::AppError;
+use crate::server::AppState;
 
 /// Response for git status/diff.
 #[derive(Debug, Serialize)]
@@ -20,24 +19,21 @@ pub struct GitDiffResponse {
 /// Gets the current git diff.
 ///
 /// GET /api/git/diff
-pub async fn get_git_diff(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_git_diff(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     // We'll execute "git diff" and "git diff --staged" to get all changes.
-    // For now, let's just get "git diff HEAD" to see everything against the last commit.
-    
-    // Note: We are assuming the current working directory is the git root or inside it.
-    // In a real agent scenario, we might need to know the workspace path.
+    // For now, let's just get "git diff HEAD" to see everything against the last
+    // commit.
+
+    // Note: We are assuming the current working directory is the git root or inside
+    // it. In a real agent scenario, we might need to know the workspace path.
     // For this MVP, we use the current directory.
-    
+
     let output = state
         .api
         .execute_shell_command("git diff HEAD", PathBuf::from("."))
         .await?;
 
-    Ok(Json(GitDiffResponse {
-        diff: output.stdout,
-    }))
+    Ok(Json(GitDiffResponse { diff: output.stdout }))
 }
 
 /// Response for git status (simplified).
@@ -49,17 +45,13 @@ pub struct GitStatusResponse {
 /// Gets the current git status.
 ///
 /// GET /api/git/status
-pub async fn get_git_status(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_git_status(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let output = state
         .api
         .execute_shell_command("git status --porcelain", PathBuf::from("."))
         .await?;
 
-    Ok(Json(GitStatusResponse {
-        status: output.stdout,
-    }))
+    Ok(Json(GitStatusResponse { status: output.stdout }))
 }
 
 use serde::Deserialize;
@@ -87,13 +79,11 @@ pub async fn commit_changes(
     // Escape quotes in message to prevent shell injection/breaking
     let escaped_message = request.message.replace('"', "\\\"");
     let cmd = format!("git commit -m \"{}\"", escaped_message);
-    
+
     let output = state
         .api
         .execute_shell_command(&cmd, PathBuf::from("."))
         .await?;
 
-    Ok(Json(GitStatusResponse {
-        status: output.stdout,
-    }))
+    Ok(Json(GitStatusResponse { status: output.stdout }))
 }

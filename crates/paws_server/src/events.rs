@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use paws_domain::ChatResponse;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use crate::task::TaskId;
 
@@ -14,9 +14,7 @@ use crate::task::TaskId;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TaskEvent {
     /// Task started processing.
-    Started {
-        timestamp: DateTime<Utc>,
-    },
+    Started { timestamp: DateTime<Utc> },
     /// Agent message/response chunk.
     Message {
         content: ChatResponse,
@@ -35,73 +33,50 @@ pub enum TaskEvent {
         timestamp: DateTime<Utc>,
     },
     /// Task completed successfully.
-    Completed {
-        timestamp: DateTime<Utc>,
-    },
+    Completed { timestamp: DateTime<Utc> },
     /// Task failed with error.
     Failed {
         error: String,
         timestamp: DateTime<Utc>,
     },
     /// Task was cancelled.
-    Cancelled {
-        timestamp: DateTime<Utc>,
-    },
+    Cancelled { timestamp: DateTime<Utc> },
 }
 
 impl TaskEvent {
     /// Creates a new Started event.
     pub fn started() -> Self {
-        Self::Started {
-            timestamp: Utc::now(),
-        }
+        Self::Started { timestamp: Utc::now() }
     }
 
     /// Creates a new Message event.
     pub fn message(content: ChatResponse) -> Self {
-        Self::Message {
-            content,
-            sequence: None,
-        }
+        Self::Message { content, sequence: None }
     }
 
     /// Creates a new ToolExecution event.
     pub fn tool_execution(tool: String, status: ToolExecutionStatus) -> Self {
-        Self::ToolExecution {
-            tool,
-            status,
-            timestamp: Utc::now(),
-        }
+        Self::ToolExecution { tool, status, timestamp: Utc::now() }
     }
 
     /// Creates a new Error event.
     pub fn error(message: String) -> Self {
-        Self::Error {
-            message,
-            timestamp: Utc::now(),
-        }
+        Self::Error { message, timestamp: Utc::now() }
     }
 
     /// Creates a new Completed event.
     pub fn completed() -> Self {
-        Self::Completed {
-            timestamp: Utc::now(),
-        }
+        Self::Completed { timestamp: Utc::now() }
     }
 
     /// Creates a new Failed event.
     pub fn failed(error: String) -> Self {
-        Self::Failed {
-            error,
-            timestamp: Utc::now(),
-        }
+        Self::Failed { error, timestamp: Utc::now() }
     }
 
     /// Creates a new Cancelled event.
     pub fn cancelled() -> Self {
-        Self::Cancelled {
-            timestamp: Utc::now(),
-        }
+        Self::Cancelled { timestamp: Utc::now() }
     }
 }
 
@@ -132,18 +107,12 @@ pub struct EventBroadcaster {
 impl EventBroadcaster {
     /// Creates a new event broadcaster.
     pub fn new() -> Self {
-        Self {
-            channels: RwLock::new(HashMap::new()),
-            capacity: 256,
-        }
+        Self { channels: RwLock::new(HashMap::new()), capacity: 256 }
     }
 
     /// Creates a broadcaster with custom capacity.
     pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            channels: RwLock::new(HashMap::new()),
-            capacity,
-        }
+        Self { channels: RwLock::new(HashMap::new()), capacity }
     }
 
     /// Subscribes to events for a task.
@@ -151,11 +120,11 @@ impl EventBroadcaster {
     /// Creates a new broadcast channel if one doesn't exist.
     pub async fn subscribe(&self, task_id: TaskId) -> EventReceiver {
         let mut channels = self.channels.write().await;
-        
+
         let sender = channels
             .entry(task_id)
             .or_insert_with(|| broadcast::channel(self.capacity).0);
-        
+
         sender.subscribe()
     }
 
@@ -217,8 +186,9 @@ impl EventLog {
 
 #[cfg(test)]
 mod tests {
+    
+
     use super::*;
-    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_task_event_serialization() {
@@ -231,10 +201,11 @@ mod tests {
     async fn test_event_log() {
         let log = EventLog::new();
         let task_id = TaskId::new();
-        
+
         log.append(task_id, TaskEvent::started()).await;
         // The rest of this test relied on methods we just removed
         // since EventLog is now just a helper struct if used at all
-        // or we can remove EventLog entirely if it's not used by Broadcaster anymore.
+        // or we can remove EventLog entirely if it's not used by Broadcaster
+        // anymore.
     }
 }

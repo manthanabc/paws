@@ -1,18 +1,14 @@
 //! Server-Sent Events streaming handlers.
 
-use axum::{
-    extract::{Path, State},
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse,
-    },
-};
+use axum::extract::{Path, State};
+use axum::response::IntoResponse;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::AppError;
 use crate::server::AppState;
 use crate::task::TaskId;
-use crate::AppError;
 
 /// Streams task events via Server-Sent Events.
 ///
@@ -27,13 +23,13 @@ pub async fn stream_task_events(
     // Validate task ID before parsing
     if id == "undefined" || id.is_empty() {
         return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
+            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
         ));
     }
 
     let task_id: TaskId = id.parse()
         .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
+
     // Verify task exists
     let task = state
         .task_store
@@ -44,10 +40,14 @@ pub async fn stream_task_events(
     // If task is already complete, return final events
     if task.status.is_terminal() {
         let events = state.task_store.get_events(task_id).await;
-        let stream = futures::stream::iter(events.into_iter().filter_map(|e| {
-            Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))
-        }));
-        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response());
+        let stream = futures::stream::iter(
+            events
+                .into_iter()
+                .filter_map(|e| Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))),
+        );
+        return Ok(Sse::new(stream)
+            .keep_alive(KeepAlive::default())
+            .into_response());
     }
 
     // Get any events that were already stored (e.g., started event)
@@ -58,9 +58,11 @@ pub async fn stream_task_events(
     let live_stream = BroadcastStream::new(receiver);
 
     // First yield stored events, then live events
-    let stored_event_stream = futures::stream::iter(stored_events.into_iter().filter_map(|e| {
-        Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))
-    }));
+    let stored_event_stream = futures::stream::iter(
+        stored_events
+            .into_iter()
+            .filter_map(|e| Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))),
+    );
 
     let live_sse_stream = live_stream.filter_map(|result| async move {
         match result {
@@ -77,7 +79,9 @@ pub async fn stream_task_events(
 
     let combined_stream = stored_event_stream.chain(live_sse_stream);
 
-    Ok(Sse::new(combined_stream).keep_alive(KeepAlive::default()).into_response())
+    Ok(Sse::new(combined_stream)
+        .keep_alive(KeepAlive::default())
+        .into_response())
 }
 
 /// Query parameters for resumable streaming.
@@ -100,13 +104,13 @@ pub async fn stream_task_events_resumable(
     // Validate task ID before parsing
     if id == "undefined" || id.is_empty() {
         return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
+            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
         ));
     }
 
     let task_id: TaskId = id.parse()
         .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
+
     let since = query.since.unwrap_or(0);
 
     // Get missed events first
@@ -117,9 +121,11 @@ pub async fn stream_task_events_resumable(
     let live_stream = BroadcastStream::new(receiver);
 
     // First yield missed events, then live events
-    let missed_stream = futures::stream::iter(missed_events.into_iter().filter_map(|e| {
-        Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))
-    }));
+    let missed_stream = futures::stream::iter(
+        missed_events
+            .into_iter()
+            .filter_map(|e| Some(Ok::<_, axum::Error>(Event::default().json_data(e).ok()?))),
+    );
 
     let live_sse_stream = live_stream.filter_map(|result| async move {
         match result {

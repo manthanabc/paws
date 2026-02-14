@@ -1,6 +1,8 @@
 //! Error handling for the HTTP API.
 
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use axum::Json;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
 /// Standard error response format.
@@ -22,11 +24,7 @@ pub struct AppError {
 impl AppError {
     /// Creates a new error with the given status and message.
     pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
-        Self {
-            status,
-            message: message.into(),
-            details: None,
-        }
+        Self { status, message: message.into(), details: None }
     }
 
     /// Creates a bad request error (400).
@@ -58,10 +56,7 @@ impl AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let body = ErrorResponse {
-            error: self.message,
-            details: self.details,
-        };
+        let body = ErrorResponse { error: self.message, details: self.details };
         (self.status, Json(body)).into_response()
     }
 }
@@ -78,15 +73,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_error_response_serialization() {
-        let fixture = ErrorResponse {
-            error: "Something went wrong".to_string(),
-            details: None,
-        };
+        let fixture = ErrorResponse { error: "Something went wrong".to_string(), details: None };
         let actual = serde_json::to_string(&fixture).unwrap();
         assert!(actual.contains("Something went wrong"));
         assert!(!actual.contains("details"));
@@ -119,8 +112,8 @@ mod tests {
 
     #[test]
     fn test_app_error_with_details() {
-        let actual = AppError::bad_request("Invalid input")
-            .with_details("Field 'name' is required");
+        let actual =
+            AppError::bad_request("Invalid input").with_details("Field 'name' is required");
         assert_eq!(actual.details, Some("Field 'name' is required".to_string()));
     }
 }
