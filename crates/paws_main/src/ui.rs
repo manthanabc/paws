@@ -202,6 +202,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
         self.cli.conversation_id = None;
+        self.cli.resume = false;
         self.state.conversation_id = None;
 
         self.init_conversation().await?;
@@ -703,13 +704,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         self.validate_conversation_exists(&id).await?;
                         id
                     }
-                    None => {
-                        let last_conversation =
-                            self.api.last_conversation().await?.ok_or_else(|| {
-                                anyhow::anyhow!("No conversation found to resume")
-                            })?;
-                        last_conversation.id
-                    }
+                    None => self.last_conversation_id_or_err().await?,
                 };
 
                 self.state.conversation_id = Some(conversation_id);
@@ -1751,16 +1746,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
-        let last_conversation = self
-            .api
-            .last_conversation()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+        let conversation_id = self.last_conversation_id_or_err().await?;
 
-        self.state.conversation_id = Some(last_conversation.id);
+        self.state.conversation_id = Some(conversation_id);
         self.writeln_title(TitleFormat::info(format!(
             "Resumed conversation: {}",
-            last_conversation.id
+            conversation_id
         )))?;
         Ok(())
     }
@@ -2275,6 +2266,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     ///
     /// Displays initialization status and updates UI state with the
     /// conversation ID.
+
+    /// Retrieves the ID of the last conversation.
+    ///
+    /// # Errors
+    /// Returns an error if no conversation is found to resume.
+    async fn last_conversation_id_or_err(&self) -> Result<ConversationId> {
+        let last_conversation = self
+            .api
+            .last_conversation()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+        Ok(last_conversation.id)
+    }
+
     async fn init_conversation(&mut self) -> Result<ConversationId> {
         // Set agent if provided via CLI
         if let Some(agent_id) = self.cli.agent.clone() {
@@ -2294,6 +2299,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 is_new = true;
             }
             id
+        } else if self.cli.resume {
+            // Resume the last conversation
+            self.last_conversation_id_or_err().await?
         } else if let Some(ref path) = self.cli.conversation {
             let conversation: Conversation =
                 serde_json::from_str(PawsFS::read_utf8(path.as_os_str()).await?.as_str())
