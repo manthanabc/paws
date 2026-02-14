@@ -9,6 +9,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::AppError;
 use crate::server::AppState;
 use crate::task::TaskId;
+use super::parse_task_id;
 
 /// Streams task events via Server-Sent Events.
 ///
@@ -20,15 +21,7 @@ pub async fn stream_task_events(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     // Verify task exists
     let task = state
@@ -101,15 +94,7 @@ pub async fn stream_task_events_resumable(
     Path(id): Path<String>,
     axum::extract::Query(query): axum::extract::Query<StreamSinceQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     let since = query.since.unwrap_or(0);
 

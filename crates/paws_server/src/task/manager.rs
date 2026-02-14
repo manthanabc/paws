@@ -126,6 +126,9 @@ impl TaskManager {
             // Execute chat
             match api.chat(chat_request).await {
                 Ok(mut stream) => {
+                    let mut has_error = false;
+                    let mut last_error = None;
+
                     while let Some(result) = futures::StreamExt::next(&mut stream).await {
                         match result {
                             Ok(response) => {
@@ -144,6 +147,8 @@ impl TaskManager {
                             }
                             Err(e) => {
                                 error!(task_id = %task_id, error = %e, "Stream error");
+                                has_error = true;
+                                last_error = Some(e.to_string());
                                 let event = TaskEvent::error(e.to_string());
                                 store.append_event(task_id, event.clone()).await;
                                 broadcaster.broadcast(task_id, event).await;
@@ -151,14 +156,25 @@ impl TaskManager {
                         }
                     }
 
-                    // Mark task as completed
+                    // Mark task as completed or failed based on whether errors occurred
                     if let Some(mut task) = store.get_task(task_id).await {
-                        task.complete();
-                        store.update_task(task.clone()).await;
-                        let event = TaskEvent::completed();
-                        store.append_event(task_id, event.clone()).await;
-                        broadcaster.broadcast(task_id, event).await;
-                        info!(task_id = %task_id, "Task completed");
+                        if has_error {
+                            // Safety: has_error is only set to true when last_error is Some
+                            let error_msg = last_error.unwrap();
+                            task.fail(error_msg.clone());
+                            store.update_task(task.clone()).await;
+                            let event = TaskEvent::failed(error_msg);
+                            store.append_event(task_id, event.clone()).await;
+                            broadcaster.broadcast(task_id, event).await;
+                            error!(task_id = %task_id, "Task failed");
+                        } else {
+                            task.complete();
+                            store.update_task(task.clone()).await;
+                            let event = TaskEvent::completed();
+                            store.append_event(task_id, event.clone()).await;
+                            broadcaster.broadcast(task_id, event).await;
+                            info!(task_id = %task_id, "Task completed");
+                        }
                     }
                 }
                 Err(e) => {

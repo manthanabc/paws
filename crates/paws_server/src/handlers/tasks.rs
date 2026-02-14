@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppError;
 use crate::server::AppState;
 use crate::task::TaskId;
+use super::parse_task_id;
 
 /// Request to create a new task.
 #[derive(Debug, Deserialize)]
@@ -86,15 +87,7 @@ pub async fn get_task(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     let task = state
         .task_manager
@@ -112,15 +105,7 @@ pub async fn cancel_task(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     state.task_manager.cancel(task_id).await?;
     Ok(StatusCode::OK)
@@ -133,15 +118,7 @@ pub async fn get_task_events(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     let events = state.task_manager.get_events(task_id).await;
     Ok(Json(events))
@@ -162,15 +139,7 @@ pub async fn get_task_events_since(
     Path(id): Path<String>,
     axum::extract::Query(query): axum::extract::Query<EventsSinceQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks",
-        ));
-    }
-
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
+    let task_id = parse_task_id(&id)?;
 
     let since = query.since.unwrap_or(0);
     let events = state.task_manager.get_events_since(task_id, since).await;
