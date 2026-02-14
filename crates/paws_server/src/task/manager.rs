@@ -159,6 +159,7 @@ impl TaskManager {
                     // Mark task as completed or failed based on whether errors occurred
                     if let Some(mut task) = store.get_task(task_id).await {
                         if has_error {
+                            // Safety: has_error is only set to true when last_error is Some
                             let error_msg = last_error.unwrap();
                             task.fail(error_msg.clone());
                             store.update_task(task.clone()).await;
