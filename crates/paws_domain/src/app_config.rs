@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ModelId, ProviderId};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitAuth {
     pub session_id: String,

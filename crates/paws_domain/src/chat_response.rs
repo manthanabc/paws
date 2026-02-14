@@ -5,7 +5,7 @@ use chrono::Local;
 
 use crate::{ToolCallFull, ToolName, ToolResult};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ChatResponseContent {
     Title(TitleFormat),
     PlainText(String),
@@ -44,7 +44,7 @@ impl ChatResponseContent {
 
 /// Events that are emitted by the agent for external consumption. This includes
 /// events for all internal state changes.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ChatResponse {
     TaskMessage { content: ChatResponseContent },
     TaskReasoning { content: String },
@@ -74,7 +74,7 @@ impl ChatResponse {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum InterruptionReason {
     MaxToolFailurePerTurnLimitReached {
         limit: u64,
@@ -85,7 +85,7 @@ pub enum InterruptionReason {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Cause(String);
 
 impl Cause {
@@ -110,7 +110,7 @@ impl From<&anyhow::Error> for Cause {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Category {
     Action,
     Info,
@@ -120,7 +120,7 @@ pub enum Category {
     Warning,
 }
 
-#[derive(Clone, derive_setters::Setters, Debug, PartialEq)]
+#[derive(Clone, derive_setters::Setters, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[setters(into, strip_option)]
 pub struct TitleFormat {
     pub title: String,

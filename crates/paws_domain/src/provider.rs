@@ -222,7 +222,7 @@ impl Provider<Url> {
 
 /// Enum for viewing providers in listings where both configured and
 /// unconfigured.
-#[derive(Debug, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, serde::Serialize)]
 pub enum AnyProvider {
     Url(Provider<Url>),
     Template(Provider<Template<HashMap<crate::URLParam, crate::URLParamValue>>>),

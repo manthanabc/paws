@@ -8,20 +8,20 @@ use super::{
     URLParamValue, UserCode,
 };
 
-#[derive(Debug, Clone, Deref, From)]
+#[derive(Debug, Clone, Deref, From, serde::Serialize, serde::Deserialize)]
 pub struct URLParameters(HashMap<URLParam, URLParamValue>);
 
 // API Key Flow
 
 /// Request parameters for API key authentication
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ApiKeyRequest {
     pub required_params: Vec<URLParam>,
     pub existing_params: Option<URLParameters>,
 }
 
 /// Response containing API key and URL parameters
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ApiKeyResponse {
     pub api_key: ApiKey,
     pub url_params: HashMap<URLParam, URLParamValue>,
@@ -30,11 +30,11 @@ pub struct ApiKeyResponse {
 // Authorization Code Flow
 
 /// Authorization code OAuth authentication flow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeAuthFlow;
 
 /// Request parameters for authorization code flow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeRequest {
     pub authorization_url: Url,
     pub state: State,
@@ -43,7 +43,7 @@ pub struct CodeRequest {
 }
 
 /// Response containing authorization code
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CodeResponse {
     pub code: AuthorizationCode,
 }
@@ -51,11 +51,11 @@ pub struct CodeResponse {
 // Device Code Flow
 
 /// Device code OAuth authentication flow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeviceCodeAuthFlow;
 
 /// Request parameters for device code flow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeviceCodeRequest {
     pub user_code: UserCode,
     pub device_code: DeviceCode,
@@ -67,18 +67,18 @@ pub struct DeviceCodeRequest {
 }
 
 /// Response for device code flow
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeviceCodeResponse;
 
 /// Generic container that pairs a request with its corresponding response
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AuthContext<Request, Response> {
     pub request: Request,
     pub response: Response,
 }
 
 /// Represents different types of authentication requests
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum AuthContextRequest {
     ApiKey(ApiKeyRequest),
     DeviceCode(DeviceCodeRequest),
@@ -86,7 +86,7 @@ pub enum AuthContextRequest {
 }
 
 /// Represents completed authentication flows with their request/response pairs
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum AuthContextResponse {
     ApiKey(AuthContext<ApiKeyRequest, ApiKeyResponse>),
     DeviceCode(AuthContext<DeviceCodeRequest, DeviceCodeResponse>),

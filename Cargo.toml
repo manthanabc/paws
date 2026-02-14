@@ -118,6 +118,7 @@ paws_common = { path = "crates/paws_common" }
 paws_domain = { path = "crates/paws_domain" }
 paws_infra = { path = "crates/paws_infra" }
 paws_repo = { path = "crates/paws_repo" }
+paws_server = { path = "crates/paws_server" }
 paws_services = { path = "crates/paws_services" }
 paws_tool_macros = { path = "crates/paws_tool_macros" }
 
