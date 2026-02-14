@@ -26,7 +26,6 @@ pub fn parse_task_id(id: &str) -> Result<TaskId, AppError> {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::*;
 
