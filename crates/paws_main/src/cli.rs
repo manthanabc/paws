@@ -44,7 +44,11 @@ pub struct Cli {
     ///
     /// When provided, automatically resumes the most recently updated
     /// conversation. Cannot be used with --conversation-id or --conversation.
-    #[arg(long, conflicts_with = "conversation_id", conflicts_with = "conversation")]
+    #[arg(
+        long,
+        conflicts_with = "conversation_id",
+        conflicts_with = "conversation"
+    )]
     pub resume: bool,
 
     /// Working directory to use before starting the session.
@@ -1341,12 +1345,8 @@ mod tests {
     #[test]
     fn test_resume_conflicts_with_conversation() {
         // This should fail because resume and conversation conflict
-        let result = Cli::try_parse_from([
-            "paws",
-            "--resume",
-            "--conversation",
-            "conversation.json",
-        ]);
+        let result =
+            Cli::try_parse_from(["paws", "--resume", "--conversation", "conversation.json"]);
         assert!(result.is_err());
     }
 }
