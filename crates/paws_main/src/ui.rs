@@ -202,6 +202,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
         self.cli.conversation_id = None;
+        self.cli.resume = false;
         self.state.conversation_id = None;
 
         self.init_conversation().await?;
