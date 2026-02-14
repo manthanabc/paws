@@ -1,7 +1,7 @@
 //! Shared utilities for HTTP handlers.
 
-use crate::task::TaskId;
 use crate::AppError;
+use crate::task::TaskId;
 
 /// Parses and validates a task ID from a string.
 ///
@@ -26,7 +26,7 @@ pub fn parse_task_id(id: &str) -> Result<TaskId, AppError> {
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
+    
 
     use super::*;
 

@@ -6,10 +6,9 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
+use super::parse_task_id;
 use crate::AppError;
 use crate::server::AppState;
-use crate::task::TaskId;
-use super::parse_task_id;
 
 /// Streams task events via Server-Sent Events.
 ///
