@@ -55,11 +55,8 @@ pub async fn list_provider_models(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let provider_id = ProviderId::from(id);
-    let provider = state.api.get_provider(&provider_id).await?;
-    // Return models from provider if available, otherwise return empty list
-    // The AnyProvider type doesn't expose models directly, so we return
-    // the provider info which includes model details
-    Ok(Json(provider))
+    let models = state.api.get_provider_models(&provider_id).await?;
+    Ok(Json(models))
 }
 
 /// Lists available models.
