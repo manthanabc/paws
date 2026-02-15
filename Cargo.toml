@@ -19,7 +19,7 @@ aws-smithy-async = { version = "1.2", features = ["rt-tokio"] }
 base64 = "0.22.1"
 bytes = "1.11.1"
 chrono = { version = "0.4.43", features = ["serde"] }
-clap = { version = "4.5.57", features = ["derive"] }
+clap = { version = "4.5.58", features = ["derive"] }
 colored = "3.1.1"
 console = "0.16.0"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
@@ -28,7 +28,7 @@ derive_more = { version = "2.1.1", features = ["from", "display", "debug", "dere
 derive_setters = "0.1.9"
 dirs = "6.0.0"
 dotenvy = "0.15.7"
-futures = "0.3.31"
+futures = "0.3.32"
 gh-workflow = "0.8.1"
 glob = "0.3.3"
 grep-searcher = "0.1.14"
@@ -66,7 +66,7 @@ sha2 = "0.10"
 strip-ansi-escapes = "0.2.1"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-syn = { version = "2.0.114", features = ["derive", "parsing"] }
+syn = { version = "2.0.116", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
 tempfile = "3.24.0"
 termimad = "0.33.0"
