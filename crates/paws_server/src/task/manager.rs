@@ -23,11 +23,7 @@ impl TaskManager {
         broadcaster: Arc<EventBroadcaster>,
         api: Arc<dyn API>,
     ) -> Self {
-        Self {
-            store,
-            broadcaster,
-            api,
-        }
+        Self { store, broadcaster, api }
     }
 
     /// Submits a new task for execution.
@@ -61,7 +57,7 @@ impl TaskManager {
         } else {
             message.clone()
         };
-        
+
         let task = Task::new(conversation_id, agent_id.clone(), title);
         let task_id = task.id;
 
@@ -125,20 +121,21 @@ impl TaskManager {
             broadcaster.broadcast(task_id, start_event).await;
 
             // Create chat request
-            let chat_request = ChatRequest {
-                event,
-                conversation_id,
-            };
+            let chat_request = ChatRequest { event, conversation_id };
 
             // Execute chat
             match api.chat(chat_request).await {
                 Ok(mut stream) => {
+                    let mut has_error = false;
+                    let mut last_error = None;
+
                     while let Some(result) = futures::StreamExt::next(&mut stream).await {
                         match result {
                             Ok(response) => {
                                 // Check for completion
-                                let is_complete = matches!(response, paws_domain::ChatResponse::TaskComplete);
-                                
+                                let is_complete =
+                                    matches!(response, paws_domain::ChatResponse::TaskComplete);
+
                                 // Broadcast the response
                                 let event = TaskEvent::message(response);
                                 store.append_event(task_id, event.clone()).await;
@@ -150,6 +147,8 @@ impl TaskManager {
                             }
                             Err(e) => {
                                 error!(task_id = %task_id, error = %e, "Stream error");
+                                has_error = true;
+                                last_error = Some(e.to_string());
                                 let event = TaskEvent::error(e.to_string());
                                 store.append_event(task_id, event.clone()).await;
                                 broadcaster.broadcast(task_id, event).await;
@@ -157,28 +156,37 @@ impl TaskManager {
                         }
                     }
 
-                    // Mark task as completed
+                    // Mark task as completed or failed based on whether errors occurred
                     if let Some(mut task) = store.get_task(task_id).await {
-                        task.complete();
-                        store.update_task(task.clone()).await;
-                        let event = TaskEvent::completed();
-                        store.append_event(task_id, event.clone()).await;
-                        broadcaster.broadcast(task_id, event).await;
-                        info!(task_id = %task_id, "Task completed");
+                        if has_error {
+                            // Safety: has_error is only set to true when last_error is Some
+                            let error_msg = last_error.unwrap();
+                            task.fail(error_msg.clone());
+                            store.update_task(task.clone()).await;
+                            let event = TaskEvent::failed(error_msg);
+                            store.append_event(task_id, event.clone()).await;
+                            broadcaster.broadcast(task_id, event).await;
+                            error!(task_id = %task_id, "Task failed");
+                        } else {
+                            task.complete();
+                            store.update_task(task.clone()).await;
+                            let event = TaskEvent::completed();
+                            store.append_event(task_id, event.clone()).await;
+                            broadcaster.broadcast(task_id, event).await;
+                            info!(task_id = %task_id, "Task completed");
+                        }
                     }
                 }
                 Err(e) => {
                     error!(task_id = %task_id, error = %e, "Failed to start chat");
-                    
+
                     // Mark task as failed
                     if let Some(mut task) = store.get_task(task_id).await {
                         task.fail(e.to_string());
                         store.update_task(task.clone()).await;
                         let event = TaskEvent::failed(e.to_string());
                         store.append_event(task_id, event.clone()).await;
-                        broadcaster
-                            .broadcast(task_id, event)
-                            .await;
+                        broadcaster.broadcast(task_id, event).await;
                     }
                 }
             }
@@ -211,7 +219,7 @@ impl TaskManager {
             if task.status.is_terminal() {
                 return Err(anyhow::anyhow!("Task already completed"));
             }
-            
+
             task.cancel();
             self.store.update_task(task).await;
             let event = TaskEvent::cancelled();
@@ -226,7 +234,7 @@ impl TaskManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_task_id_generation() {
         let id1 = TaskId::new();

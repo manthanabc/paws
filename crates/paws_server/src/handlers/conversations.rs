@@ -1,16 +1,14 @@
 //! Conversation-related HTTP handlers.
 
-use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
-};
+use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use paws_domain::{Conversation, ConversationId};
 use serde::{Deserialize, Serialize};
 
-use crate::server::AppState;
 use crate::AppError;
+use crate::server::AppState;
 
 /// Query parameters for listing conversations.
 #[derive(Debug, Deserialize)]
@@ -75,11 +73,7 @@ pub async fn create_conversation(
 
     state.api.upsert_conversation(conversation).await?;
 
-    let response = CreateConversationResponse {
-        id,
-        title: request.title,
-        created_at,
-    };
+    let response = CreateConversationResponse { id, title: request.title, created_at };
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -149,8 +143,9 @@ pub async fn compact_conversation(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_create_conversation_request_deserialization() {

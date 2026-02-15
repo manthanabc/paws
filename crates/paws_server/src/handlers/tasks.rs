@@ -1,17 +1,16 @@
 //! Task-related HTTP handlers.
 
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use paws_domain::ConversationId;
 use serde::{Deserialize, Serialize};
 
+use super::parse_task_id;
+use crate::AppError;
 use crate::server::AppState;
 use crate::task::TaskId;
-use crate::AppError;
 
 /// Request to create a new task.
 #[derive(Debug, Deserialize)]
@@ -58,10 +57,7 @@ pub async fn create_task(
         )
         .await?;
 
-    let response = CreateTaskResponse {
-        task_id,
-        conversation_id: request.conversation_id,
-    };
+    let response = CreateTaskResponse { task_id, conversation_id: request.conversation_id };
 
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
@@ -91,16 +87,8 @@ pub async fn get_task(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
-        ));
-    }
+    let task_id = parse_task_id(&id)?;
 
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
     let task = state
         .task_manager
         .get_task(task_id)
@@ -117,16 +105,8 @@ pub async fn cancel_task(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
-        ));
-    }
+    let task_id = parse_task_id(&id)?;
 
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
     state.task_manager.cancel(task_id).await?;
     Ok(StatusCode::OK)
 }
@@ -138,16 +118,8 @@ pub async fn get_task_events(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
-        ));
-    }
+    let task_id = parse_task_id(&id)?;
 
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
     let events = state.task_manager.get_events(task_id).await;
     Ok(Json(events))
 }
@@ -167,16 +139,8 @@ pub async fn get_task_events_since(
     Path(id): Path<String>,
     axum::extract::Query(query): axum::extract::Query<EventsSinceQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate task ID before parsing
-    if id == "undefined" || id.is_empty() {
-        return Err(AppError::bad_request(
-            "Invalid task ID: task ID is undefined or empty. Please create a task first using POST /api/tasks"
-        ));
-    }
+    let task_id = parse_task_id(&id)?;
 
-    let task_id: TaskId = id.parse()
-        .map_err(|e: uuid::Error| AppError::bad_request(format!("Invalid task ID '{}': {}. Task ID must be a valid UUID. Please create a task first using POST /api/tasks", id, e)))?;
-    
     let since = query.since.unwrap_or(0);
     let events = state.task_manager.get_events_since(task_id, since).await;
     Ok(Json(events))
@@ -184,8 +148,9 @@ pub async fn get_task_events_since(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_create_task_request_deserialization() {
@@ -193,7 +158,7 @@ mod tests {
             "conversation_id": "550e8400-e29b-41d4-a716-446655440000",
             "message": "Hello, world!"
         }"#;
-        
+
         let actual: CreateTaskRequest = serde_json::from_str(json).unwrap();
         assert_eq!(actual.message, "Hello, world!");
         assert!(actual.agent_id.is_none());
@@ -207,7 +172,7 @@ mod tests {
             "message": "Hello!",
             "agent_id": "paws"
         }"#;
-        
+
         let actual: CreateTaskRequest = serde_json::from_str(json).unwrap();
         assert_eq!(actual.agent_id, Some(paws_domain::AgentId::new("paws")));
     }

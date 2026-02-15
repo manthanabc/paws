@@ -49,9 +49,7 @@ pub enum TaskStatus {
     /// Task is queued but not yet started.
     Pending,
     /// Task is currently being processed.
-    Running {
-        started_at: DateTime<Utc>,
-    },
+    Running { started_at: DateTime<Utc> },
     /// Task completed successfully.
     Completed {
         started_at: DateTime<Utc>,
@@ -75,9 +73,7 @@ impl TaskStatus {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            TaskStatus::Completed { .. }
-                | TaskStatus::Failed { .. }
-                | TaskStatus::Cancelled { .. }
+            TaskStatus::Completed { .. } | TaskStatus::Failed { .. } | TaskStatus::Cancelled { .. }
         )
     }
 
@@ -119,18 +115,13 @@ impl Task {
 
     /// Marks the task as running.
     pub fn start(&mut self) {
-        self.status = TaskStatus::Running {
-            started_at: Utc::now(),
-        };
+        self.status = TaskStatus::Running { started_at: Utc::now() };
     }
 
     /// Marks the task as completed.
     pub fn complete(&mut self) {
         if let TaskStatus::Running { started_at } = self.status {
-            self.status = TaskStatus::Completed {
-                started_at,
-                completed_at: Utc::now(),
-            };
+            self.status = TaskStatus::Completed { started_at, completed_at: Utc::now() };
         }
     }
 
@@ -140,11 +131,7 @@ impl Task {
             TaskStatus::Running { started_at } => *started_at,
             _ => Utc::now(),
         };
-        self.status = TaskStatus::Failed {
-            started_at,
-            completed_at: Utc::now(),
-            error,
-        };
+        self.status = TaskStatus::Failed { started_at, completed_at: Utc::now(), error };
     }
 
     /// Marks the task as cancelled.
@@ -153,10 +140,7 @@ impl Task {
             TaskStatus::Running { started_at } => Some(*started_at),
             _ => None,
         };
-        self.status = TaskStatus::Cancelled {
-            started_at,
-            completed_at: Utc::now(),
-        };
+        self.status = TaskStatus::Cancelled { started_at, completed_at: Utc::now() };
     }
 }
 
@@ -235,21 +219,22 @@ impl TaskStore {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_task_lifecycle() {
         let conversation_id = ConversationId::default();
         let agent_id = AgentId::new("test-agent");
         let title = "Test task".to_string();
-        
+
         let mut fixture = Task::new(conversation_id, agent_id, title);
         assert!(matches!(fixture.status, TaskStatus::Pending));
-        
+
         fixture.start();
         assert!(fixture.status.is_running());
-        
+
         fixture.complete();
         assert!(fixture.status.is_terminal());
     }
@@ -259,13 +244,15 @@ mod tests {
         let conversation_id = ConversationId::default();
         let agent_id = AgentId::new("test-agent");
         let title = "Test task".to_string();
-        
+
         let mut fixture = Task::new(conversation_id, agent_id, title);
         fixture.start();
         fixture.fail("Something went wrong".to_string());
-        
+
         let actual = &fixture.status;
-        assert!(matches!(actual, TaskStatus::Failed { error, .. } if error == "Something went wrong"));
+        assert!(
+            matches!(actual, TaskStatus::Failed { error, .. } if error == "Something went wrong")
+        );
     }
 
     #[tokio::test]
@@ -276,7 +263,7 @@ mod tests {
         let title = "Test task".to_string();
         let task = Task::new(conversation_id, agent_id, title);
         let task_id = task.id;
-        
+
         store.insert_task(task.clone()).await;
         let actual = store.get_task(task_id).await;
         assert_eq!(actual.unwrap().id, task_id);

@@ -1,7 +1,7 @@
 //! Task-based server architecture for Paws.
 //!
-//! This module implements a server that runs the orchestration loop server-side,
-//! allowing the frontend to be stateless and reconnectable.
+//! This module implements a server that runs the orchestration loop
+//! server-side, allowing the frontend to be stateless and reconnectable.
 
 mod error;
 mod events;

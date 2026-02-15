@@ -120,7 +120,9 @@ pub enum Category {
     Warning,
 }
 
-#[derive(Clone, derive_setters::Setters, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, derive_setters::Setters, Debug, PartialEq, serde::Serialize, serde::Deserialize,
+)]
 #[setters(into, strip_option)]
 pub struct TitleFormat {
     pub title: String,

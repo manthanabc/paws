@@ -1,16 +1,14 @@
 //! Configuration and resource HTTP handlers (read-only for UI).
 
-use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::Json;
+use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use paws_domain::{AgentId, ModelId, ProviderId};
 use serde::Deserialize;
 
-use crate::server::AppState;
 use crate::AppError;
+use crate::server::AppState;
 
 // =============================================================================
 // Health & Environment
@@ -330,9 +328,7 @@ pub async fn logout(
 /// Gets user information.
 ///
 /// GET /api/auth/user
-pub async fn get_user_info(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_user_info(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let info = state.api.user_info().await?;
     Ok(Json(info))
 }
@@ -340,9 +336,7 @@ pub async fn get_user_info(
 /// Gets user usage statistics.
 ///
 /// GET /api/auth/usage
-pub async fn get_user_usage(
-    State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_user_usage(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
     let usage = state.api.user_usage().await?;
     Ok(Json(usage))
 }
