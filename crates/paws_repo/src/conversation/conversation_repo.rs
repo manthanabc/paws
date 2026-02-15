@@ -84,7 +84,10 @@ impl ConversationRepository for ConversationRepositoryImpl {
             .map(|record| {
                 // Deserialize metrics using MetricsRecord for proper type handling
                 let metrics = if let Some(text) = record.metrics {
-                    if let Ok(metrics_record) = serde_json::from_str::<crate::conversation::conversation_record::MetricsRecord>(&text) {
+                    if let Ok(metrics_record) = serde_json::from_str::<
+                        crate::conversation::conversation_record::MetricsRecord,
+                    >(&text)
+                    {
                         paws_domain::Metrics::from(metrics_record)
                     } else {
                         paws_domain::Metrics::default()
@@ -92,12 +95,12 @@ impl ConversationRepository for ConversationRepositoryImpl {
                 } else {
                     paws_domain::Metrics::default()
                 };
-                
+
                 Ok(paws_domain::ConversationSummary {
                     id: paws_domain::ConversationId::parse(record.conversation_id)?,
                     title: record.title,
                     metrics,
-                    metadata: paws_domain::MetaData { 
+                    metadata: paws_domain::MetaData {
                         created_at: record.created_at.and_utc(),
                         updated_at: record.updated_at.map(|dt| dt.and_utc()),
                     },

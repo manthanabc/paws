@@ -62,7 +62,8 @@ pub trait ConversationRepository: Send + Sync {
 
     /// Retrieves all conversation summaries with an optional limit
     ///
-    /// Returns lightweight summaries without the full context for faster loading
+    /// Returns lightweight summaries without the full context for faster
+    /// loading
     ///
     /// # Arguments
     /// * `limit` - Optional maximum number of conversations to retrieve

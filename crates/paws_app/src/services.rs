@@ -211,7 +211,8 @@ pub trait ConversationService: Send + Sync {
         F: FnOnce(&mut Conversation) -> T + Send,
         T: Send;
 
-    /// Find conversation summaries with optional limit (lightweight, no context)
+    /// Find conversation summaries with optional limit (lightweight, no
+    /// context)
     async fn get_conversation_summaries(
         &self,
         limit: Option<usize>,

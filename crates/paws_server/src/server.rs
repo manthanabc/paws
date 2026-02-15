@@ -87,8 +87,14 @@ impl Server {
             .route("/api/git/status", get(get_git_status))
             .route("/api/git/commit", post(commit_changes))
             // Conversations
-            .route("/api/conversations", get(list_conversations).post(create_conversation))
-            .route("/api/conversations/summaries", get(list_conversation_summaries))
+            .route(
+                "/api/conversations",
+                get(list_conversations).post(create_conversation),
+            )
+            .route(
+                "/api/conversations/summaries",
+                get(list_conversation_summaries),
+            )
             .route(
                 "/api/conversations/:id",
                 get(get_conversation)

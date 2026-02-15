@@ -51,7 +51,10 @@ impl<S: ConversationRepository> ConversationService for PawsConversationService<
         Ok(())
     }
 
-    async fn get_conversation_summaries(&self, limit: Option<usize>) -> Result<Option<Vec<paws_domain::ConversationSummary>>> {
+    async fn get_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<Option<Vec<paws_domain::ConversationSummary>>> {
         self.conversation_repository
             .get_all_conversation_summaries(limit)
             .await
