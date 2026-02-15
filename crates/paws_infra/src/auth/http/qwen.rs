@@ -79,7 +79,7 @@ impl QwenHttpProvider {
             code_challenge_method: "S256".to_string(),
         };
 
-        let client = Self::build_http_client_internal(config)?;
+        let client = build_http_client(config.custom_headers.as_ref())?;
         let response = client
             .post(config.auth_url.as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -109,7 +109,7 @@ impl QwenHttpProvider {
             code_verifier: code_verifier.to_string(),
         };
 
-        let client = Self::build_http_client_internal(config)?;
+        let client = build_http_client(config.custom_headers.as_ref())?;
         let response = client
             .post(config.token_url.as_str())
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -138,10 +138,6 @@ impl QwenHttpProvider {
             refresh_token,
             expires_in,
         ))
-    }
-
-    fn build_http_client_internal(config: &OAuthConfig) -> anyhow::Result<reqwest::Client> {
-        build_http_client(config.custom_headers.as_ref())
     }
 }
 
