@@ -91,6 +91,7 @@ impl Server {
             .route("/api/git/commit", post(commit_changes))
             // Conversations
             .route("/api/conversations", get(list_conversations).post(create_conversation))
+            .route("/api/conversations/summaries", get(list_conversation_summaries))
             .route("/api/conversations/:id", get(get_conversation).delete(delete_conversation).put(update_conversation))
             .route("/api/conversations/:id/compact", post(compact_conversation))
             // Configuration

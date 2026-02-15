@@ -143,6 +143,14 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
             .unwrap_or_default())
     }
 
+    async fn get_conversation_summaries(&self, limit: Option<usize>) -> anyhow::Result<Vec<ConversationSummary>> {
+        Ok(self
+            .services
+            .get_conversation_summaries(limit)
+            .await?
+            .unwrap_or_default())
+    }
+
     async fn last_conversation(&self) -> anyhow::Result<Option<Conversation>> {
         self.services.last_conversation().await
     }

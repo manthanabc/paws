@@ -211,6 +211,12 @@ pub trait ConversationService: Send + Sync {
         F: FnOnce(&mut Conversation) -> T + Send,
         T: Send;
 
+    /// Find conversation summaries with optional limit (lightweight, no context)
+    async fn get_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<paws_domain::ConversationSummary>>>;
+
     /// Find conversations with optional limit
     async fn get_conversations(
         &self,
@@ -562,6 +568,15 @@ impl<I: Services> ConversationService for I {
         limit: Option<usize>,
     ) -> anyhow::Result<Option<Vec<Conversation>>> {
         self.conversation_service().get_conversations(limit).await
+    }
+
+    async fn get_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<paws_domain::ConversationSummary>>> {
+        self.conversation_service()
+            .get_conversation_summaries(limit)
+            .await
     }
 
     async fn last_conversation(&self) -> anyhow::Result<Option<Conversation>> {

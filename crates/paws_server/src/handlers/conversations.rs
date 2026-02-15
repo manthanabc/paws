@@ -29,6 +29,17 @@ pub async fn list_conversations(
     Ok(Json(conversations))
 }
 
+/// Lists conversation summaries (lightweight, no context).
+///
+/// GET /api/conversations/summaries
+pub async fn list_conversation_summaries(
+    State(state): State<AppState>,
+    Query(query): Query<ListConversationsQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let summaries = state.api.get_conversation_summaries(query.limit).await?;
+    Ok(Json(summaries))
+}
+
 /// Request body for creating a new conversation.
 #[derive(Debug, Deserialize)]
 pub struct CreateConversationRequest {
