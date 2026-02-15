@@ -55,9 +55,11 @@ Planned -
  
 Updates -
  Additional provideres
- - [X] Xiomi (free mimo v2-flash)
+ - [X] Xiomi (mimo v2-flash)
+ - [X] Nvidia Nim (GLM 5, GLM 4.7, MinMax M2.1, Qwen coder )(40 RPM)
+ - [WIP] Qwencode oauth (qwen coder model) (60 RPM afaik)  
  - [X] AI studio (free all models from google under free tier limit)
- - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
+ - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle, kimi 2.5, glm 4.7)
  - [X] Copilot (free to use gpt 5 mini, claude haiku 4.5, grok code fast 1) 
  - [X] Gemini (Everything in AI studio but in native format)
  - [X] Antigravity via [antigravity-claude-proxy](https://github.com/badrisnarayanan/antigravity-claude-proxy) (free to use gemini 3 pro (high), gemini flash latest, claude opus 4.5, claude sonnet 4.5, Gpt oss 120B)
