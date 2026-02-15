@@ -92,7 +92,7 @@ impl<H: HttpClientService> QwenProvider<H> {
     async fn inner_models(&self) -> Result<Vec<Model>> {
         // Use hardcoded models for Qwen
         Ok(vec![Model {
-            id: ModelId::from("coder-model".to_string()),
+            id: ModelId::from("coder-model"),
             name: Some("Coder Model".to_string()),
             description: None,
             context_length: Some(32768),
