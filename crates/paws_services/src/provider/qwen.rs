@@ -93,7 +93,7 @@ impl<H: HttpClientService> QwenProvider<H> {
         // Use hardcoded models for Qwen
         Ok(vec![Model {
             id: ModelId::from("coder-model"),
-            name: Some("Coder Model".to_string()),
+            name: Some("Coder Model".into()),
             description: None,
             context_length: Some(32768),
             tools_supported: Some(false),
