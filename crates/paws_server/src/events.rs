@@ -130,10 +130,8 @@ impl EventBroadcaster {
 
     /// Ensures a broadcast channel exists for a task.
     ///
-    /// This creates the channel before any events are broadcast to prevent
-    /// events from being dropped due to a missing sender. Note that broadcast
-    /// channels do not buffer past events for new subscribers; event
-    /// persistence and replay are handled by `TaskStore`.
+    /// This is useful to create the channel before any events are broadcast,
+    /// so that subsequent subscribers can receive events from the buffer.
     pub async fn ensure_channel(&self, task_id: TaskId) {
         let mut channels = self.channels.write().await;
         channels
