@@ -47,6 +47,7 @@ mod top_k;
 mod top_p;
 mod transformer;
 mod update;
+pub mod virtual_fs;
 mod workflow;
 
 mod xml;
