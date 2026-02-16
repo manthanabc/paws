@@ -211,12 +211,13 @@ pub enum PatchOperation {
 // TODO: do the Blanket impl for all the unit enums
 impl JsonSchema for PatchOperation {
     fn schema_name() -> Cow<'static, str> {
-        std::any::type_name::<Self>()
-            .split("::")
-            .last()
-            .unwrap_or("PatchOperation")
-            .to_string()
-            .into()
+        // Use Borrowed to avoid allocation since we're using a static string
+        Cow::Borrowed(
+            std::any::type_name::<Self>()
+                .split("::")
+                .last()
+                .unwrap_or("PatchOperation"),
+        )
     }
 
     fn json_schema(_gen: &mut SchemaGenerator) -> Schema {
