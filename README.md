@@ -8,7 +8,7 @@ https://discord.gg/9EGrd4s9fe)
 <h1 align="center">Paws</h1>
 <p align="center">Simplified wersion of forge</p>
 
-Do check original ![forge](https://github.com/antimonyhq/forge)
+Do check original ![forge](https://github.com/antinomyhq/forge)
 
 <img width="901" height="592" alt="screenshot" src="https://github.com/user-attachments/assets/8f6dd4ee-fe36-4078-8eec-35acfd5c5198" />
 
