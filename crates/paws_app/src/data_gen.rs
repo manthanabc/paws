@@ -7,7 +7,7 @@ use futures::stream::{self, BoxStream};
 use paws_domain::{
     Context, ContextMessage, DataGenerationParameters, ResultStreamExt, Template, ToolDefinition,
 };
-use schemars::schema::RootSchema;
+use schemars::Schema;
 use tracing::{debug, info};
 
 use crate::{
@@ -98,7 +98,7 @@ impl<A: Services> DataGenerationApp<A> {
         let provider = self.services.get_default_provider().await?;
         let model_id = self.services.get_provider_model(Some(&provider.id)).await?;
         debug!("Using provider: {}, model: {}", provider.id, model_id);
-        let schema: RootSchema =
+        let schema: Schema =
             serde_json::from_str(&schema).with_context(|| "Could not parse the JSON schema")?;
         let mut context =
             Context::default().add_tool(ToolDefinition::new("output").input_schema(schema));

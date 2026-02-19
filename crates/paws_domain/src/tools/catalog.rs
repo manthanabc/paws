@@ -1,4 +1,5 @@
 #![allow(clippy::enum_variant_names)]
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -6,8 +7,7 @@ use convert_case::{Case, Casing};
 use derive_more::From;
 use eserde::Deserialize;
 use paws_tool_macros::ToolDescription;
-use schemars::JsonSchema;
-use schemars::schema::RootSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::Serialize;
 use serde_json::Map;
 use strum::IntoEnumIterator;
@@ -210,26 +210,24 @@ pub enum PatchOperation {
 
 // TODO: do the Blanket impl for all the unit enums
 impl JsonSchema for PatchOperation {
-    fn schema_name() -> String {
-        std::any::type_name::<Self>()
-            .split("::")
-            .last()
-            .unwrap_or("PatchOperation")
-            .to_string()
+    fn schema_name() -> Cow<'static, str> {
+        // Use Borrowed to avoid allocation since we're using a static string
+        Cow::Borrowed(
+            std::any::type_name::<Self>()
+                .split("::")
+                .last()
+                .unwrap_or("PatchOperation"),
+        )
     }
 
-    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::{InstanceType, Schema, SchemaObject};
+    fn json_schema(_gen: &mut SchemaGenerator) -> Schema {
         let variants: Vec<serde_json::Value> = Self::iter()
             .map(|variant| variant.as_ref().to_case(Case::Snake).into())
             .collect();
-        Schema::Object(SchemaObject {
-            instance_type: Some(InstanceType::String.into()),
-            enum_values: Some(variants),
-            metadata: Some(Box::new(schemars::schema::Metadata {
-                ..Default::default()
-            })),
-            ..Default::default()
+
+        schemars::json_schema!({
+            "type": "string",
+            "enum": variants
         })
     }
 }
@@ -500,14 +498,10 @@ lazy_static::lazy_static! {
 }
 
 impl ToolCatalog {
-    pub fn schema(&self) -> RootSchema {
-        use schemars::r#gen::SchemaSettings;
+    pub fn schema(&self) -> Schema {
+        use schemars::generate::SchemaSettings;
         let r#gen = SchemaSettings::default()
             .with(|s| {
-                // incase of null, add nullable property.
-                s.option_nullable = true;
-                // incase of option type, don't add null in type.
-                s.option_add_null_type = false;
                 s.meta_schema = None;
                 s.inline_subschemas = true;
             })

@@ -1,4 +1,6 @@
-use schemars::JsonSchema;
+use std::borrow::Cow;
+
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -9,12 +11,19 @@ pub struct Template<V> {
     _marker: std::marker::PhantomData<V>,
 }
 
+/// Template type that wraps a string template and a phantom type for
+/// validation.
+///
+/// The JsonSchema implementation always returns the schema for a String,
+/// regardless of the generic type `T`. This is intentional because templates
+/// are serialized and deserialized as strings. The generic type `T` is used for
+/// type safety at compile time but does not affect the schema representation.
 impl<T> JsonSchema for Template<T> {
-    fn schema_name() -> String {
+    fn schema_name() -> Cow<'static, str> {
         String::schema_name()
     }
 
-    fn json_schema(r#gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(r#gen: &mut SchemaGenerator) -> Schema {
         String::json_schema(r#gen)
     }
 }
