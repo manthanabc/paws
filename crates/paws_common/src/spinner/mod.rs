@@ -7,7 +7,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::style::{Attribute, Stylize, style};
 use crossterm::terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode};
 use crossterm::{cursor, execute};
-use rand::seq::SliceRandom;
+use rand::prelude::IndexedRandom;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
@@ -214,7 +214,7 @@ impl SpinnerManager {
 
         // Use a random word from the list
         let word = match message {
-            None => words.choose(&mut rand::thread_rng()).unwrap_or(&words[0]),
+            None => words.choose(&mut rand::rng()).unwrap_or(&words[0]),
             Some(msg) => msg,
         };
         let status_text = word.to_string();
