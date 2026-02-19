@@ -224,7 +224,7 @@ impl JsonSchema for PatchOperation {
         let variants: Vec<serde_json::Value> = Self::iter()
             .map(|variant| variant.as_ref().to_case(Case::Snake).into())
             .collect();
-        
+
         schemars::json_schema!({
             "type": "string",
             "enum": variants

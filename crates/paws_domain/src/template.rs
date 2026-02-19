@@ -11,12 +11,13 @@ pub struct Template<V> {
     _marker: std::marker::PhantomData<V>,
 }
 
-/// Template type that wraps a string template and a phantom type for validation.
+/// Template type that wraps a string template and a phantom type for
+/// validation.
 ///
-/// The JsonSchema implementation always returns the schema for a String, regardless
-/// of the generic type `T`. This is intentional because templates are serialized and
-/// deserialized as strings. The generic type `T` is used for type safety at compile
-/// time but does not affect the schema representation.
+/// The JsonSchema implementation always returns the schema for a String,
+/// regardless of the generic type `T`. This is intentional because templates
+/// are serialized and deserialized as strings. The generic type `T` is used for
+/// type safety at compile time but does not affect the schema representation.
 impl<T> JsonSchema for Template<T> {
     fn schema_name() -> Cow<'static, str> {
         String::schema_name()
