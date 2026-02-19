@@ -6,6 +6,7 @@ mod gemini;
 #[cfg(test)]
 mod mock_server;
 mod openai;
+mod qwen;
 mod retry;
 mod service;
 mod utils;

@@ -95,7 +95,14 @@ workspace = true
 [dependencies.url]
 workspace = true
 
+[dependencies.rand]
+version = "0.8"
 
+[dependencies.sha2]
+version = "0.10"
+
+[dependencies.base64]
+version = "0.22"
 
 [dependencies.paws_common]
 workspace = true

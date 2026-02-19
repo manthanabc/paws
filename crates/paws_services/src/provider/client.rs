@@ -19,6 +19,7 @@ use tokio_stream::StreamExt;
 use crate::provider::anthropic::Anthropic;
 use crate::provider::gemini::GeminiProvider;
 use crate::provider::openai::OpenAIProvider;
+use crate::provider::qwen::QwenProvider;
 use crate::provider::retry::into_retry;
 
 #[derive(Setters)]
@@ -123,6 +124,10 @@ impl ClientBuilder {
                     }
                 }
             }
+
+            ProviderResponse::Qwen => {
+                InnerClient::Qwen(Box::new(QwenProvider::new(provider.clone(), http.clone())))
+            }
         };
 
         Ok(Client {
@@ -154,6 +159,7 @@ enum InnerClient<T> {
     Anthropic(Box<Anthropic<T>>),
     Bedrock(Box<crate::provider::bedrock::BedrockProvider<T>>),
     Gemini(Box<GeminiProvider<T>>),
+    Qwen(Box<QwenProvider<T>>),
 }
 
 impl<T: HttpClientService> Client<T> {
@@ -168,6 +174,7 @@ impl<T: HttpClientService> Client<T> {
             InnerClient::Anthropic(provider) => provider.models().await,
             InnerClient::Bedrock(provider) => provider.models().await,
             InnerClient::Gemini(provider) => provider.models().await,
+            InnerClient::Qwen(provider) => provider.models().await,
         })?;
 
         // Update cache with all fetched models
@@ -194,6 +201,7 @@ impl<T: HttpClientService> Client<T> {
             InnerClient::Anthropic(provider) => provider.chat(model, context).await,
             InnerClient::Bedrock(provider) => provider.chat(model, context).await,
             InnerClient::Gemini(provider) => provider.chat(model, context).await,
+            InnerClient::Qwen(provider) => provider.chat(model, context).await,
         })?;
 
         let this: Client<T> = self.clone();

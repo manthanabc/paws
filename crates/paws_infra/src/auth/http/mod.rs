@@ -1,7 +1,9 @@
 mod anthropic;
 mod github;
+mod qwen;
 mod standard;
 
-pub(crate) use anthropic::AnthropicHttpProvider;
-pub(crate) use github::GithubHttpProvider;
-pub(crate) use standard::StandardHttpProvider;
+pub use anthropic::AnthropicHttpProvider;
+pub use github::GithubHttpProvider;
+pub use qwen::QwenHttpProvider;
+pub use standard::StandardHttpProvider;

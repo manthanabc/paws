@@ -64,6 +64,7 @@ pub struct DeviceCodeRequest {
     pub expires_in: u64,
     pub interval: u64,
     pub oauth_config: OAuthConfig,
+    pub pkce_verifier: Option<PkceVerifier>,
 }
 
 /// Response for device code flow
