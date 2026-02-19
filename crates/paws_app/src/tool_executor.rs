@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+
 use paws_domain::{ToolCallContext, ToolCatalog, ToolOutput};
 
 use crate::fmt::content::FormatContent;
@@ -255,13 +255,13 @@ impl<
                 let skill = self.services.fetch_skill(input.name.clone()).await?;
                 ToolOperation::Skill { input, output: skill }
             }
-            ToolCatalog::ReadImage(input) => {
-                let normalized_path = self.normalize_path(input.path.clone());
+            ToolCatalog::ReadImage(_input) => {
+                let normalized_path = self.normalize_path(_input.path.clone());
                 let output = self
                     .services
                     .read_image(normalized_path)
                     .await?;
-                ToolOperation::ImageRead { input, output }
+                ToolOperation::ImageRead { _input, output }
             }
             ToolCatalog::SemSearch(_) => {
                 anyhow::bail!("SemSearch tool has been removed")

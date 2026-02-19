@@ -6,7 +6,7 @@ use paws_app::domain::{
     AnyProvider, ChatCompletionMessage, Context as ChatContext, HttpConfig, Model, ModelId,
     ProviderId, ResultStream, RetryConfig,
 };
-use paws_app::{EnvironmentInfra, HttpInfra, HttpClientService, ProviderService};
+use paws_app::{EnvironmentInfra, HttpInfra, ProviderService};
 use paws_domain::{Provider, ProviderRepository};
 use tokio::sync::Mutex;
 use url::Url;

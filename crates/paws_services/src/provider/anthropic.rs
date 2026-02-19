@@ -153,10 +153,11 @@ impl<T: HttpClientService> Anthropic<T> {
 }
 
 /// Creates an Anthropic client from a provider configuration
+#[allow(dead_code)]
 pub fn create_anthropic_client<F: HttpClientService>(
     infra: Arc<F>,
     provider: &Provider<Url>,
-    retry_config: Arc<RetryConfig>,
+    _retry_config: Arc<RetryConfig>,
 ) -> anyhow::Result<Anthropic<F>> {
     let chat_url = provider.url.clone();
     let models = provider

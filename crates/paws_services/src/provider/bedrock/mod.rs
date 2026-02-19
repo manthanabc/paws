@@ -35,4 +35,4 @@
 mod provider;
 mod set_cache;
 
-pub use provider::{BedrockProvider, create_bedrock_client};
+pub use provider::BedrockProvider;

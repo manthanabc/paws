@@ -4,17 +4,13 @@ use anyhow::{Context as _, Result};
 use aws_sdk_bedrockruntime::Client;
 use aws_sdk_bedrockruntime::config::Token;
 use paws_app::domain::RetryConfig;
-use paws_app::ProviderService;
 use paws_domain::{
-    AnyProvider, AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider,
+    AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider,
     ResultStream, Transformer,
 };
 use reqwest::Url;
 use tokio::sync::OnceCell;
-use tokio_stream::StreamExt;
-
 use crate::provider::bedrock::set_cache::SetCache;
-use crate::provider::retry::into_retry;
 use crate::{FromDomain, IntoDomain};
 
 /// Provider implementation for Amazon Bedrock using Bearer token authentication
@@ -287,9 +283,10 @@ impl BedrockProvider {
 }
 
 /// Creates a Bedrock client from a provider configuration
+#[allow(dead_code)]
 pub fn create_bedrock_client(
     provider: &Provider<Url>,
-    retry_config: Arc<RetryConfig>,
+    _retry_config: Arc<RetryConfig>,
 ) -> anyhow::Result<BedrockProvider> {
     BedrockProvider::new(provider.clone())
 }
