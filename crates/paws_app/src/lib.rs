@@ -1,5 +1,6 @@
 mod agent;
 mod agent_executor;
+pub mod agent_protocol_service;
 mod agent_provider_resolver;
 mod app;
 mod apply_tunable_parameters;
@@ -39,6 +40,8 @@ pub mod utils;
 mod walker;
 
 pub use agent::*;
+pub use agent_executor::*;
+pub use agent_protocol_service::*;
 pub use agent_provider_resolver::*;
 pub use app::*;
 pub use command_generator::*;

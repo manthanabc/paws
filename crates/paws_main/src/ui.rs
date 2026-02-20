@@ -642,6 +642,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln(data?)?;
                 }
             }
+
+            TopLevelCommand::Serve { port, host } => {
+                use paws_infra::agent_protocol_server::AgentProtocolServer;
+                let server = AgentProtocolServer::new();
+                server.serve(&host, port).await?;
+            }
         }
         Ok(())
     }
