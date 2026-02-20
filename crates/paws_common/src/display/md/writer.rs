@@ -1,3 +1,4 @@
+use console::strip_ansi_codes;
 use termimad::crossterm::style::{Attribute, Stylize};
 
 use crate::display::md::render::MarkdownRenderer;
@@ -9,6 +10,7 @@ pub struct MarkdownWriter {
     previous_rendered: String,
     last_was_dimmed: bool,
     max_height: Option<usize>,
+    header: Option<String>,
 }
 
 impl MarkdownWriter {
@@ -19,11 +21,20 @@ impl MarkdownWriter {
             previous_rendered: String::new(),
             last_was_dimmed: false,
             max_height: None,
+            header: None,
         }
     }
 
     pub fn set_max_height(&mut self, max_height: Option<usize>) {
         self.max_height = max_height;
+    }
+
+    /// Sets an optional header line rendered above the buffer.
+    ///
+    /// # Arguments
+    /// - `header`: Header text to display, or `None` to clear it.
+    pub fn set_header(&mut self, header: Option<String>) {
+        self.header = header;
     }
 
     pub fn height(&self) -> usize {
@@ -66,10 +77,13 @@ impl MarkdownWriter {
             spn.write_ln("").expect("Failed to write");
         }
         self.buffer.push_str(chunk);
-        self.stream(
-            &self.renderer.render(&self.buffer, Some(Attribute::Dim)),
-            spn,
-        );
+        let rendered = self.renderer.render(&self.buffer, None);
+        let mut lines: Vec<String> = rendered.lines().map(|line| line.to_string()).collect();
+        // Always apply mild dimming to all lines
+        for line in lines.iter_mut() {
+            *line = dim_line_mild(line);
+        }
+        self.stream(&lines.join("\n"), spn);
         self.last_was_dimmed = true;
         Ok(())
     }
@@ -84,7 +98,7 @@ impl MarkdownWriter {
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
-        let mut lines_new: Vec<&str> = content.lines().collect();
+        let mut lines_new: Vec<String> = content.lines().map(|line| line.to_string()).collect();
         let lines_prev: Vec<String> = self
             .previous_rendered
             .lines()
@@ -92,20 +106,34 @@ impl MarkdownWriter {
             .collect();
 
         // Apply max_height truncation if set
+        let mut was_truncated = false;
         if let Some(max_h) = self.max_height
             && lines_new.len() > max_h
         {
-            // Keep only the last max_h lines
             let start = lines_new.len() - max_h;
             lines_new = lines_new[start..].to_vec();
+            was_truncated = true;
+        }
+
+        if was_truncated {
+            // Apply gradient only to first 3 lines when scrolling starts
+            dim_first_3_lines_gradient(&mut lines_new);
+        }
+
+        if let Some(header) = &self.header {
+            let mut header_lines = header
+                .lines()
+                .map(|line| line.to_string())
+                .collect::<Vec<_>>();
+            header_lines.append(&mut lines_new);
+            lines_new = header_lines;
         }
 
         // Compute common prefix to minimize redraw
         let common = lines_prev
             .iter()
-            .map(|s| s.as_str())
             .zip(&lines_new)
-            .take_while(|(p, n)| p == *n)
+            .take_while(|(p, n)| p == n)
             .count();
 
         let lines_to_update = self.renderer.height;
@@ -133,6 +161,56 @@ impl MarkdownWriter {
         // Write above spinner; spinner will redraw itself
         let _ = spn.write_ln(out);
         self.previous_rendered = lines_new.join("\n");
+    }
+}
+
+fn dim_line_gradient(line: &str, intensity: f64) -> String {
+    const RESET: &str = "\x1b[0m";
+
+    if line.is_empty() {
+        return String::new();
+    }
+
+    // ANSI 256-color gray codes from light (240) to lightest (247)
+    // Top lines (intensity 1.0) = lightest gray
+    // Bottom lines (intensity 0.0) = lighter gray
+    let gray_code = (240.0 + (intensity * 7.0)) as u8;
+    let gray_code = gray_code.min(247).max(240);
+
+    // Strip ANSI codes for the gradient effect
+    let plain_text = strip_ansi_codes(line);
+
+    format!("\x1b[38;5;{}m{}{}", gray_code, plain_text, RESET)
+}
+
+fn dim_line_mild(line: &str) -> String {
+    const DIM: &str = "\x1b[2m";
+    const RESET: &str = "\x1b[0m";
+    const RESET_DIM: &str = "\x1b[0m\x1b[2m";
+
+    if line.is_empty() {
+        return String::new();
+    }
+
+    let dimmed = line.replace(RESET, RESET_DIM);
+    format!("{DIM}{dimmed}{RESET}")
+}
+
+fn dim_first_3_lines_gradient(lines: &mut [String]) {
+    let len = lines.len();
+    if len == 0 {
+        return;
+    }
+
+    // Apply gradient only to first 3 lines
+    for (i, line) in lines.iter_mut().take(3).enumerate() {
+        // Calculate intensity: 0.0 (newest) to 1.0 (oldest of first 3)
+        let intensity = if len == 1 {
+            0.0
+        } else {
+            i as f64 / (len.min(3) - 1) as f64
+        };
+        *line = dim_line_gradient(line, intensity);
     }
 }
 
@@ -223,5 +301,68 @@ And some more text after the code block."#;
         assert!(fixture.buffer.contains("println!"));
         assert!(fixture.buffer.contains("Hello, world!"));
         assert!(fixture.buffer.contains("more text"));
+    }
+
+    #[test]
+    fn test_markdown_writer_header_line() {
+        let mut fixture = MarkdownWriter::new();
+        let mut spn = SpinnerManager::new();
+
+        fixture.set_header(Some("Thinking..".to_string()));
+        fixture.stream("Line 1", &mut spn);
+
+        let actual = fixture.previous_rendered.clone();
+        let expected = "Thinking..\nLine 1";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_markdown_writer_truncation_dims_top_line() {
+        let mut fixture = MarkdownWriter::new();
+        let mut spn = SpinnerManager::new();
+
+        fixture.set_max_height(Some(2));
+        fixture.stream("Line 1\nLine 2\nLine 3", &mut spn);
+
+        let actual = fixture.previous_rendered.clone();
+        // After truncation, gradient is applied to all lines
+        // Line 2 (index 0) should have lighter gray
+        // Line 3 (index 1) should have darker gray
+        assert!(actual.contains("\x1b[38;5;")); // Contains gradient codes
+        assert!(actual.contains("Line 2"));
+        assert!(actual.contains("Line 3"));
+    }
+
+    #[test]
+    fn test_dim_first_3_lines_gradient() {
+        let mut lines = vec![
+            "Line 1".to_string(),
+            "Line 2".to_string(),
+            "Line 3".to_string(),
+        ];
+        dim_first_3_lines_gradient(&mut lines);
+
+        // Check that all lines have been transformed with gradient ANSI codes
+        assert!(lines[0].contains("\x1b[38;5;"));
+        assert!(lines[1].contains("\x1b[38;5;"));
+        assert!(lines[2].contains("\x1b[38;5;"));
+
+        // Check that the gradient is applied (different gray codes)
+        // The exact codes depend on the intensity calculation
+        assert_ne!(lines[0], lines[1]);
+        assert_ne!(lines[1], lines[2]);
+    }
+
+    #[test]
+    fn test_dim_line_mild() {
+        let line = "Some text";
+        let dimmed = dim_line_mild(line);
+
+        // Should contain dim code
+        assert!(dimmed.contains("\x1b[2m"));
+        // Should contain reset code
+        assert!(dimmed.contains("\x1b[0m"));
+        // Should contain the original text
+        assert!(dimmed.contains("Some text"));
     }
 }
