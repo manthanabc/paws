@@ -171,6 +171,10 @@ impl SpinnerManager {
                                         Clear(ClearType::CurrentLine),
                                         cursor::Show
                                     ));
+                                    let _ = io::stdout().flush();
+                                    let _ = disable_raw_mode();
+                                    active = false;
+                                    hidden = false;
                                     // Notify UI
                                     let _ = ctrl_c_tx.send(());
                                 }
