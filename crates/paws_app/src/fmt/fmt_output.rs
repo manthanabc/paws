@@ -36,11 +36,13 @@ impl FormatContent for ToolOperation {
             }),
             ToolOperation::FsCreate { input, output } => {
                 // Show diff when overwriting an existing file
-                output.before.as_ref().map(|before| ChatResponseContent::PlainText(
+                output.before.as_ref().map(|before| {
+                    ChatResponseContent::PlainText(
                         DiffFormat::format(before, &input.content)
                             .diff()
                             .to_string(),
-                    ))
+                    )
+                })
             }
             ToolOperation::FsRead { input: _, output: _ }
             | ToolOperation::ImageRead { output: _ }
