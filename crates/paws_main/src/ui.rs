@@ -17,7 +17,7 @@ use paws_api::{
 use paws_app::ToolResolver;
 use paws_app::fmt::content::FormatContent;
 use paws_app::utils::{format_display_path, truncate_key};
-use paws_common::display::MarkdownWriter;
+use paws_common::display::{CollapsibleBuffer, MarkdownWriter};
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
@@ -88,7 +88,7 @@ fn format_mcp_headers(server: &paws_domain::McpServerConfig) -> Option<String> {
 }
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter,
+    thinking_buffer: CollapsibleBuffer,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -97,7 +97,7 @@ pub struct UI<A, F: Fn() -> A> {
     cli: Cli,
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
-    thinking_start: Option<std::time::Instant>,
+    markdown: MarkdownWriter,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: paws_services::log::Guard,
 }
@@ -2569,12 +2569,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
-                    if self.thinking_start.is_none() {
-                        self.thinking_start = Some(std::time::Instant::now());
+                    if self.thinking_buffer.elapsed().is_none() {
+                        self.thinking_buffer.start_timing();
                         let max_h = (self.markdown.height() as f64 * 0.4) as usize;
-                        self.markdown.set_max_height(Some(max_h));
+                        self.thinking_buffer.set_max_height(Some(max_h));
                     }
-                    self.markdown
+                    self.thinking_buffer
                         .add_chunk_dimmed(&content, &mut self.spinner)?;
                 }
             }
@@ -2592,12 +2592,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     async fn finish_thinking(&mut self) -> Result<()> {
-        if let Some(start) = self.thinking_start.take() {
-            let duration = start.elapsed();
-
-            self.markdown
-                .clear(&mut self.spinner, duration.as_secs_f64());
-
+        if let Some(duration) = self.thinking_buffer.elapsed() {
+            self.thinking_buffer.finish(&mut self.spinner, duration.as_secs_f64());
             self.markdown.set_max_height(None);
         }
         Ok(())
