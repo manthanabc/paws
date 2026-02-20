@@ -605,7 +605,7 @@ impl ToolCatalog {
                 message: format!("Fetch content from URL: {}", input.url),
             }),
             // Operations that don't require permission checks
-            | ToolCatalog::Undo(_)
+            ToolCatalog::Undo(_)
             | ToolCatalog::Followup(_)
             | ToolCatalog::Plan(_)
             | ToolCatalog::Skill(_) => None,

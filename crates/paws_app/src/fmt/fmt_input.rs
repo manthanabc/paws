@@ -87,7 +87,11 @@ impl FormatContent for ToolCatalog {
             ),
             ToolCatalog::ReadImage(input) => {
                 let display_path = display_path_for(&input.path);
-                Some(TitleFormat::debug("Read Image").sub_title(display_path).into())
+                Some(
+                    TitleFormat::debug("Read Image")
+                        .sub_title(display_path)
+                        .into(),
+                )
             }
             ToolCatalog::Plan(_) => None,
             ToolCatalog::Skill(input) => Some(

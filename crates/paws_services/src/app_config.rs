@@ -91,8 +91,8 @@ mod tests {
     use std::sync::Mutex;
 
     use paws_domain::{
-        AnyProvider, AppConfig, AuthCredential, AuthDetails, ApiKey, InputModality, MigrationResult,
-        Model, ModelSource, ProviderId, ProviderResponse,
+        AnyProvider, ApiKey, AppConfig, AuthCredential, AuthDetails, InputModality,
+        MigrationResult, Model, ModelSource, ProviderId, ProviderResponse,
     };
     use pretty_assertions::assert_eq;
     use url::Url;
@@ -191,17 +191,11 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("Provider not found"))
         }
 
-        async fn upsert_credential(
-            &self,
-            _credential: AuthCredential,
-        ) -> anyhow::Result<()> {
+        async fn upsert_credential(&self, _credential: AuthCredential) -> anyhow::Result<()> {
             Ok(())
         }
 
-        async fn get_credential(
-            &self,
-            _id: &ProviderId,
-        ) -> anyhow::Result<Option<AuthCredential>> {
+        async fn get_credential(&self, _id: &ProviderId) -> anyhow::Result<Option<AuthCredential>> {
             Ok(None)
         }
 

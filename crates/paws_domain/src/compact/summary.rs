@@ -159,9 +159,7 @@ impl SummaryToolCall {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SummaryTool {
-    FileRead {
-        path: String,
-    },
+    FileRead { path: String },
     FileUpdate { path: String },
     FileRemove { path: String },
     Shell { command: String },

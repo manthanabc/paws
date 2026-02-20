@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-
 use paws_common::template::Element;
 use paws_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolCatalog, ToolOutput};
 

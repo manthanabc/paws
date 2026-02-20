@@ -121,8 +121,10 @@ impl<S: Services> ToolRegistry<S> {
                 ));
             }
 
-            self.call_with_timeout(&tool_name, || self.tool_executor.execute(tool_input.into(), context))
-                .await
+            self.call_with_timeout(&tool_name, || {
+                self.tool_executor.execute(tool_input.into(), context)
+            })
+            .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
             // Handle agent delegation tool calls
             let agent_input = AgentInput::try_from(&input)?;

@@ -80,7 +80,6 @@ impl Display for SelectItem {
 }
 
 impl Display for CliProvider {
-
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use fixed width for alignment
         // Format: "✓ " + name_padded + " [" + domain + "]"

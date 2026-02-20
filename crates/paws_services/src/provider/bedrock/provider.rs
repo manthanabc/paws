@@ -5,11 +5,12 @@ use aws_sdk_bedrockruntime::Client;
 use aws_sdk_bedrockruntime::config::Token;
 use paws_app::domain::RetryConfig;
 use paws_domain::{
-    AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider,
-    ResultStream, Transformer,
+    AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider, ResultStream,
+    Transformer,
 };
 use reqwest::Url;
 use tokio::sync::OnceCell;
+
 use crate::provider::bedrock::set_cache::SetCache;
 use crate::{FromDomain, IntoDomain};
 
