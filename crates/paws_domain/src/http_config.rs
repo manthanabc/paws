@@ -100,7 +100,6 @@ impl std::fmt::Display for TlsBackend {
 /// - `FORGE_HTTP_POOL_MAX_IDLE_PER_HOST`: Max idle connections per host
 ///   (default: 5)
 /// - `FORGE_HTTP_MAX_REDIRECTS`: Maximum redirects to follow (default: 10)
-/// - `FORGE_HTTP_USE_HICKORY`: Use Hickory DNS resolver (default: false)
 /// - `FORGE_HTTP_TLS_BACKEND`: TLS backend ("default" or "rustls", default:
 ///   "default")
 /// - `FORGE_HTTP_MIN_TLS_VERSION`: Minimum TLS version ("1.0", "1.1", "1.2",
@@ -141,7 +140,6 @@ pub struct HttpConfig {
     pub pool_idle_timeout: u64,
     pub pool_max_idle_per_host: usize,
     pub max_redirects: usize,
-    pub hickory: bool,
     pub tls_backend: TlsBackend,
     /// Minimum TLS protocol version to use. When `None`, uses TLS library
     /// default.
@@ -174,7 +172,6 @@ impl Default for HttpConfig {
             pool_idle_timeout: 90,
             pool_max_idle_per_host: 5,
             max_redirects: 10,
-            hickory: false,
             tls_backend: TlsBackend::default(),
             min_tls_version: None, // Use TLS library default
             max_tls_version: None, // Use TLS library default

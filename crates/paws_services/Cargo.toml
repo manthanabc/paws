@@ -75,10 +75,10 @@ workspace = true
 [dependencies.strum_macros]
 workspace = true
 
-[dependencies.infer]
+[dependencies.bytes]
 workspace = true
 
-[dependencies.bytes]
+[dependencies.infer]
 workspace = true
 
 [dependencies.serde_yml]

@@ -40,6 +40,17 @@ pub struct Cli {
     #[arg(long, alias = "cid")]
     pub conversation_id: Option<ConversationId>,
 
+    /// Resume the last conversation.
+    ///
+    /// When provided, automatically resumes the most recently updated
+    /// conversation. Cannot be used with --conversation-id or --conversation.
+    #[arg(
+        long,
+        conflicts_with = "conversation_id",
+        conflicts_with = "conversation"
+    )]
+    pub resume: bool,
+
     /// Working directory to use before starting the session.
     ///
     /// When provided, changes to this directory before starting paws.
@@ -1300,5 +1311,45 @@ mod tests {
     fn test_prompt_with_double_hyphen() {
         let fixture = Cli::parse_from(["paws", "-p", "--something"]);
         assert_eq!(fixture.prompt, Some("--something".to_string()));
+    }
+
+    #[test]
+    fn test_resume_flag() {
+        let fixture = Cli::parse_from(["paws", "--resume"]);
+        assert_eq!(fixture.resume, true);
+        assert_eq!(fixture.conversation_id, None);
+    }
+
+    #[test]
+    fn test_resume_flag_without_flag() {
+        let fixture = Cli::parse_from(["paws"]);
+        assert_eq!(fixture.resume, false);
+    }
+
+    #[test]
+    fn test_resume_flag_with_other_flags() {
+        let fixture = Cli::parse_from(["paws", "--resume", "--verbose"]);
+        assert_eq!(fixture.resume, true);
+        assert_eq!(fixture.verbose, true);
+    }
+
+    #[test]
+    fn test_resume_conflicts_with_conversation_id() {
+        // This should fail because resume and conversation-id conflict
+        let result = Cli::try_parse_from([
+            "paws",
+            "--resume",
+            "--conversation-id",
+            "550e8400-e29b-41d4-a716-446655440000",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resume_conflicts_with_conversation() {
+        // This should fail because resume and conversation conflict
+        let result =
+            Cli::try_parse_from(["paws", "--resume", "--conversation", "conversation.json"]);
+        assert!(result.is_err());
     }
 }

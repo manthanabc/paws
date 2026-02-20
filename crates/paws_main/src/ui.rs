@@ -40,6 +40,7 @@ use crate::prompt::{PawsPrompt, get_git_branch};
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::tools_display::format_tools;
+use crate::transcript::TranscriptRenderer;
 use crate::update::on_update;
 
 // File-specific constants
@@ -240,6 +241,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
         self.cli.conversation_id = None;
+        self.cli.resume = false;
+        self.state.conversation_id = None;
 
         self.display_banner().await?;
         self.trace_user();
@@ -727,15 +730,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.state.conversation_id = original_id;
             }
             ConversationCommand::Resume { id } => {
-                if let Some(id) = id {
-                    self.validate_conversation_exists(&id).await?;
-                    self.state.conversation_id = Some(id);
-                    self.writeln_title(TitleFormat::info(format!("Resumed conversation: {id}")))?;
-                } else {
-                    // Resume last conversation if no ID provided
-                    self.writeln("Resuming last conversation...")?;
-                    // The logic for finding last conversation should go here
-                }
+                let conversation_id = match id {
+                    Some(id) => {
+                        self.validate_conversation_exists(&id).await?;
+                        id
+                    }
+                    None => self.last_conversation_id_or_err().await?,
+                };
+
+                self.state.conversation_id = Some(conversation_id);
+                self.writeln_title(TitleFormat::info(format!(
+                    "Resumed conversation: {conversation_id}"
+                )))?;
                 // Interactive mode will be handled by the main loop
             }
             ConversationCommand::Show { id } => {
@@ -867,13 +873,13 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             select_items.extend(
                 suggested
                     .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p.0))),
+                    .map(|p| SelectItem::Provider(Box::new(p))),
             );
             select_items.push(SelectItem::Separator);
             select_items.extend(
                 others
                     .into_iter()
-                    .map(|p| SelectItem::Provider(Box::new(p.0))),
+                    .map(|p| SelectItem::Provider(Box::new(p))),
             );
 
             // Use the centralized select module
@@ -881,7 +887,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
                 .prompt()?
             {
-                Some(SelectItem::Provider(provider)) => *provider,
+                Some(SelectItem::Provider(provider)) => provider.0,
                 _ => {
                     self.writeln_title(TitleFormat::info("Cancelled"))?;
                     return Ok(());
@@ -1631,8 +1637,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Sage => {
                 self.on_agent_change(AgentId::SAGE).await?;
             }
-            SlashCommand::Forge => {
-                self.on_agent_change(AgentId::FORGE).await?;
+            SlashCommand::Paws => {
+                self.on_agent_change(AgentId::PAWS).await?;
+            }
+            SlashCommand::AgentSwitch(agent_id) => {
+                let agent_id = AgentId::from(agent_id.as_str());
+                self.on_agent_change(agent_id).await?;
             }
             SlashCommand::Help => {
                 let info = Info::from(self.command.as_ref());
@@ -1728,21 +1738,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
-            SlashCommand::AgentSwitch(agent_id) => {
-                // Validate that the agent exists by checking against loaded agents
-                let agents = self.api.get_agents().await?;
-                let agent_exists = agents.iter().any(|agent| agent.id.as_str() == agent_id);
-
-                if agent_exists {
-                    self.on_agent_change(AgentId::new(agent_id)).await?;
-                } else {
-                    return Err(anyhow::anyhow!(
-                        "Agent '{agent_id}' not found or unavailable"
-                    ));
-                }
-            }
             SlashCommand::Resize => {
                 return Ok(false);
+            }
+            SlashCommand::Transcript => {
+                if let Some(conversation_id) = self.state.conversation_id
+                    && let Some(conversation) = self.api.conversation(&conversation_id).await?
+                {
+                    let mut renderer = TranscriptRenderer::new(
+                        self.state.cwd.clone(),
+                        self.api.environment().clone(),
+                    );
+                    renderer.run(conversation).await?;
+                }
             }
         }
 
@@ -1767,16 +1775,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     async fn handle_resume_conversation(&mut self) -> anyhow::Result<()> {
-        let last_conversation = self
-            .api
-            .last_conversation()
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+        let conversation_id = self.last_conversation_id_or_err().await?;
 
-        self.state.conversation_id = Some(last_conversation.id);
+        self.state.conversation_id = Some(conversation_id);
         self.writeln_title(TitleFormat::info(format!(
             "Resumed conversation: {}",
-            last_conversation.id
+            conversation_id
         )))?;
         Ok(())
     }
@@ -2297,6 +2301,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     ///
     /// Displays initialization status and updates UI state with the
     /// conversation ID.
+
+    /// Retrieves the ID of the last conversation.
+    ///
+    /// # Errors
+    /// Returns an error if no conversation is found to resume.
+    async fn last_conversation_id_or_err(&self) -> Result<ConversationId> {
+        let last_conversation = self
+            .api
+            .last_conversation()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No conversation found to resume"))?;
+        Ok(last_conversation.id)
+    }
+
     async fn init_conversation(&mut self) -> Result<ConversationId> {
         // Set agent if provided via CLI
         if let Some(agent_id) = self.cli.agent.clone() {
@@ -2316,6 +2334,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 is_new = true;
             }
             id
+        } else if self.cli.resume {
+            // Resume the last conversation
+            self.last_conversation_id_or_err().await?
         } else if let Some(ref path) = self.cli.conversation {
             let conversation: Conversation =
                 serde_json::from_str(PawsFS::read_utf8(path.as_os_str()).await?.as_str())
@@ -2961,6 +2982,42 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         Ok(())
     }
+
+    fn format_user_message(&self, message: &TextMessage) -> Vec<String> {
+        let content = &message.content;
+        let content_to_show = message
+            .raw_content
+            .as_ref()
+            .and_then(|v| v.as_user_prompt())
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| content.clone());
+
+        let paws_prompt = PawsPrompt {
+            cwd: self.state.cwd.clone(),
+            agent_id: AgentId::default(),
+            model: message.model.clone(),
+            git_branch: None,
+        };
+        let full_prompt = paws_prompt.render_prompt();
+
+        let mut lines = Vec::new();
+        lines.push("".to_string());
+        if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
+            lines.push(header.to_string());
+            for line in content_to_show.lines() {
+                lines.push(format!("{}{}", prefix, line));
+            }
+        } else {
+            lines.push(full_prompt);
+            for line in content_to_show.lines() {
+                lines.push(format!("{} {}", "┃".white().bold(), line));
+            }
+        }
+        lines
+    }
+
+    /// Renders a header for the transcript view showing conversation metadata
+    /// and controls.
     /// Prints the conversation history
     async fn on_print_conversation(&mut self, conversation: Conversation) -> Result<()> {
         let Some(context) = conversation.context else {
@@ -2970,44 +3027,23 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.markdown = MarkdownWriter::new();
         for message in &context.messages {
             match &**message {
-                ContextMessage::Text(TextMessage { content, role, tool_calls, model, .. }) => {
-                    match role {
+                ContextMessage::Text(text_message) => {
+                    match text_message.role {
                         Role::User => {
-                            let content_to_show = message
-                                .as_value()
-                                .and_then(|v| v.as_user_prompt())
-                                .map(|p| p.as_str().to_string())
-                                .unwrap_or_else(|| content.clone());
-
-                            let paws_prompt = PawsPrompt {
-                                cwd: self.state.cwd.clone(),
-                                agent_id: AgentId::default(),
-                                model: model.clone(),
-                                git_branch: None,
-                            };
-                            let full_prompt = paws_prompt.render_prompt();
-
-                            self.writeln("")?;
-                            if let Some((header, prefix)) = full_prompt.rsplit_once('\n') {
-                                self.writeln(header)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{}{}", prefix, line))?;
-                                }
-                            } else {
-                                self.writeln(full_prompt)?;
-                                for line in content_to_show.lines() {
-                                    self.writeln(format!("{} {}", "┃".white().bold(), line))?;
-                                }
+                            let lines = self.format_user_message(text_message);
+                            for line in lines {
+                                self.writeln(line)?;
                             }
                             self.writeln("")?;
                         }
                         Role::Assistant => {
-                            if !content.is_empty() {
-                                self.markdown.add_chunk(content, &mut self.spinner)?;
+                            if !text_message.content.is_empty() {
+                                self.markdown
+                                    .add_chunk(&text_message.content, &mut self.spinner)?;
                                 self.markdown.reset();
                             }
                             // Show tool calls if any
-                            if let Some(calls) = tool_calls {
+                            if let Some(calls) = &text_message.tool_calls {
                                 for call in calls {
                                     if let Ok(catalog) = ToolCatalog::try_from(call.clone())
                                         && let Some(content) =

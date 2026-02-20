@@ -1,13 +1,34 @@
-<h1 align="center">Paws</h1>
-<p align="center">Simplified wersion of forge</p>
-
-Do check original ![forge](https://github.com/antimonyhq/forge)
 
 [![CI Status](https://img.shields.io/github/actions/workflow/status/manthanabc/paws/ci.yml?style=for-the-badge)](https://github.com/manthanabc/paws/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/manthanabc/paws?style=for-the-badge)](https://github.com/manthanabc/paws/releases)
- 
+[![Discord](https://img.shields.io/discord/1450204700212199616?style=for-the-badge&cacheSeconds=120&logo=discord)](
+https://discord.gg/9EGrd4s9fe)
+
+
+<h1 align="center">Paws</h1>
+<p align="center">Simplified wersion of forge</p>
+
+Do check the original [forge](https://github.com/antinomyhq/forge).
+
+<img width="901" height="592" alt="screenshot" src="https://github.com/user-attachments/assets/8f6dd4ee-fe36-4078-8eec-35acfd5c5198" />
+
 [![asciicast](https://asciinema.org/a/Ahhq0trN61YSHssd.svg)](https://asciinema.org/a/Ahhq0trN61YSHssd)
 ---
+
+## Quickstart
+
+To get started with Paws, run the command below:
+
+```bash
+npx pawscode@latest
+```
+
+Or install globally:
+
+```bash
+npm install -g pawscode
+```
+
 <summary>About fork</summary>
 
 Difference so far-
@@ -34,9 +55,11 @@ Planned -
  
 Updates -
  Additional provideres
- - [X] Xiomi (free mimo v2-flash)
+ - [X] Xiomi (mimo v2-flash)
+ - [X] Nvidia Nim (GLM 5, GLM 4.7, MinMax M2.1, Qwen coder )(40 RPM)
+ - [WIP] Qwencode oauth (qwen coder model) (60 RPM afaik)  
  - [X] AI studio (free all models from google under free tier limit)
- - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle)
+ - [X] Opencode Zen (free to use models: glm 4.7, grok code fast 1, big pickle, kimi 2.5, glm 4.7)
  - [X] Copilot (free to use gpt 5 mini, claude haiku 4.5, grok code fast 1) 
  - [X] Gemini (Everything in AI studio but in native format)
  - [X] Antigravity via [antigravity-claude-proxy](https://github.com/badrisnarayanan/antigravity-claude-proxy) (free to use gemini 3 pro (high), gemini flash latest, claude opus 4.5, claude sonnet 4.5, Gpt oss 120B)
@@ -484,7 +507,6 @@ FORGE_HTTP_READ_TIMEOUT=900                # Read timeout in seconds (default: 9
 FORGE_HTTP_POOL_IDLE_TIMEOUT=90            # Pool idle timeout in seconds (default: 90)
 FORGE_HTTP_POOL_MAX_IDLE_PER_HOST=5        # Max idle connections per host (default: 5)
 FORGE_HTTP_MAX_REDIRECTS=10                # Maximum redirects to follow (default: 10)
-FORGE_HTTP_USE_HICKORY=false               # Use Hickory DNS resolver (default: false)
 FORGE_HTTP_TLS_BACKEND=default             # TLS backend: "default" or "rustls" (default: "default")
 FORGE_HTTP_MIN_TLS_VERSION=1.2             # Minimum TLS version: "1.0", "1.1", "1.2", "1.3"
 FORGE_HTTP_MAX_TLS_VERSION=1.3             # Maximum TLS version: "1.0", "1.1", "1.2", "1.3"

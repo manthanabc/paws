@@ -2,14 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use paws_app::HttpClientService;
-use paws_app::domain::{
-    ChatCompletionMessage, Context, Model, ModelId, ResultStream, RetryConfig, Transformer,
-};
+use paws_app::domain::{ChatCompletionMessage, Context, Model, ModelId, ResultStream, Transformer};
 use paws_app::dto::anthropic::{
-    AuthSystemMessage, CapitalizeToolNames, DropInvalidToolUse, EventData, ListModelResponse,
-    ReasoningTransform, Request, SetCache,
+    AuthSystemMessage, DropInvalidToolUse, EventData, ListModelResponse, ReasoningTransform,
+    Request, SetCache,
 };
-use paws_domain::Provider;
 use reqwest::Url;
 use tracing::debug;
 
@@ -61,7 +58,7 @@ impl<H: HttpClientService> Anthropic<H> {
             // OAuth requires multiple beta flags
             headers.push((
                 "anthropic-beta".to_string(),
-                "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14".to_string(),
+                "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14".to_string(),
             ));
         } else {
             headers.push(("x-api-key".to_string(), self.api_key.clone()));
@@ -78,7 +75,7 @@ impl<T: HttpClientService> Anthropic<T> {
         context: Context,
     ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
         let max_tokens = context.max_tokens.unwrap_or(4000);
-        // transform the context to match the request format
+        // transform context to match request format
         let context = ReasoningTransform.transform(context);
 
         let request = Request::try_from(context)?
@@ -87,7 +84,6 @@ impl<T: HttpClientService> Anthropic<T> {
 
         let request = AuthSystemMessage::default()
             .when(|_| self.use_oauth)
-            .pipe(CapitalizeToolNames)
             .pipe(DropInvalidToolUse)
             .pipe(SetCache)
             .transform(request);
@@ -141,7 +137,7 @@ impl<T: HttpClientService> Anthropic<T> {
                     // treat non 200 response as error.
                     Err(anyhow::anyhow!(text))
                         .with_context(|| ctx_msg)
-                        .with_context(|| "Failed to fetch the models")
+                        .with_context(|| "Failed to fetch models")
                 }
             }
             paws_domain::ModelSource::Hardcoded(models) => {
@@ -152,48 +148,10 @@ impl<T: HttpClientService> Anthropic<T> {
     }
 }
 
-/// Creates an Anthropic client from a provider configuration
-#[allow(dead_code)]
-pub fn create_anthropic_client<F: HttpClientService>(
-    infra: Arc<F>,
-    provider: &Provider<Url>,
-    _retry_config: Arc<RetryConfig>,
-) -> anyhow::Result<Anthropic<F>> {
-    let chat_url = provider.url.clone();
-    let models = provider
-        .models
-        .clone()
-        .context("Anthropic requires models configuration")?;
-    let creds = provider
-        .credential
-        .as_ref()
-        .context("Anthropic provider requires credentials")?
-        .auth_details
-        .clone();
-
-    let (key, is_oauth) = match creds {
-        paws_domain::AuthDetails::ApiKey(api_key) => (api_key.as_str().to_string(), false),
-        paws_domain::AuthDetails::OAuth { tokens, .. } => {
-            (tokens.access_token.as_str().to_string(), true)
-        }
-        _ => anyhow::bail!("Unsupported authentication method for Anthropic provider"),
-    };
-
-    Ok(Anthropic::new(
-        infra,
-        key,
-        chat_url,
-        models,
-        "2023-06-01".to_string(),
-        is_oauth,
-    ))
-}
-
 #[cfg(test)]
 mod tests {
 
     use bytes::Bytes;
-    use paws_app::HttpClientService;
     use paws_app::domain::{
         Context, ContextMessage, ToolCallFull, ToolCallId, ToolChoice, ToolName, ToolOutput,
         ToolResult,
@@ -204,7 +162,7 @@ mod tests {
     use super::*;
     use crate::provider::mock_server::{MockServer, normalize_ports};
 
-    // Mock implementation of HttpInfra for testing
+    // Mock implementation of HttpClientService for testing
     #[derive(Clone)]
     struct MockHttpClient {
         client: reqwest::Client,
@@ -217,8 +175,8 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl paws_app::HttpInfra for MockHttpClient {
-        async fn http_get(
+    impl HttpClientService for MockHttpClient {
+        async fn get(
             &self,
             url: &Url,
             headers: Option<HeaderMap>,
@@ -230,21 +188,21 @@ mod tests {
             Ok(request.send().await?)
         }
 
-        async fn http_post(&self, _url: &Url, _body: Bytes) -> anyhow::Result<reqwest::Response> {
+        async fn post(&self, _url: &Url, _body: Bytes) -> anyhow::Result<reqwest::Response> {
             unimplemented!()
         }
 
-        async fn http_delete(&self, _url: &Url) -> anyhow::Result<reqwest::Response> {
+        async fn delete(&self, _url: &Url) -> anyhow::Result<reqwest::Response> {
             unimplemented!()
         }
 
-        async fn http_eventsource(
+        async fn eventsource(
             &self,
             _url: &Url,
             _headers: Option<HeaderMap>,
             _body: Bytes,
         ) -> anyhow::Result<EventSource> {
-            // For now, return an error since eventsource is not used in the failing tests
+            // For now, return an error since eventsource is not used in failing tests
             Err(anyhow::anyhow!("EventSource not implemented in mock"))
         }
     }
@@ -331,7 +289,7 @@ mod tests {
                 model_id.clone().into(),
             ))
             .add_message(ContextMessage::assistant(
-                "here is the system call.",
+                "here is system call.",
                 None,
                 Some(vec![ToolCallFull {
                     name: ToolName::new("math"),
@@ -364,7 +322,7 @@ mod tests {
 
         mock.assert_async().await;
 
-        // Verify we got the expected models
+        // Verify we got expected models
         assert_eq!(actual.len(), 2);
         insta::assert_json_snapshot!(actual);
         Ok(())

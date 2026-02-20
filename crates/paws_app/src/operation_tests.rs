@@ -519,7 +519,7 @@ fn test_fs_search_output() {
     let env = fixture_environment(); // max_search_lines is 25
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -559,7 +559,7 @@ fn test_fs_search_max_output() {
     env.max_search_lines = 10;
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -601,7 +601,7 @@ fn test_fs_search_min_lines_but_max_line_length() {
     env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -646,7 +646,7 @@ fn test_fs_search_very_lengthy_one_line_match() {
     env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -671,7 +671,7 @@ fn test_fs_search_no_matches() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -761,7 +761,7 @@ fn test_fs_search_with_results() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),
@@ -786,7 +786,7 @@ fn test_fs_search_no_results() {
     let env = fixture_environment();
 
     let actual = fixture.into_tool_output(
-        ToolKind::FsSearch,
+        ToolKind::Search,
         TempContentFiles::default(),
         &env,
         &mut Metrics::default(),

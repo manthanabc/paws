@@ -91,8 +91,8 @@ mod tests {
     use std::sync::Mutex;
 
     use paws_domain::{
-        AnyProvider, AppConfig, InputModality, MigrationResult, Model, ModelSource,
-        Provider, ProviderId, ProviderResponse, ProviderTemplate,
+        AnyProvider, AppConfig, AuthCredential, AuthDetails, ApiKey, InputModality, MigrationResult,
+        Model, ModelSource, ProviderId, ProviderResponse,
     };
     use pretty_assertions::assert_eq;
     use url::Url;
@@ -115,11 +115,9 @@ mod tests {
                         provider_type: Default::default(),
                         response: Some(ProviderResponse::OpenAI),
                         url: Url::parse("https://api.openai.com").unwrap(),
-                        credential: Some(paws_domain::AuthCredential {
+                        credential: Some(AuthCredential {
                             id: ProviderId::OPENAI,
-                            auth_details: paws_domain::AuthDetails::ApiKey(
-                                paws_domain::ApiKey::from("test-key".to_string()),
-                            ),
+                            auth_details: AuthDetails::ApiKey(ApiKey::from("test-key".to_string())),
                             url_params: HashMap::new(),
                         }),
                         auth_methods: vec![paws_domain::AuthMethod::ApiKey],
@@ -142,11 +140,9 @@ mod tests {
                         url: Url::parse("https://api.anthropic.com").unwrap(),
                         auth_methods: vec![paws_domain::AuthMethod::ApiKey],
                         url_params: vec![],
-                        credential: Some(paws_domain::AuthCredential {
+                        credential: Some(AuthCredential {
                             id: ProviderId::ANTHROPIC,
-                            auth_details: paws_domain::AuthDetails::ApiKey(
-                                paws_domain::ApiKey::from("test-key".to_string()),
-                            ),
+                            auth_details: AuthDetails::ApiKey(ApiKey::from("test-key".to_string())),
                             url_params: HashMap::new(),
                         }),
                         models: Some(ModelSource::Hardcoded(vec![Model {
@@ -197,7 +193,7 @@ mod tests {
 
         async fn upsert_credential(
             &self,
-            _credential: paws_domain::AuthCredential,
+            _credential: AuthCredential,
         ) -> anyhow::Result<()> {
             Ok(())
         }
@@ -205,7 +201,7 @@ mod tests {
         async fn get_credential(
             &self,
             _id: &ProviderId,
-        ) -> anyhow::Result<Option<paws_domain::AuthCredential>> {
+        ) -> anyhow::Result<Option<AuthCredential>> {
             Ok(None)
         }
 

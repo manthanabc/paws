@@ -124,8 +124,7 @@ jobs:
     strategy:
       matrix:
         repository:
-        - antinomyhq/npm-code-paws
-        - antinomyhq/npm-pawscode
+        - manthanabc/npm-paws
     steps:
     - name: Checkout Code
       uses: actions/checkout@v6

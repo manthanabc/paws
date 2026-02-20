@@ -45,7 +45,7 @@ fi
 VERSION="${1:-latest}"
 
 # Construct download URL
-DOWNLOAD_URL="https://eeeeee.eeee/download/$VERSION/paws-$ARCH-unknown-linux$LIBC_SUFFIX"
+DOWNLOAD_URL="https://github.com/manthanabc/paws/releases/download/$VERSION/paws-$ARCH-unknown-linux$LIBC_SUFFIX"
 
 # Create temp directory
 TMP_DIR=$(mktemp -d)

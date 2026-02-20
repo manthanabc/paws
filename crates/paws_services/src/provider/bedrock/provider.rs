@@ -809,15 +809,15 @@ impl FromDomain<paws_domain::ContextMessage> for aws_sdk_bedrockruntime::types::
     }
 }
 
-/// Converts schemars RootSchema to AWS Bedrock ToolInputSchema
-impl FromDomain<schemars::schema::RootSchema> for aws_sdk_bedrockruntime::types::ToolInputSchema {
-    fn from_domain(schema: schemars::schema::RootSchema) -> anyhow::Result<Self> {
+/// Converts schemars Schema to AWS Bedrock ToolInputSchema
+impl FromDomain<schemars::Schema> for aws_sdk_bedrockruntime::types::ToolInputSchema {
+    fn from_domain(schema: schemars::Schema) -> anyhow::Result<Self> {
         use anyhow::Context as _;
         use aws_sdk_bedrockruntime::types::ToolInputSchema;
 
-        // Serialize RootSchema to JSON value first
+        // Serialize Schema to JSON value first
         let json_value =
-            serde_json::to_value(&schema).with_context(|| "Failed to serialize RootSchema")?;
+            serde_json::to_value(&schema).with_context(|| "Failed to serialize Schema")?;
 
         // Convert JSON value to Document and wrap in ToolInputSchema
         Ok(ToolInputSchema::Json(json_value_to_document(json_value)))
@@ -1416,12 +1416,11 @@ mod tests {
     fn test_from_domain_tool_definition() {
         use aws_sdk_bedrockruntime::types::Tool;
         use paws_domain::ToolDefinition;
-        use schemars::schema::{RootSchema, SchemaObject};
 
         let fixture = ToolDefinition {
             name: paws_domain::ToolName::new("test_tool"),
             description: "A test tool".to_string(),
-            input_schema: RootSchema { schema: SchemaObject::default(), ..Default::default() },
+            input_schema: schemars::json_schema!({ "type": "object" }),
         };
 
         let actual = Tool::from_domain(fixture).unwrap();

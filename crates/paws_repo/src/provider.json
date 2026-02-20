@@ -89,6 +89,16 @@
     "auth_methods": ["api_key"]
   },
   {
+    "id": "nvidia_nim",
+    "api_key_vars": "NVIDIA_NIM_API_KEY",
+    "response_type": "OpenAI",
+    "url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "models": "https://integrate.api.nvidia.com/v1/models",
+    "auth_methods": [
+      "api_key"
+    ]
+  },
+  {
     "id": "anthropic",
     "api_key_vars": "ANTHROPIC_API_KEY",
     "url_param_vars": [],

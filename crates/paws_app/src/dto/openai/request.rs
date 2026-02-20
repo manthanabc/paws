@@ -750,20 +750,11 @@ mod tests {
     fn test_tool_definition_conversion_missing_properties() {
         // Test case where input_schema is an object type but missing properties field
         let fixture = {
-            let mut schema = schemars::schema_for!(());
-            // Create an object schema without properties field
-            schema.schema.object = Some(Box::new(schemars::schema::ObjectValidation {
-                max_properties: None,
-                min_properties: None,
-                required: Default::default(),
-                properties: Default::default(), // Empty properties map
-                pattern_properties: Default::default(),
-                additional_properties: None,
-                property_names: None,
-            }));
-            schema.schema.instance_type = Some(schemars::schema::SingleOrVec::Single(Box::new(
-                schemars::schema::InstanceType::Object,
-            )));
+            // Create an object schema without properties field using json_schema! macro
+            let schema = schemars::json_schema!({
+                "type": "object",
+                "properties": {}
+            });
 
             ToolDefinition::new("test_tool")
                 .description("Test tool")
@@ -778,9 +769,7 @@ mod tests {
                 description: Some("Test tool".to_string()),
                 name: "test_tool".to_string(),
                 parameters: serde_json::json!({
-                    "$schema": "http://json-schema.org/draft-07/schema#",
                     "properties": {},
-                    "title": "Null",
                     "type": "object"
                 }),
             },

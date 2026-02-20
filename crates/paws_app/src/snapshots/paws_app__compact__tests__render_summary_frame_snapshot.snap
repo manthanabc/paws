@@ -123,6 +123,7 @@ I see - there are other transformer files that also use the old API. Let me fix 
 ````
 Good! Now let me check the other files that have compilation errors. Let me search for files that use `SummaryMessageBlock`:
 ````
+**Search:** `SummaryMessageBlock\s*\{`
 ````
 Let me check and fix those files:
 ````
@@ -134,6 +135,7 @@ Let me fix this file:
 ````
 Now let me check the trim_context_summary.rs file:
 ````
+**Search:** `Block::(default|read|update|remove)`
 ````
 This file has many uses of the old API. Let me read a section to understand the structure better:
 ````
@@ -249,6 +251,7 @@ There are still errors in other transformer files. Let me quickly fix `strip_wor
 ````
 Now let me search for all other uses of `Block::read`, `Block::update`, and `Block::remove` in that file and fix them:
 ````
+**Search:** `Block::(read|update|remove)\(`
 ````
 There are many more uses. Let me use a more efficient approach and fix them all at once with a replace_all operation:
 ````

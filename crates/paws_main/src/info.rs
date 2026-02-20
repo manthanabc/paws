@@ -342,7 +342,6 @@ impl From<&Environment> for Info {
             )
             .add_key_value("Pool Max Idle", env.http.pool_max_idle_per_host.to_string())
             .add_key_value("Max Redirects", env.http.max_redirects.to_string())
-            .add_key_value("Use Hickory DNS", env.http.hickory.to_string())
             .add_key_value("TLS Backend", format!("{}", env.http.tls_backend))
             .add_key_value(
                 "Min TLS Version",
@@ -715,7 +714,7 @@ pub fn format_reset_time(seconds: u64) -> String {
 }
 
 /// Extracts the first line of raw content from a context message.
-fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
+pub(crate) fn format_user_message(msg: &paws_api::ContextMessage) -> Option<String> {
     let content = msg
         .as_value()
         .and_then(|v| v.as_user_prompt())

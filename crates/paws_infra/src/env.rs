@@ -231,9 +231,6 @@ fn resolve_http_config() -> paws_domain::HttpConfig {
     if let Some(parsed) = parse_env::<usize>("FORGE_HTTP_MAX_REDIRECTS") {
         config.max_redirects = parsed;
     }
-    if let Some(parsed) = parse_env::<bool>("FORGE_HTTP_USE_HICKORY") {
-        config.hickory = parsed;
-    }
     if let Some(parsed) = parse_env::<TlsBackend>("FORGE_HTTP_TLS_BACKEND") {
         config.tls_backend = parsed;
     }
@@ -328,7 +325,6 @@ mod tests {
             "FORGE_HTTP_POOL_IDLE_TIMEOUT",
             "FORGE_HTTP_POOL_MAX_IDLE_PER_HOST",
             "FORGE_HTTP_MAX_REDIRECTS",
-            "FORGE_HTTP_USE_HICKORY",
             "FORGE_HTTP_TLS_BACKEND",
             "FORGE_HTTP_MIN_TLS_VERSION",
             "FORGE_HTTP_MAX_TLS_VERSION",
@@ -443,14 +439,12 @@ mod tests {
         assert_eq!(actual.connect_timeout, expected.connect_timeout);
         assert_eq!(actual.read_timeout, expected.read_timeout);
         assert_eq!(actual.tls_backend, expected.tls_backend);
-        assert_eq!(actual.hickory, expected.hickory);
         assert_eq!(actual.accept_invalid_certs, expected.accept_invalid_certs);
         assert_eq!(actual.root_cert_paths, expected.root_cert_paths);
 
         // Test environment variable overrides
         unsafe {
             env::set_var("FORGE_HTTP_CONNECT_TIMEOUT", "30");
-            env::set_var("FORGE_HTTP_USE_HICKORY", "true");
             env::set_var("FORGE_HTTP_TLS_BACKEND", "rustls");
             env::set_var("FORGE_HTTP_MIN_TLS_VERSION", "1.2");
             env::set_var("FORGE_HTTP_KEEP_ALIVE_INTERVAL", "30");
@@ -463,7 +457,6 @@ mod tests {
 
         let actual = resolve_http_config();
         assert_eq!(actual.connect_timeout, 30);
-        assert!(actual.hickory);
         assert_eq!(actual.tls_backend, TlsBackend::Rustls);
         assert_eq!(actual.min_tls_version, Some(TlsVersion::V1_2));
         assert_eq!(actual.keep_alive_interval, Some(30));

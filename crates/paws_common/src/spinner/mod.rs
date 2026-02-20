@@ -7,7 +7,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::style::{Attribute, Stylize, style};
 use crossterm::terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode};
 use crossterm::{cursor, execute};
-use rand::seq::SliceRandom;
+use rand::prelude::IndexedRandom;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
@@ -66,9 +66,9 @@ impl SpinnerManager {
         let (ctrl_c_tx, ctrl_c_rx) = broadcast::channel(1);
 
         let handle = tokio::spawn(async move {
-            let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let spinner_frames: [&str; 5] = ["⠋", "⠹", "⠼", "⠦", "⠇"];
             let mut idx: usize = 0;
-            let tick = Duration::from_millis(60);
+            let tick = Duration::from_millis(120);
             let mut last = std::time::Instant::now();
             let mut start_time = std::time::Instant::now();
             let mut status_text = String::new();
@@ -104,14 +104,14 @@ impl SpinnerManager {
                                 cursor::MoveToColumn(0),
                                 Clear(ClearType::CurrentLine)
                             ));
-                            println!("{}", s);
+                            println!("\r{}", s);
                             if !hidden {
                                 let elapsed = start_time.elapsed().as_secs();
                                 render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                             }
                             let _ = io::stdout().flush();
                         } else {
-                            println!("{}", s);
+                            println!("\r{}", s);
                         }
                     }
                     Ok(Cmd::Hide) => {
@@ -213,7 +213,7 @@ impl SpinnerManager {
 
         // Use a random word from the list
         let word = match message {
-            None => words.choose(&mut rand::thread_rng()).unwrap_or(&words[0]),
+            None => words.choose(&mut rand::rng()).unwrap_or(&words[0]),
             Some(msg) => msg,
         };
         let status_text = word.to_string();

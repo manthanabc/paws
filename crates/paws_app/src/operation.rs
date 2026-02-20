@@ -34,7 +34,6 @@ pub enum ToolOperation {
         output: ReadOutput,
     },
     ImageRead {
-        _input: paws_domain::ReadImage,
         output: paws_domain::Image,
     },
     FsCreate {
@@ -221,7 +220,7 @@ impl ToolOperation {
 
                 paws_domain::ToolOutput::text(elm)
             }
-            ToolOperation::ImageRead { _input: _, output } => paws_domain::ToolOutput::image(output),
+            ToolOperation::ImageRead { output } => paws_domain::ToolOutput::image(output),
             ToolOperation::FsCreate { input, output } => {
                 let diff_result = DiffFormat::format(
                     output.before.as_ref().unwrap_or(&"".to_string()),

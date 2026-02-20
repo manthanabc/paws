@@ -1,4 +1,5 @@
 #![allow(clippy::enum_variant_names)]
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -6,8 +7,7 @@ use convert_case::{Case, Casing};
 use derive_more::From;
 use eserde::Deserialize;
 use paws_tool_macros::ToolDescription;
-use schemars::JsonSchema;
-use schemars::schema::RootSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::Serialize;
 use serde_json::Map;
 use strum::IntoEnumIterator;
@@ -43,8 +43,7 @@ pub enum ToolCatalog {
     ReadImage(ReadImage),
     #[serde(alias = "Write")]
     Write(FSWrite),
-    FsSearch(FSSearch),
-    SemSearch(SemanticSearch),
+    Search(FSSearch),
     Remove(FSRemove),
     Patch(FSPatch),
     Undo(FSUndo),
@@ -232,26 +231,24 @@ pub enum PatchOperation {
 
 // TODO: do the Blanket impl for all the unit enums
 impl JsonSchema for PatchOperation {
-    fn schema_name() -> String {
-        std::any::type_name::<Self>()
-            .split("::")
-            .last()
-            .unwrap_or("PatchOperation")
-            .to_string()
+    fn schema_name() -> Cow<'static, str> {
+        // Use Borrowed to avoid allocation since we're using a static string
+        Cow::Borrowed(
+            std::any::type_name::<Self>()
+                .split("::")
+                .last()
+                .unwrap_or("PatchOperation"),
+        )
     }
 
-    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::{InstanceType, Schema, SchemaObject};
+    fn json_schema(_gen: &mut SchemaGenerator) -> Schema {
         let variants: Vec<serde_json::Value> = Self::iter()
             .map(|variant| variant.as_ref().to_case(Case::Snake).into())
             .collect();
-        Schema::Object(SchemaObject {
-            instance_type: Some(InstanceType::String.into()),
-            enum_values: Some(variants),
-            metadata: Some(Box::new(schemars::schema::Metadata {
-                ..Default::default()
-            })),
-            ..Default::default()
+
+        schemars::json_schema!({
+            "type": "string",
+            "enum": variants
         })
     }
 }
@@ -475,8 +472,7 @@ impl ToolDescription for ToolCatalog {
             ToolCatalog::Shell(v) => v.description(),
             ToolCatalog::Followup(v) => v.description(),
             ToolCatalog::Fetch(v) => v.description(),
-            ToolCatalog::FsSearch(v) => v.description(),
-            ToolCatalog::SemSearch(v) => v.description(),
+            ToolCatalog::Search(v) => v.description(),
             ToolCatalog::Read(v) => v.description(),
             ToolCatalog::ReadImage(v) => v.description(),
             ToolCatalog::Remove(v) => v.description(),
@@ -494,25 +490,11 @@ lazy_static::lazy_static! {
         .collect();
 }
 
-/// Normalizes tool names for backward compatibility
-/// Maps capitalized aliases to their lowercase canonical forms
-fn normalize_tool_name(name: &ToolName) -> ToolName {
-    match name.as_str() {
-        "Read" => ToolName::new("read"),
-        "Write" => ToolName::new("write"),
-        _ => name.clone(),
-    }
-}
-
 impl ToolCatalog {
-    pub fn schema(&self) -> RootSchema {
-        use schemars::r#gen::SchemaSettings;
+    pub fn schema(&self) -> Schema {
+        use schemars::generate::SchemaSettings;
         let r#gen = SchemaSettings::default()
             .with(|s| {
-                // incase of null, add nullable property.
-                s.option_nullable = true;
-                // incase of option type, don't add null in type.
-                s.option_add_null_type = false;
                 s.meta_schema = None;
                 s.inline_subschemas = true;
             })
@@ -522,8 +504,7 @@ impl ToolCatalog {
             ToolCatalog::Shell(_) => r#gen.into_root_schema_for::<Shell>(),
             ToolCatalog::Followup(_) => r#gen.into_root_schema_for::<Followup>(),
             ToolCatalog::Fetch(_) => r#gen.into_root_schema_for::<NetFetch>(),
-            ToolCatalog::FsSearch(_) => r#gen.into_root_schema_for::<FSSearch>(),
-            ToolCatalog::SemSearch(_) => r#gen.into_root_schema_for::<SemanticSearch>(),
+            ToolCatalog::Search(_) => r#gen.into_root_schema_for::<FSSearch>(),
             ToolCatalog::Read(_) => r#gen.into_root_schema_for::<FSRead>(),
             ToolCatalog::ReadImage(_) => r#gen.into_root_schema_for::<ReadImage>(),
             ToolCatalog::Remove(_) => r#gen.into_root_schema_for::<FSRemove>(),
@@ -540,23 +521,13 @@ impl ToolCatalog {
             .input_schema(self.schema())
     }
     pub fn contains(tool_name: &ToolName) -> bool {
-        let normalized = normalize_tool_name(tool_name);
-        FORGE_TOOLS.contains(&normalized)
+        FORGE_TOOLS.contains(tool_name)
     }
     pub fn should_yield(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
-        let normalized = normalize_tool_name(tool_name);
         [ToolKind::Followup]
             .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(normalized.as_str()))
-    }
-
-    pub fn requires_stdout(tool_name: &ToolName) -> bool {
-        // Tools that require direct stdout/stderr access
-        let normalized = normalize_tool_name(tool_name);
-        [ToolKind::Shell]
-            .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(normalized.as_str()))
+            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
 
     /// Convert a tool input to its corresponding domain operation for policy
@@ -591,7 +562,7 @@ impl ToolCatalog {
                 cwd,
                 message: format!("Create/overwrite file: {}", display_path_for(&input.path)),
             }),
-            ToolCatalog::FsSearch(input) => {
+            ToolCatalog::Search(input) => {
                 let base_message = format!(
                     "Search in directory/file: {}",
                     display_path_for(&input.path)
@@ -634,7 +605,6 @@ impl ToolCatalog {
                 message: format!("Fetch content from URL: {}", input.url),
             }),
             // Operations that don't require permission checks
-            ToolCatalog::SemSearch(_)
             | ToolCatalog::Undo(_)
             | ToolCatalog::Followup(_)
             | ToolCatalog::Plan(_)
@@ -696,21 +666,10 @@ impl ToolCatalog {
 
     /// Creates a Search tool call with the specified path and regex pattern
     pub fn tool_call_search(path: &str, regex: Option<&str>) -> ToolCallFull {
-        ToolCallFull::from(ToolCatalog::FsSearch(FSSearch {
+        ToolCallFull::from(ToolCatalog::Search(FSSearch {
             path: path.to_string(),
             regex: regex.map(|r| r.to_string()),
             ..Default::default()
-        }))
-    }
-
-    /// Creates a Semantic Search tool call with the specified queries
-    pub fn tool_call_semantic_search(
-        queries: Vec<SearchQuery>,
-        extensions: Vec<String>,
-    ) -> ToolCallFull {
-        ToolCallFull::from(ToolCatalog::SemSearch(SemanticSearch {
-            queries,
-            extensions,
         }))
     }
 
@@ -783,21 +742,7 @@ impl TryFrom<ToolCallFull> for ToolCatalog {
         let mut map = Map::new();
         map.insert("name".into(), value.name.as_str().into());
 
-        // Parse the arguments
-        let parsed_args = value.arguments.parse()?;
-
-        // Normalize the tool name for comparison
-        let normalized_name = normalize_tool_name(&value.name);
-        // Try to find the tool definition and coerce types based on schema
-        let coerced_args = ToolCatalog::iter()
-            .find(|tool| tool.definition().name == normalized_name)
-            .map(|tool| {
-                let schema = tool.definition().input_schema;
-                paws_common::json_repair::coerce_to_schema(parsed_args.clone(), &schema)
-            })
-            .unwrap_or(parsed_args);
-
-        map.insert("arguments".into(), coerced_args);
+        map.insert("arguments".into(), value.arguments.parse()?);
 
         serde_json::from_value(serde_json::Value::Object(map))
             .map_err(|error| crate::Error::AgentCallArgument { error })
@@ -858,18 +803,6 @@ mod tests {
     }
 
     #[test]
-    fn test_requires_stdout_for_shell() {
-        let fixture = ToolName::new("shell");
-        assert!(ToolCatalog::requires_stdout(&fixture));
-    }
-
-    #[test]
-    fn test_requires_stdout_for_non_shell() {
-        let fixture = ToolName::new("read");
-        assert!(!ToolCatalog::requires_stdout(&fixture));
-    }
-
-    #[test]
     fn test_tool_definition_json() {
         let tools = ToolCatalog::iter()
             .map(|tool| {
@@ -881,36 +814,6 @@ mod tests {
             .join("\n");
 
         insta::assert_snapshot!(tools);
-    }
-
-    #[test]
-    fn test_coerce_string_integers_to_i32() {
-        use crate::{ToolCallArguments, ToolCallFull};
-
-        // Simulate the exact error case: read tool with string integers instead of i32
-        let tool_call = ToolCallFull {
-            name: ToolName::new("read"),
-            call_id: None,
-            arguments: ToolCallArguments::from_json(
-                r#"{"path": "/test/path.rs", "start_line": "10", "end_line": "20"}"#,
-            ),
-        };
-
-        // This should not panic - it should coerce strings to integers
-        let actual = ToolCatalog::try_from(tool_call);
-
-        assert!(
-            actual.is_ok(),
-            "Should successfully parse with coerced types"
-        );
-
-        if let Ok(ToolCatalog::Read(fs_read)) = actual {
-            assert_eq!(fs_read.path, "/test/path.rs");
-            assert_eq!(fs_read.start_line, Some(10));
-            assert_eq!(fs_read.end_line, Some(20));
-        } else {
-            panic!("Expected FSRead variant");
-        }
     }
 
     #[test]
@@ -938,7 +841,7 @@ mod tests {
             assert_eq!(fs_read.start_line, Some(10));
             assert_eq!(fs_read.end_line, Some(20));
         } else {
-            panic!("Expected FSRead variant");
+            panic!("Expected Read variant");
         }
     }
 
@@ -1051,26 +954,13 @@ mod tests {
     }
 
     #[test]
-    fn test_contains_with_capitalized() {
-        // Test that capitalized versions are also found
-        assert!(
-            ToolCatalog::contains(&ToolName::new("Read")),
-            "Should contain capitalized 'Read'"
-        );
-        assert!(
-            ToolCatalog::contains(&ToolName::new("Write")),
-            "Should contain capitalized 'Write'"
-        );
-    }
-
-    #[test]
     fn test_fs_search_message_with_regex() {
         use std::path::PathBuf;
 
         use crate::FSSearch;
         use crate::policies::PermissionOperation;
 
-        let search_with_regex = ToolCatalog::FsSearch(FSSearch {
+        let search_with_regex = ToolCatalog::Search(FSSearch {
             path: "/home/user/project".to_string(),
             regex: Some("fn main".to_string()),
             start_index: None,
@@ -1100,7 +990,7 @@ mod tests {
         use crate::FSSearch;
         use crate::policies::PermissionOperation;
 
-        let search_without_regex = ToolCatalog::FsSearch(FSSearch {
+        let search_without_regex = ToolCatalog::Search(FSSearch {
             path: "/home/user/project".to_string(),
             regex: None,
             start_index: None,
@@ -1127,7 +1017,7 @@ mod tests {
         use crate::FSSearch;
         use crate::policies::PermissionOperation;
 
-        let search_with_pattern = ToolCatalog::FsSearch(FSSearch {
+        let search_with_pattern = ToolCatalog::Search(FSSearch {
             path: "/home/user/project".to_string(),
             regex: None,
             start_index: None,
@@ -1157,7 +1047,7 @@ mod tests {
         use crate::FSSearch;
         use crate::policies::PermissionOperation;
 
-        let search_with_both = ToolCatalog::FsSearch(FSSearch {
+        let search_with_both = ToolCatalog::Search(FSSearch {
             path: "/home/user/project".to_string(),
             regex: Some("fn main".to_string()),
             start_index: None,

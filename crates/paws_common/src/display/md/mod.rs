@@ -1,5 +1,6 @@
 mod ansi;
-mod render;
+pub mod render;
 mod writer;
 
+pub use render::MarkdownRenderer;
 pub use writer::*;

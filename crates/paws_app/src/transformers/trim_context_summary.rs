@@ -29,8 +29,6 @@ enum Operation<'a> {
     Plan(&'a str),
     /// Skill loading by name
     Skill(&'a str),
-    /// MCP tool execution by name
-    Mcp(&'a str),
 }
 
 /// Converts the tool call to its operation type for comparison.
@@ -49,7 +47,6 @@ fn to_op(tool: &SummaryTool) -> Operation<'_> {
         SummaryTool::Followup { question } => Operation::Followup(question),
         SummaryTool::Plan { plan_name } => Operation::Plan(plan_name),
         SummaryTool::Skill { name } => Operation::Skill(name),
-        SummaryTool::Mcp { name } => Operation::Mcp(name),
     }
 }
 

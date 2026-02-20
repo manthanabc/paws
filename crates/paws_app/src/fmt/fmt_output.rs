@@ -47,7 +47,7 @@ impl FormatContent for ToolOperation {
                 }
             }
             ToolOperation::FsRead { input: _, output: _ }
-            | ToolOperation::ImageRead { _input: _, output: _ }
+            | ToolOperation::ImageRead { output: _ }
             | ToolOperation::FsRemove { .. }
             | ToolOperation::FsSearch { .. }
             | ToolOperation::FsUndo { .. }
