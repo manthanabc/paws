@@ -149,6 +149,13 @@ pub enum TopLevelCommand {
 
     /// Process JSONL data through LLM with schema-constrained tools.
     Data(DataCommandGroup),
+
+    /// Start the API server.
+    Serve {
+        /// Port to listen on.
+        #[arg(long, default_value_t = 3000)]
+        port: u16,
+    },
 }
 
 /// Command group for custom command management.

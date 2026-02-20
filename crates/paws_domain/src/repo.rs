@@ -60,6 +60,21 @@ pub trait ConversationRepository: Send + Sync {
         conversation_id: &ConversationId,
     ) -> Result<Option<Conversation>>;
 
+    /// Retrieves all conversation summaries with an optional limit
+    ///
+    /// Returns lightweight summaries without the full context for faster
+    /// loading
+    ///
+    /// # Arguments
+    /// * `limit` - Optional maximum number of conversations to retrieve
+    ///
+    /// # Errors
+    /// Returns an error if the operation fails
+    async fn get_all_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<Option<Vec<crate::ConversationSummary>>>;
+
     /// Retrieves all conversations with an optional limit
     ///
     /// # Arguments

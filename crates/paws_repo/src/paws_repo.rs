@@ -117,6 +117,15 @@ impl<F: Send + Sync> ConversationRepository for PawsRepo<F> {
             .await
     }
 
+    async fn get_all_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<paws_domain::ConversationSummary>>> {
+        self.conversation_repository
+            .get_all_conversation_summaries(limit)
+            .await
+    }
+
     async fn get_last_conversation(&self) -> anyhow::Result<Option<Conversation>> {
         self.conversation_repository.get_last_conversation().await
     }

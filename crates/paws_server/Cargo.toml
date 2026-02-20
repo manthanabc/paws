@@ -1,0 +1,25 @@
+[package]
+name = "paws_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = { workspace = true }
+futures = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+paws_api = { workspace = true }
+paws_domain = { workspace = true }
+paws_app = { workspace = true }
+
+tokio-stream = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

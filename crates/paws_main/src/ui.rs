@@ -642,6 +642,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     self.writeln(data?)?;
                 }
             }
+            TopLevelCommand::Serve { port } => {
+                self.on_serve(port).await?;
+                return Ok(());
+            }
         }
         Ok(())
     }
@@ -1451,6 +1455,20 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let env = self.api.environment();
         let info = Info::from(&env);
         self.writeln(info)?;
+        Ok(())
+    }
+
+    /// Start the API server
+    async fn on_serve(&mut self, port: u16) -> anyhow::Result<()> {
+        use paws_server::Server;
+
+        self.writeln_title(TitleFormat::info(format!(
+            "Starting Paws API server on port {port}..."
+        )))?;
+
+        let server = Server::new(self.api.clone(), port);
+        server.run().await?;
+
         Ok(())
     }
 

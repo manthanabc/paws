@@ -38,6 +38,26 @@ impl FromStr for ConversationId {
     }
 }
 
+/// A lightweight summary of a conversation without the full context
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ConversationSummary {
+    pub id: ConversationId,
+    pub title: Option<String>,
+    pub metrics: Metrics,
+    pub metadata: MetaData,
+}
+
+impl From<Conversation> for ConversationSummary {
+    fn from(conversation: Conversation) -> Self {
+        Self {
+            id: conversation.id,
+            title: conversation.title,
+            metrics: conversation.metrics,
+            metadata: conversation.metadata,
+        }
+    }
+}
+
 #[derive(Debug, Setters, Serialize, Deserialize, Clone)]
 #[setters(into)]
 pub struct Conversation {

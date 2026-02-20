@@ -30,6 +30,9 @@ pub trait API: Sync + Send {
     /// Gets a provider by ID
     async fn get_provider(&self, id: &ProviderId) -> Result<AnyProvider>;
 
+    /// Gets models for a specific provider
+    async fn get_provider_models(&self, id: &ProviderId) -> Result<Vec<Model>>;
+
     /// Executes a chat request and returns a stream of responses
     async fn chat(&self, chat: ChatRequest) -> Result<MpscStream<Result<ChatResponse>>>;
 
@@ -54,6 +57,13 @@ pub trait API: Sync + Send {
 
     /// Returns the conversation with the given ID
     async fn conversation(&self, conversation_id: &ConversationId) -> Result<Option<Conversation>>;
+
+    /// Lists conversation summaries for the active workspace (lightweight, no
+    /// context)
+    async fn get_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> Result<Vec<ConversationSummary>>;
 
     /// Lists all conversations for the active workspace
     async fn get_conversations(&self, limit: Option<usize>) -> Result<Vec<Conversation>>;

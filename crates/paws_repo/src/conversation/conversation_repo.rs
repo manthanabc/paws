@@ -56,6 +56,61 @@ impl ConversationRepository for ConversationRepositoryImpl {
         }
     }
 
+    async fn get_all_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<paws_domain::ConversationSummary>>> {
+        let mut connection = self.pool.get_connection()?;
+
+        let workspace_id = self.wid.id() as i64;
+        let mut query = conversations::table
+            .filter(conversations::workspace_id.eq(&workspace_id))
+            .filter(conversations::context.is_not_null())
+            .order(conversations::updated_at.desc())
+            .into_boxed();
+
+        if let Some(limit_value) = limit {
+            query = query.limit(limit_value as i64);
+        }
+
+        let records: Vec<ConversationRecord> = query.load(&mut connection)?;
+
+        if records.is_empty() {
+            return Ok(None);
+        }
+
+        let summaries: Vec<paws_domain::ConversationSummary> = records
+            .into_iter()
+            .map(|record| {
+                // Deserialize metrics using MetricsRecord for proper type handling
+                let metrics = if let Some(text) = record.metrics {
+                    if let Ok(metrics_record) = serde_json::from_str::<
+                        crate::conversation::conversation_record::MetricsRecord,
+                    >(&text)
+                    {
+                        paws_domain::Metrics::from(metrics_record)
+                    } else {
+                        paws_domain::Metrics::default()
+                    }
+                } else {
+                    paws_domain::Metrics::default()
+                };
+
+                Ok(paws_domain::ConversationSummary {
+                    id: paws_domain::ConversationId::parse(record.conversation_id)?,
+                    title: record.title,
+                    metrics,
+                    metadata: paws_domain::MetaData {
+                        created_at: record.created_at.and_utc(),
+                        updated_at: record.updated_at.map(|dt| dt.and_utc()),
+                    },
+                })
+            })
+            .collect::<Result<_, anyhow::Error>>()?;
+
+        Ok(Some(summaries))
+    }
+
     async fn get_all_conversations(
         &self,
         limit: Option<usize>,

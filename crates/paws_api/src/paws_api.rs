@@ -86,6 +86,16 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
             .ok_or_else(|| Error::provider_not_available(id.clone()))?)
     }
 
+    async fn get_provider_models(&self, id: &ProviderId) -> Result<Vec<Model>> {
+        let provider = self.get_provider(id).await?;
+        // Only configured URL providers can fetch models
+        if let Some(configured) = provider.into_configured() {
+            Ok(self.services.models(configured).await?)
+        } else {
+            Ok(vec![])
+        }
+    }
+
     async fn chat(
         &self,
         chat: ChatRequest,
@@ -139,6 +149,17 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
         Ok(self
             .services
             .get_conversations(limit)
+            .await?
+            .unwrap_or_default())
+    }
+
+    async fn get_conversation_summaries(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Vec<ConversationSummary>> {
+        Ok(self
+            .services
+            .get_conversation_summaries(limit)
             .await?
             .unwrap_or_default())
     }
