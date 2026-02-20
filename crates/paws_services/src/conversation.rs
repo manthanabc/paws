@@ -66,4 +66,11 @@ impl<S: ConversationRepository> ConversationService for PawsConversationService<
             .delete_conversation(conversation_id)
             .await
     }
+
+    async fn undo_conversation(&self, conversation_id: &ConversationId) -> Result<bool> {
+        self.modify_conversation(conversation_id, |conversation| {
+            conversation.undo()
+        })
+        .await
+    }
 }
