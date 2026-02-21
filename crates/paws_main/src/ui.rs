@@ -389,12 +389,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     _ => {
                         let result = tokio::select! {
                             _ = tokio::signal::ctrl_c() => {
-                                self.spinner.stop(None)?;
                                 self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
                                 Ok(false)
                             }
                             _ = ctrl_c_rx.recv() => {
-                                self.spinner.stop(None)?;
                                 self.writeln_to_stderr(TitleFormat::info("Interrupted").display().to_string())?;
                                 Ok(false)
                             }
@@ -431,6 +429,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
             }
             // Centralized prompt call at the end of the loop
+            self.spinner.stop(None)?;
             command = self.prompt().await;
             self.markdown.reset();
         }
