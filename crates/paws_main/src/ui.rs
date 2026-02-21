@@ -321,8 +321,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         self.trace_user();
         self.hydrate_caches();
-        self.init_conversation().await?;
+        // Capture resume intent before init_conversation() runs, since CLI flags are not
+        // cleared by that call and we need to know whether to print context afterward.
+        let is_resuming = self.cli.resume
+            || self.cli.conversation_id.is_some()
+            || self.cli.conversation.is_some();
+        let conversation_id = self.init_conversation().await?;
         self.display_banner().await?;
+
+        if is_resuming {
+            self.print_conversation_context(conversation_id).await?;
+        }
 
         // Check for dispatch flag first
         if let Some(dispatch_json) = self.cli.event.clone() {
@@ -409,14 +418,27 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         println!("\x1b[3J\x1b[2J\x1b[H");
         eprintln!("\x1b[3J\x1b[2J\x1b[H");
         let conversation_id = self.init_conversation().await?;
+
+        self.display_banner().await?;
+        self.print_conversation_context(conversation_id).await?;
+        Ok(())
+    }
+
+    /// Fetches the conversation by ID and prints its messages and info summary.
+    async fn print_conversation_context(
+        &mut self,
+        conversation_id: ConversationId,
+    ) -> Result<()> {
         let conversation = self
             .api
             .conversation(&conversation_id)
-            .await
-            .unwrap()
-            .expect("IDK why this happened, do report");
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Conversation '{conversation_id}' not found while printing context"
+                )
+            })?;
 
-        self.display_banner().await?;
         self.on_print_conversation(conversation.clone()).await?;
         self.on_show_conv_info(conversation).await?;
         Ok(())
@@ -711,6 +733,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.writeln_title(TitleFormat::info(format!(
                     "Resumed conversation: {conversation_id}"
                 )))?;
+                self.print_conversation_context(conversation_id).await?;
                 // Interactive mode will be handled by the main loop
             }
             ConversationCommand::Show { id } => {
@@ -1753,6 +1776,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             "Resumed conversation: {}",
             conversation_id
         )))?;
+        self.print_conversation_context(conversation_id).await?;
         Ok(())
     }
 
