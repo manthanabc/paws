@@ -1097,7 +1097,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = "✓ Paws                [localhost]";
+        let expected = "✓ Anthropic           [localhost]";
         assert_eq!(actual, expected);
     }
 
