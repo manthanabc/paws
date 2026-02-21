@@ -75,7 +75,7 @@ impl<T: HttpClientService> Anthropic<T> {
         context: Context,
     ) -> ResultStream<ChatCompletionMessage, anyhow::Error> {
         let max_tokens = context.max_tokens.unwrap_or(4000);
-        // transform the context to match the request format
+        // transform context to match request format
         let context = ReasoningTransform.transform(context);
 
         let request = Request::try_from(context)?
@@ -137,7 +137,7 @@ impl<T: HttpClientService> Anthropic<T> {
                     // treat non 200 response as error.
                     Err(anyhow::anyhow!(text))
                         .with_context(|| ctx_msg)
-                        .with_context(|| "Failed to fetch the models")
+                        .with_context(|| "Failed to fetch models")
                 }
             }
             paws_domain::ModelSource::Hardcoded(models) => {
@@ -152,7 +152,6 @@ impl<T: HttpClientService> Anthropic<T> {
 mod tests {
 
     use bytes::Bytes;
-    use paws_app::HttpClientService;
     use paws_app::domain::{
         Context, ContextMessage, ToolCallFull, ToolCallId, ToolChoice, ToolName, ToolOutput,
         ToolResult,
@@ -179,7 +178,7 @@ mod tests {
     impl HttpClientService for MockHttpClient {
         async fn get(
             &self,
-            url: &reqwest::Url,
+            url: &Url,
             headers: Option<HeaderMap>,
         ) -> anyhow::Result<reqwest::Response> {
             let mut request = self.client.get(url.clone());
@@ -203,7 +202,7 @@ mod tests {
             _headers: Option<HeaderMap>,
             _body: Bytes,
         ) -> anyhow::Result<EventSource> {
-            // For now, return an error since eventsource is not used in the failing tests
+            // For now, return an error since eventsource is not used in failing tests
             Err(anyhow::anyhow!("EventSource not implemented in mock"))
         }
     }
@@ -290,7 +289,7 @@ mod tests {
                 model_id.clone().into(),
             ))
             .add_message(ContextMessage::assistant(
-                "here is the system call.",
+                "here is system call.",
                 None,
                 Some(vec![ToolCallFull {
                     name: ToolName::new("math"),
@@ -323,7 +322,7 @@ mod tests {
 
         mock.assert_async().await;
 
-        // Verify we got the expected models
+        // Verify we got expected models
         assert_eq!(actual.len(), 2);
         insta::assert_json_snapshot!(actual);
         Ok(())
@@ -362,7 +361,6 @@ mod tests {
         // Verify that we got an error
         assert!(actual.is_err());
         insta::assert_snapshot!(normalize_ports(format!("{:#?}", actual.unwrap_err())));
-
         Ok(())
     }
 

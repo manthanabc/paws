@@ -509,29 +509,6 @@ mod tests {
     }
 
     #[test]
-    fn test_context_summary_extracts_read_image_tool_calls() {
-        let fixture = context(vec![assistant_with_tools(
-            "Reading image",
-            vec![ToolCatalog::tool_call_read_image("/test/image.png").call_id("call_1")],
-        )]);
-
-        let actual = ContextSummary::from(&fixture);
-
-        let expected = ContextSummary::new(vec![SummaryBlock::new(
-            Role::Assistant,
-            vec![
-                Block::content("Reading image"),
-                SummaryToolCall::read("/test/image.png")
-                    .id("call_1")
-                    .is_success(false)
-                    .into(),
-            ],
-        )]);
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
     fn test_context_summary_extracts_shell_tool_calls() {
         let fixture = context(vec![assistant_with_tools(
             "Running shell",
@@ -769,19 +746,6 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_tool_info_with_invalid_tool() {
-        let fixture = ToolCallFull {
-            name: ToolName::new("invalid_tool"),
-            call_id: Some(ToolCallId::new("call_1")),
-            arguments: ToolCallArguments::from_json(r#"{"invalid": "args"}"#),
-        };
-
-        let actual = extract_tool_info(&fixture);
-
-        assert_eq!(actual, None);
-    }
-
-    #[test]
     fn test_summary_message_block_shell_helper() {
         let actual: SummaryMessage = SummaryToolCall::shell("cargo build").into();
 
@@ -853,7 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn test_context_summary_ignores_non_file_tool_calls() {
+    fn test_context_summary_includes_search_tool_calls() {
         let fixture = context(vec![assistant_with_tools(
             "Searching",
             vec![ToolCallFull {

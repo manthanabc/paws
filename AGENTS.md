@@ -98,7 +98,7 @@ Always verify changes by running tests and linting the codebase
 1. Run crate specific tests to ensure they pass.
 
    ```
-   cargo insta test --accept
+   cargo nextest run --accept
    ```
 
 2. **Build Guidelines**:

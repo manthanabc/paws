@@ -8,7 +8,7 @@ use paws_domain::{
     AgentId, AnyProvider, Attachment, AuthContextRequest, AuthContextResponse, AuthMethod,
     ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId, Environment, File,
     Image, InitAuth, LoginInfo, McpConfig, McpServers, Model, ModelId, PatchOperation, Provider,
-    ProviderId, ResultStream, Scope, Template, ToolCallFull, ToolOutput, Workflow,
+    ProviderId, ResultStream, Scope, SyntaxError, Template, ToolCallFull, ToolOutput, Workflow,
 };
 use reqwest::Response;
 use reqwest::header::HeaderMap;
@@ -26,6 +26,7 @@ pub struct ShellOutput {
 
 #[derive(Debug)]
 pub struct PatchOutput {
+    pub errors: Vec<SyntaxError>,
     pub before: String,
     pub after: String,
     pub content_hash: String,
@@ -44,6 +45,7 @@ pub struct ReadOutput {
 #[derive(Debug)]
 pub enum Content {
     File(String),
+    Image(paws_domain::Image),
 }
 
 impl Content {
@@ -54,6 +56,7 @@ impl Content {
     pub fn file_content(&self) -> &str {
         match self {
             Self::File(content) => content,
+            Self::Image(_) => "",
         }
     }
 }
@@ -94,7 +97,7 @@ pub struct FsCreateOutput {
     pub path: String,
     // Set when the file already exists
     pub before: Option<String>,
-
+    pub errors: Vec<SyntaxError>,
     pub content_hash: String,
 }
 
@@ -241,6 +244,8 @@ pub trait AttachmentService {
 
 pub trait EnvironmentService: Send + Sync {
     fn get_environment(&self) -> Environment;
+    /// Returns whether the application is running in restricted mode.
+    fn is_restricted(&self) -> bool;
 }
 #[async_trait::async_trait]
 pub trait CustomInstructionsService: Send + Sync {
@@ -822,6 +827,10 @@ impl<I: Services> ShellService for I {
 impl<I: Services> EnvironmentService for I {
     fn get_environment(&self) -> Environment {
         self.environment_service().get_environment()
+    }
+
+    fn is_restricted(&self) -> bool {
+        self.environment_service().is_restricted()
     }
 }
 

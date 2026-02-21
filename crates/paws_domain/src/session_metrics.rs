@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -16,17 +16,24 @@ pub struct Metrics {
     /// Holds the last file operation for each file
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub file_operations: HashMap<String, FileOperation>,
+
+    /// Tracks all files that have been read in this session
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub files_accessed: HashSet<String>,
 }
 
 impl Metrics {
     /// Records a file operation, replacing any previous operation for the same
-    /// file
+    /// file. Only Read operations are tracked in files_accessed.
     pub fn insert(mut self, path: String, metrics: FileOperation) -> Self {
+        // Only track Read operations in files_accessed
+        if metrics.tool == crate::ToolKind::Read {
+            self.files_accessed.insert(path.clone());
+        }
         self.file_operations.insert(path, metrics);
         self
     }
 
-    /// Gets the session duration if tracking has started
     /// Gets the session duration if tracking has started
     pub fn duration(&self, now: DateTime<Utc>) -> Option<Duration> {
         self.started_at

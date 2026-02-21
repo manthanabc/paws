@@ -70,6 +70,7 @@ impl<S: SkillFetchService> SystemPrompt<S> {
                 custom_rules: custom_rules.join("\n\n"),
                 supports_parallel_tool_calls,
                 skills,
+                tool_names: paws_domain::ToolNames::new(),
             };
 
             let static_block = TemplateEngine::default()

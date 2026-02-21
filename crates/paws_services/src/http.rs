@@ -37,3 +37,25 @@ impl<T: HttpInfra> HttpClientService for HttpClient<T> {
         self.0.http_eventsource(url, headers, body).await
     }
 }
+
+#[async_trait::async_trait]
+impl<T: HttpInfra> HttpInfra for HttpClient<T> {
+    async fn http_get(&self, url: &Url, headers: Option<HeaderMap>) -> anyhow::Result<Response> {
+        self.0.http_get(url, headers).await
+    }
+    async fn http_post(&self, url: &Url, body: bytes::Bytes) -> anyhow::Result<Response> {
+        self.0.http_post(url, body).await
+    }
+    async fn http_delete(&self, url: &Url) -> anyhow::Result<Response> {
+        self.0.http_delete(url).await
+    }
+
+    async fn http_eventsource(
+        &self,
+        url: &Url,
+        headers: Option<HeaderMap>,
+        body: Bytes,
+    ) -> anyhow::Result<reqwest_eventsource::EventSource> {
+        self.0.http_eventsource(url, headers, body).await
+    }
+}

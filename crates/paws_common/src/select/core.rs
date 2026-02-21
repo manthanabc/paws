@@ -1,9 +1,12 @@
 use anyhow::Result;
 use console::{strip_ansi_codes, style};
+use crossterm::cursor;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, FuzzySelect, Input, MultiSelect};
 
-use crate::select::{ApplicationCursorKeysGuard, BracketedPasteGuard};
+use crate::select::terminal::{
+    ApplicationCursorKeysGuard, BracketedPasteGuard, CursorRestoreGuard,
+};
 
 /// Check if a dialoguer error is an interrupted error (CTRL+C)
 fn is_interrupted_error(err: &dialoguer::Error) -> bool {
@@ -38,7 +41,7 @@ impl PawsSelect {
     /// suffix arrow
     fn default_theme() -> ColorfulTheme {
         ColorfulTheme {
-            prompt_suffix: style("".to_string()),
+            prompt_suffix: style(format!("{}", cursor::MoveLeft(1))),
             ..ColorfulTheme::default()
         }
     }
@@ -80,7 +83,12 @@ impl PawsSelect {
 
     /// Prompt a question and get text input
     pub fn input(message: impl Into<String>) -> InputBuilder {
-        InputBuilder { message: message.into(), allow_empty: false, default: None }
+        InputBuilder {
+            message: message.into(),
+            allow_empty: false,
+            default: None,
+            default_display: None,
+        }
     }
 
     /// Multi-select prompt
@@ -129,6 +137,9 @@ impl<T: 'static> SelectBuilder<T> {
     where
         T: std::fmt::Display + Clone,
     {
+        // Ensure cursor is visible when prompt completes
+        let _cursor_restore_guard = CursorRestoreGuard::new();
+
         // Handle confirm case (bool options)
         if std::any::TypeId::of::<T>() == std::any::TypeId::of::<bool>() {
             let theme = PawsSelect::default_theme();
@@ -156,7 +167,7 @@ impl<T: 'static> SelectBuilder<T> {
         // fuzzy search input
         let _paste_guard = BracketedPasteGuard::new()?;
         // Disable application cursor keys to ensure arrow keys work correctly
-        let _cursor_guard = ApplicationCursorKeysGuard::new()?;
+        let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
 
         let theme = PawsSelect::default_theme();
 
@@ -226,8 +237,9 @@ impl<T> SelectBuilderOwned<T> {
         // fuzzy search input
         let _paste_guard = BracketedPasteGuard::new()?;
         // Disable application cursor keys to ensure arrow keys work correctly
-        let _cursor_guard = ApplicationCursorKeysGuard::new()?;
-
+        let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
+        // Ensure cursor is visible when prompt completes
+        let _cursor_restore_guard = CursorRestoreGuard::new();
         let theme = PawsSelect::default_theme();
 
         // Strip ANSI codes from display strings for better fuzzy search experience
@@ -265,6 +277,28 @@ pub struct InputBuilder {
     message: String,
     allow_empty: bool,
     default: Option<String>,
+    default_display: Option<String>,
+}
+
+// Internal type for dialoguer interaction
+#[derive(Clone)]
+struct MaskedDefault {
+    value: String,
+    display: String,
+}
+
+impl std::fmt::Display for MaskedDefault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display)
+    }
+}
+
+impl std::str::FromStr for MaskedDefault {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(MaskedDefault { value: s.to_string(), display: s.to_string() })
+    }
 }
 
 impl InputBuilder {
@@ -275,8 +309,12 @@ impl InputBuilder {
     }
 
     /// Set default value
-    pub fn with_default(mut self, default: impl Into<String>) -> Self {
-        self.default = Some(default.into());
+    pub fn with_default<T>(mut self, default: T) -> Self
+    where
+        T: std::fmt::Display + AsRef<str>,
+    {
+        self.default = Some(default.as_ref().to_string());
+        self.default_display = Some(default.to_string());
         self
     }
 
@@ -295,16 +333,46 @@ impl InputBuilder {
         // Disable bracketed paste mode to prevent ~0 and ~1 markers during input
         let _paste_guard = BracketedPasteGuard::new()?;
         // Disable application cursor keys to ensure arrow keys work correctly
-        let _cursor_guard = ApplicationCursorKeysGuard::new()?;
+        let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
+        // Ensure cursor is visible when prompt completes
+        let _cursor_restore_guard = CursorRestoreGuard::new();
 
         let theme = PawsSelect::default_theme();
-        let mut input = Input::with_theme(&theme)
+
+        // Check if we have both value and display (masked default scenario)
+        if let (Some(value), Some(display)) = (self.default, self.default_display) {
+            // If value and display are different, use DialoguerMaskedDefault
+            if value != display {
+                let masked = MaskedDefault { value, display };
+                let input = Input::with_theme(&theme)
+                    .with_prompt(&self.message)
+                    .allow_empty(self.allow_empty)
+                    .default(masked);
+
+                return match input.interact_text() {
+                    Ok(masked_result) => Ok(Some(masked_result.value)),
+                    Err(e) if is_interrupted_error(&e) => Ok(None),
+                    Err(e) => Err(e.into()),
+                };
+            }
+
+            // If they're the same, treat as normal string
+            let input = Input::with_theme(&theme)
+                .with_prompt(&self.message)
+                .allow_empty(self.allow_empty)
+                .default(value);
+
+            return match input.interact_text() {
+                Ok(value) => Ok(Some(value)),
+                Err(e) if is_interrupted_error(&e) => Ok(None),
+                Err(e) => Err(e.into()),
+            };
+        }
+
+        // No default provided
+        let input = Input::with_theme(&theme)
             .with_prompt(&self.message)
             .allow_empty(self.allow_empty);
-
-        if let Some(default) = self.default {
-            input = input.default(default);
-        }
 
         match input.interact_text() {
             Ok(value) => Ok(Some(value)),
@@ -343,7 +411,9 @@ impl<T> MultiSelectBuilder<T> {
         // Disable bracketed paste mode to prevent ~0 and ~1 markers
         let _paste_guard = BracketedPasteGuard::new()?;
         // Disable application cursor keys to ensure arrow keys work correctly
-        let _cursor_guard = ApplicationCursorKeysGuard::new()?;
+        let _cursor_keys_guard = ApplicationCursorKeysGuard::new()?;
+        // Ensure cursor is visible when prompt completes
+        let _cursor_restore_guard = CursorRestoreGuard::new();
 
         let theme = PawsSelect::default_theme();
         let multi_select = MultiSelect::with_theme(&theme)

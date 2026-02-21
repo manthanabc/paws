@@ -47,6 +47,9 @@ pub struct Environment {
     pub stdout_max_suffix_length: usize,
     /// Maximum characters per line for shell output
     pub stdout_max_line_length: usize,
+    /// Maximum characters per line for file read operations
+    /// Controlled by FORGE_MAX_LINE_LENGTH environment variable.
+    pub max_line_length: usize,
     /// Maximum number of lines to read from a file
     pub max_read_size: u64,
     /// Http configuration
@@ -70,13 +73,6 @@ pub struct Environment {
     /// Maximum number of conversations to show in list.
     /// Controlled by FORGE_MAX_CONVERSATIONS environment variable.
     pub max_conversations: usize,
-    /// Maximum number of results to return from initial vector search.
-    /// Controlled by FORGE_SEM_SEARCH_LIMIT environment variable.
-    pub sem_search_limit: usize,
-    /// Top-k parameter for relevance filtering during semantic search.
-    /// Controls the number of nearest neighbors to consider.
-    /// Controlled by FORGE_SEM_SEARCH_TOP_K environment variable.
-    pub sem_search_top_k: usize,
 
     /// Override model for all providers from FORGE_OVERRIDE_MODEL environment
     /// variable. If set, this model will be used instead of configured
@@ -285,6 +281,7 @@ fn test_command_path() {
         stdout_max_prefix_length: 100,
         stdout_max_suffix_length: 100,
         stdout_max_line_length: 500,
+        max_line_length: 2000,
         max_read_size: 2000,
         http: HttpConfig::default(),
         max_file_size: 104857600,
@@ -293,8 +290,6 @@ fn test_command_path() {
         debug_requests: None,
         custom_history_path: None,
         max_conversations: 100,
-        sem_search_limit: 100,
-        sem_search_top_k: 10,
         max_image_size: 262144,
 
         override_model: None,
@@ -325,6 +320,7 @@ fn test_command_cwd_path() {
         stdout_max_prefix_length: 100,
         stdout_max_suffix_length: 100,
         stdout_max_line_length: 500,
+        max_line_length: 2000,
         max_read_size: 2000,
         http: HttpConfig::default(),
         max_file_size: 104857600,
@@ -333,8 +329,6 @@ fn test_command_cwd_path() {
         debug_requests: None,
         custom_history_path: None,
         max_conversations: 100,
-        sem_search_limit: 100,
-        sem_search_top_k: 10,
         max_image_size: 262144,
 
         override_model: None,
@@ -365,6 +359,7 @@ fn test_command_cwd_path_independent_from_command_path() {
         stdout_max_prefix_length: 100,
         stdout_max_suffix_length: 100,
         stdout_max_line_length: 500,
+        max_line_length: 2000,
         max_read_size: 2000,
         http: HttpConfig::default(),
         max_file_size: 104857600,
@@ -373,8 +368,6 @@ fn test_command_cwd_path_independent_from_command_path() {
         debug_requests: None,
         custom_history_path: None,
         max_conversations: 100,
-        sem_search_limit: 100,
-        sem_search_top_k: 10,
         max_image_size: 262144,
 
         override_model: None,

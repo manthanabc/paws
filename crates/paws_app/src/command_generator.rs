@@ -110,6 +110,10 @@ mod tests {
     }
 
     impl EnvironmentService for MockServices {
+        fn is_restricted(&self) -> bool {
+            false
+        }
+
         fn get_environment(&self) -> Environment {
             self.environment.clone()
         }

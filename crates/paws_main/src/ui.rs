@@ -17,21 +17,19 @@ use paws_api::{
 use paws_app::ToolResolver;
 use paws_app::fmt::content::FormatContent;
 use paws_app::utils::{format_display_path, truncate_key};
-use paws_common::display::MarkdownWriter;
+use paws_common::display::md::MarkdownWriter;
 use paws_common::fs::PawsFS;
 use paws_common::select::PawsSelect;
 use paws_common::spinner::SpinnerManager;
 use paws_domain::{
-    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
+    AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, TokenCount, UserCommand,
 };
 use tokio_stream::StreamExt;
 use tracing::debug;
 use url::Url;
 
 use crate::banner;
-use crate::cli::{
-    Cli, ConversationCommand, ExtensionCommand, ListCommand, McpCommand, TopLevelCommand,
-};
+use crate::cli::{Cli, ConversationCommand, ListCommand, McpCommand, TopLevelCommand};
 use crate::conversation_selector::ConversationSelector;
 use crate::display_constants::{CommandType, headers, markers, status};
 use crate::info::Info;
@@ -87,6 +85,49 @@ fn format_mcp_headers(server: &paws_domain::McpServerConfig) -> Option<String> {
     }
 }
 
+#[derive(Default)]
+struct ZshRPrompt {
+    agent: Option<AgentId>,
+    model: Option<ModelId>,
+    token_count: Option<TokenCount>,
+    use_nerd_font: bool,
+}
+
+impl ZshRPrompt {
+    fn agent(mut self, agent: Option<AgentId>) -> Self {
+        self.agent = agent;
+        self
+    }
+    fn model(mut self, model: Option<ModelId>) -> Self {
+        self.model = model;
+        self
+    }
+    fn token_count(mut self, count: Option<TokenCount>) -> Self {
+        self.token_count = count;
+        self
+    }
+    fn use_nerd_font(mut self, use_nerd: bool) -> Self {
+        self.use_nerd_font = use_nerd;
+        self
+    }
+}
+
+impl Display for ZshRPrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut parts = Vec::new();
+        if let Some(agent) = &self.agent {
+            parts.push(format!("{}", agent));
+        }
+        if let Some(model) = &self.model {
+            parts.push(format!("{}", model));
+        }
+        if let Some(count) = self.token_count {
+            parts.push(format!("{}t", count));
+        }
+        write!(f, "{}", parts.join(" | "))
+    }
+}
+
 pub struct UI<A, F: Fn() -> A> {
     markdown: MarkdownWriter,
     state: UIState,
@@ -98,8 +139,6 @@ pub struct UI<A, F: Fn() -> A> {
     spinner: SpinnerManager,
     ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
     thinking_start: Option<std::time::Instant>,
-    #[allow(dead_code)] // The guard is kept alive by being held in the struct
-    _guard: paws_services::log::Guard,
 }
 
 impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
@@ -158,22 +197,27 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     async fn display_banner(&self) -> Result<()> {
         if self.cli.is_interactive() {
             let info = self.get_banner_info().await;
-            banner::display(&info)?;
+            banner::display(&info)?
         }
         Ok(())
     }
 
     async fn get_banner_info(&self) -> banner::BannerInfo {
-        let agent = self.api.get_active_agent().await;
-        let model = self.get_agent_model(agent.clone()).await;
-        let provider = self.get_provider(agent).await.ok();
+        let version = env!("CARGO_PKG_VERSION").to_string();
 
-        let model_str = model
-            .map(|m| m.as_str().to_string())
+        let model = self
+            .api
+            .get_default_model()
+            .await
+            .map(|m| m.to_string())
             .unwrap_or_else(|| "Unknown".to_string());
-        let provider_str = provider
+
+        let provider = self
+            .api
+            .get_default_provider()
+            .await
             .map(|p| p.id.to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .unwrap_or_else(|_| "Unknown".to_string());
 
         let conversation_id = self
             .state
@@ -181,12 +225,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             .map(|id| id.into_string())
             .unwrap_or_else(|| "New Session".to_string());
 
-        banner::BannerInfo {
-            model: model_str,
-            provider: provider_str,
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            conversation_id,
-        }
+        banner::BannerInfo { model, provider, version, conversation_id }
     }
 
     // Handle creating a new conversation
@@ -205,7 +244,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.cli.resume = false;
         self.state.conversation_id = None;
 
-        self.init_conversation().await?;
         self.display_banner().await?;
         self.trace_user();
         self.hydrate_caches();
@@ -256,7 +294,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             ctrl_c_rx,
             markdown: MarkdownWriter::new(),
             thinking_start: None,
-            _guard: paws_services::log::init_tracing(env.log_path())?,
         })
     }
 
@@ -278,6 +315,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let model = self
             .get_agent_model(self.api.get_active_agent().await)
             .await;
+
         let paws_prompt = PawsPrompt {
             cwd: self.state.cwd.clone(),
             model,
@@ -317,12 +355,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         // Display the banner in dimmed colors since we're in interactive mode
+        self.display_banner().await?;
         self.init_state(true).await?;
 
         self.trace_user();
         self.hydrate_caches();
         self.init_conversation().await?;
-        self.display_banner().await?;
 
         // Check for dispatch flag first
         if let Some(dispatch_json) = self.cli.event.clone() {
@@ -382,27 +420,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                     }
                 },
-                Err(ref error) => {
+                Err(error) => {
                     tracing::error!(error = ?error);
                     self.spinner.stop(None)?;
                     self.writeln_to_stderr(
                         TitleFormat::error(error.to_string()).display().to_string(),
                     )?;
-                    if !is_interactive {
-                        return Ok(());
-                    }
                 }
             }
-            self.spinner.stop(None)?;
-            if !is_interactive {
-                break;
-            }
-
             // Centralized prompt call at the end of the loop
+            self.spinner.stop(None)?;
             command = self.prompt().await;
             self.markdown.reset();
         }
-        Ok(())
     }
 
     async fn on_resize(&mut self) -> Result<()> {
@@ -430,6 +460,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         tokio::spawn(async move { api.get_tools().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.get_agents().await });
+        let api = self.api.clone();
+        tokio::spawn(async move {
+            let _ = api.hydrate_channel();
+        });
     }
 
     async fn handle_generate_conversation_id(&mut self) -> Result<()> {
@@ -480,14 +514,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     }
                     ListCommand::Skill => {
                         self.on_show_skills(porcelain).await?;
-                    }
-                }
-                return Ok(());
-            }
-            TopLevelCommand::Extension(extension_group) => {
-                match extension_group.command {
-                    ExtensionCommand::Zsh => {
-                        self.on_zsh_prompt().await?;
                     }
                 }
                 return Ok(());
@@ -579,11 +605,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.on_env().await?;
                 return Ok(());
             }
-            TopLevelCommand::Banner => {
-                let info = self.get_banner_info().await;
-                banner::display(&info)?;
-                return Ok(());
-            }
             TopLevelCommand::Config(config_group) => {
                 self.handle_config_command(config_group.command.clone(), config_group.porcelain)
                     .await?;
@@ -635,13 +656,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
                 return Ok(());
             }
-
             TopLevelCommand::Data(data_command_group) => {
                 let mut stream = self.api.generate_data(data_command_group.into()).await?;
                 while let Some(data) = stream.next().await {
                     self.writeln(data?)?;
                 }
             }
+            TopLevelCommand::Extension(extension) => match extension.command {
+                crate::cli::ExtensionCommand::Zsh => {
+                    let script = crate::zsh_plugin::generate_zsh_plugin()?;
+                    println!("{}", script);
+                }
+                crate::cli::ExtensionCommand::Prompt => {
+                    if let Some(prompt) = self.handle_zsh_rprompt_command().await {
+                        print!("{}", prompt);
+                    }
+                }
+            },
+            TopLevelCommand::Banner => {}
         }
         Ok(())
     }
@@ -718,12 +750,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
                 self.on_show_last_message(conversation).await?;
             }
-            ConversationCommand::Print { id } => {
-                let id = id.unwrap_or_else(|| self.state.conversation_id.unwrap_or_default());
-                let conversation = self.validate_conversation_exists(&id).await?;
-
-                self.on_print_conversation(conversation).await?;
-            }
             ConversationCommand::Info { id } => {
                 let conversation = self.validate_conversation_exists(&id).await?;
 
@@ -740,6 +766,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(Some("Cloning"))?;
                 self.on_clone_conversation(conversation, porcelain).await?;
                 self.spinner.stop(None)?;
+            }
+            ConversationCommand::Print { .. } => {
+                self.writeln("Print command is not available in Paws")?;
             }
         }
 
@@ -1096,6 +1125,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             } else {
                 info = info.add_key_value("Tools", markers::EMPTY)
             }
+
+            // Add image modality support indicator
+            let supports_image = model
+                .input_modalities
+                .contains(&paws_domain::InputModality::Image);
+            info = info.add_key_value(
+                "Image",
+                if supports_image {
+                    status::YES
+                } else {
+                    status::NO
+                },
+            );
         }
 
         if porcelain {
@@ -1113,7 +1155,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Load built-in commands from JSON
         // NOTE: When adding a new command, update built_in_commands.json AND
-        //       shell-plugin/paws.plugin.zsh (case statement around line 745)
+        //       shell-plugin/forge.plugin.zsh (case statement around line 745)
         const COMMANDS_JSON: &str = include_str!("built_in_commands.json");
 
         #[derive(serde::Deserialize)]
@@ -1454,12 +1496,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         Ok(())
     }
 
-    async fn on_zsh_prompt(&self) -> anyhow::Result<()> {
-        let plugin = crate::zsh_plugin::generate_zsh_plugin()?;
-        println!("{plugin}");
-        Ok(())
-    }
-
     /// Handle the cmd command - generates shell command from natural language
     async fn on_cmd(&mut self, prompt: UserPrompt) -> anyhow::Result<()> {
         self.spinner.start(Some("Generating"))?;
@@ -1495,6 +1531,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         {
             let conversation_id = conversation.id;
             self.state.conversation_id = Some(conversation_id);
+
+            // Print log about conversation switching
+            self.writeln_title(TitleFormat::info(format!(
+                "Switched to conversation {}",
+                conversation_id.into_string().bold()
+            )))?;
 
             // Show conversation
             self.on_print_conversation(conversation).await?;
@@ -1564,9 +1606,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Conversations => {
                 self.list_conversations().await?;
             }
-            SlashCommand::Resume => {
-                self.handle_resume_conversation().await?;
-            }
             SlashCommand::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -1575,7 +1614,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.handle_delete_conversation().await?;
             }
             SlashCommand::Dump { html } => {
-                self.spinner.start(Some("Dumping"))?;
                 self.on_dump(html).await?;
             }
             SlashCommand::New => {
@@ -1594,14 +1632,18 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(Some(content.clone())).await?;
             }
-            SlashCommand::Paws => {
-                self.on_agent_change(AgentId::FORGE).await?;
-            }
             SlashCommand::Muse => {
                 self.on_agent_change(AgentId::MUSE).await?;
             }
             SlashCommand::Sage => {
                 self.on_agent_change(AgentId::SAGE).await?;
+            }
+            SlashCommand::Paws => {
+                self.on_agent_change(AgentId::PAWS).await?;
+            }
+            SlashCommand::AgentSwitch(agent_id) => {
+                let agent_id = AgentId::from(agent_id.as_str());
+                self.on_agent_change(agent_id).await?;
             }
             SlashCommand::Help => {
                 let info = Info::from(self.command.as_ref());
@@ -1613,6 +1655,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             SlashCommand::Update => {
                 on_update(self.api.clone(), None).await;
+            }
+            SlashCommand::Resume => {
+                self.handle_resume_conversation().await?;
             }
             SlashCommand::Exit => {
                 return Ok(true);
@@ -1631,7 +1676,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             SlashCommand::Shell(ref command) => {
                 self.api.execute_shell_command_raw(command).await?;
             }
-
             SlashCommand::Agent => {
                 #[derive(Clone)]
                 struct Agent {
@@ -1695,21 +1739,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
-            SlashCommand::AgentSwitch(agent_id) => {
-                // Validate that the agent exists by checking against loaded agents
-                let agents = self.api.get_agents().await?;
-                let agent_exists = agents.iter().any(|agent| agent.id.as_str() == agent_id);
-
-                if agent_exists {
-                    self.on_agent_change(AgentId::new(agent_id)).await?;
-                } else {
-                    return Err(anyhow::anyhow!(
-                        "Agent '{agent_id}' not found or unavailable"
-                    ));
-                }
-            }
             SlashCommand::Resize => {
-                // Handled in the main loop, but we need to handle it here to satisfy the match
                 return Ok(false);
             }
             SlashCommand::Transcript => {
@@ -1836,11 +1866,17 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             })
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
-        let api_key = PawsSelect::input(format!("Enter your {provider_id} API key:"))
-            .prompt()?
-            .context("API key input cancelled")?;
+        let input = if let Some(default_key) = &request.api_key {
+            // ApiKey's Display shows masked version, AsRef<str> gives actual value
+            PawsSelect::input(format!("Enter your {provider_id} API key:"))
+                .with_default(default_key)
+        } else {
+            PawsSelect::input(format!("Enter your {provider_id} API key:"))
+        };
 
-        let api_key_str = api_key.trim();
+        let api_key_str = input.prompt()?.context("API key input cancelled")?;
+
+        let api_key_str = api_key_str.trim();
         anyhow::ensure!(!api_key_str.is_empty(), "API key cannot be empty");
 
         // Update the context with collected data
@@ -2219,10 +2255,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Set the provider via API
         self.api.set_default_provider(provider.id.clone()).await?;
 
-        self.writeln_title(TitleFormat::action(format!(
-            "Switched to provider: {}",
-            CliProvider(AnyProvider::Url(provider.clone()))
-        )))?;
+        self.writeln_title(
+            TitleFormat::action(format!("{}", provider.id))
+                .sub_title("is now the default provider"),
+        )?;
 
         // Check if the current model is available for the new provider
         let current_model = self.api.get_default_model().await;
@@ -2350,6 +2386,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // Run the independent initialization tasks in parallel for better performance
         let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
 
+        let _ = self.handle_migrate_credentials().await;
+
         // Ensure we have a model selected before proceeding with initialization
         let active_agent = self.api.get_active_agent().await;
 
@@ -2379,7 +2417,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             // only call on_update if this is the first initialization
             on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
             if !workflow.commands.is_empty() {
-                self.writeln_title(TitleFormat::error("paws.yaml commands are deprecated. Use .md files in paws/ (home) or .paws/ (project) instead"))?;
+                self.writeln_title(TitleFormat::error(".yaml commands are deprecated. Use .md files in .paws/ (home) or .paws/ (project) instead"))?;
             }
         }
 
@@ -2428,16 +2466,24 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             None => Event::empty(),
         };
 
-        // Only use CLI piped_input as additional context if it wasn't already passed as
-        // content This handles cases where piped input is used alongside
-        // explicit prompts
+        // Only use CLI piped_input as additional context when BOTH --prompt and piped
+        // input are provided. This handles the case: `echo "context" | forge -p
+        // "question"` where piped input provides context and --prompt provides
+        // the actual question.
+        //
+        // When only piped input is provided (no --prompt), it's already used as the
+        // main content (passed via the `content` parameter). We must NOT add it again
+        // as additional_context, otherwise the input appears twice in the
+        // conversation. We detect this by checking if cli.prompt exists - if it
+        // does, the content came from --prompt and piped input should be
+        // additional context.
         let piped_input = self.cli.piped_input.clone();
-        if let Some(piped) = piped_input {
-            // Only add as additional context if content is provided separately (e.g., via
-            // --prompt)
-            if has_content {
-                event = event.additional_context(piped);
-            }
+        let has_explicit_prompt = self.cli.prompt.is_some();
+        if let Some(piped) = piped_input
+            && has_content
+            && has_explicit_prompt
+        {
+            event = event.additional_context(piped);
         }
 
         // Create the chat request with the event
@@ -2459,8 +2505,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
         }
 
-        self.markdown.reset();
         self.spinner.stop(None)?;
+        self.spinner.reset();
 
         Ok(())
     }
@@ -2584,6 +2630,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     && let Ok(conversation) =
                         self.validate_conversation_exists(&conversation_id).await
                 {
+                    self.writeln_title(
+                        TitleFormat::debug("Finished").sub_title(conversation_id.into_string()),
+                    )?;
                     self.on_show_conv_info(conversation).await?;
                 }
             }
@@ -2618,8 +2667,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
     async fn on_show_conv_info(&mut self, conversation: Conversation) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
-        let info = Info::default().extend(&conversation);
 
+        let info = Info::default().extend(&conversation);
         self.spinner.stop(None)?;
         self.writeln(info)?;
 
@@ -2770,7 +2819,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         // NOTE: Spawning required so that we don't block the user while querying user
         // info
         tokio::spawn(async move {
-            let _ = api.user_info().await;
+            if let Ok(Some(_user_info)) = api.user_info().await {
+                // tracker::login(user_info.auth_provider_id.into_string());
+            }
         });
     }
 
@@ -2850,6 +2901,43 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         Ok(())
+    }
+
+    /// Handle prompt command - returns model and conversation stats for shell
+    /// integration
+    async fn handle_zsh_rprompt_command(&mut self) -> Option<String> {
+        let cid = std::env::var("_FORGE_CONVERSATION_ID")
+            .ok()
+            .filter(|text| !text.trim().is_empty())
+            .and_then(|str| ConversationId::from_str(str.as_str()).ok());
+
+        // Make IO calls in parallel
+        let (model_id, conversation) = tokio::join!(self.api.get_default_model(), async {
+            if let Some(cid) = cid {
+                self.api.conversation(&cid).await.ok().flatten()
+            } else {
+                None
+            }
+        });
+
+        // Check if nerd fonts should be used (NERD_FONT or USE_NERD_FONT set to "1")
+        let use_nerd_font = std::env::var("NERD_FONT")
+            .or_else(|_| std::env::var("USE_NERD_FONT"))
+            .map(|val| val == "1")
+            .unwrap_or(true); // Default to true
+
+        let rprompt = ZshRPrompt::default()
+            .agent(
+                std::env::var("_FORGE_ACTIVE_AGENT")
+                    .ok()
+                    .filter(|text| !text.trim().is_empty())
+                    .map(AgentId::new),
+            )
+            .model(model_id)
+            .token_count(conversation.and_then(|conversation| conversation.token_count()))
+            .use_nerd_font(use_nerd_font);
+
+        Some(rprompt.to_string())
     }
 
     /// Validate model exists
@@ -2936,7 +3024,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let Some(context) = conversation.context else {
             return Ok(());
         };
-
         // Create new markdown writer, (which will be based on current terminal size)
         self.markdown = MarkdownWriter::new();
         for message in &context.messages {
@@ -2956,7 +3043,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                     .add_chunk(&text_message.content, &mut self.spinner)?;
                                 self.markdown.reset();
                             }
-
                             // Show tool calls if any
                             if let Some(calls) = &text_message.tool_calls {
                                 for call in calls {
@@ -2984,7 +3070,31 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 _ => {}
             }
         }
+        Ok(())
+    }
 
+    /// Handle credential migration
+    async fn handle_migrate_credentials(&mut self) -> Result<()> {
+        // Perform the migration
+        self.spinner.start(Some("Migrating credentials"))?;
+        let result = self.api.migrate_env_credentials().await?;
+        self.spinner.stop(None)?;
+
+        // Display results based on whether migration occurred
+        if let Some(result) = result {
+            self.writeln_title(
+                TitleFormat::warning("Forge no longer reads API keys from environment variables.")
+                    .sub_title("Learn more: https://forgecode.dev/docs/custom-providers/"),
+            )?;
+
+            let count = result.migrated_providers.len();
+            let message = if count == 1 {
+                "Migrated 1 provider from environment variables".to_string()
+            } else {
+                format!("Migrated {count} providers from environment variables")
+            };
+            self.writeln_title(TitleFormat::info(message))?;
+        }
         Ok(())
     }
 }

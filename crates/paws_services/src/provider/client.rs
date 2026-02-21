@@ -133,13 +133,13 @@ impl ClientBuilder {
     }
 }
 
-pub struct Client<T> {
+pub struct Client<T: paws_app::HttpClientService> {
     retry_config: Arc<RetryConfig>,
     inner: Arc<InnerClient<T>>,
     models_cache: Arc<RwLock<HashMap<ModelId, Model>>>,
 }
 
-impl<T> Clone for Client<T> {
+impl<T: paws_app::HttpClientService> Clone for Client<T> {
     fn clone(&self) -> Self {
         Self {
             retry_config: self.retry_config.clone(),
@@ -149,14 +149,14 @@ impl<T> Clone for Client<T> {
     }
 }
 
-enum InnerClient<T> {
+enum InnerClient<T: HttpClientService> {
     OpenAICompat(Box<OpenAIProvider<T>>),
     Anthropic(Box<Anthropic<T>>),
-    Bedrock(Box<crate::provider::bedrock::BedrockProvider<T>>),
+    Bedrock(Box<crate::provider::bedrock::BedrockProvider>),
     Gemini(Box<GeminiProvider<T>>),
 }
 
-impl<T: HttpClientService> Client<T> {
+impl<T: paws_app::HttpClientService> Client<T> {
     fn retry<A>(&self, result: anyhow::Result<A>) -> anyhow::Result<A> {
         let retry_config = &self.retry_config;
         result.map_err(move |e| into_retry(e, retry_config))
@@ -183,7 +183,7 @@ impl<T: HttpClientService> Client<T> {
     }
 }
 
-impl<T: HttpClientService> Client<T> {
+impl<T: paws_app::HttpClientService> Client<T> {
     pub async fn chat(
         &self,
         model: &ModelId,

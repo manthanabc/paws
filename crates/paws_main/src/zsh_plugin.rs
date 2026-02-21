@@ -6,6 +6,7 @@ use rust_embed::RustEmbed;
 #[folder = "$CARGO_MANIFEST_DIR/../../shell-plugin"]
 #[include = "**/*.zsh"]
 #[exclude = "paws.plugin.zsh"]
+#[allow(dead_code)]
 struct ZshPlugin;
 
 /// Generates the complete zsh plugin by combining all embedded files

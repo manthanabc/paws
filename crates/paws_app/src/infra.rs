@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::Result;
 use bytes::Bytes;
@@ -29,6 +30,8 @@ pub trait EnvironmentInfra: Send + Sync {
     fn get_environment(&self) -> Environment;
     fn get_env_var(&self, key: &str) -> Option<String>;
     fn get_env_vars(&self) -> BTreeMap<String, String>;
+    /// Returns whether the application is running in restricted mode.
+    fn is_restricted(&self) -> bool;
 }
 
 /// Repository for accessing system environment information
@@ -347,4 +350,26 @@ pub trait AgentRepository: Send + Sync {
     /// Load all agent definitions from all available sources with conflict
     /// resolution.
     async fn get_agents(&self) -> anyhow::Result<Vec<paws_domain::AgentDefinition>>;
+}
+
+#[async_trait::async_trait]
+impl<T: HttpInfra> HttpInfra for Arc<T> {
+    async fn http_get(&self, url: &Url, headers: Option<HeaderMap>) -> anyhow::Result<Response> {
+        self.as_ref().http_get(url, headers).await
+    }
+    async fn http_post(&self, url: &Url, body: bytes::Bytes) -> anyhow::Result<Response> {
+        self.as_ref().http_post(url, body).await
+    }
+    async fn http_delete(&self, url: &Url) -> anyhow::Result<Response> {
+        self.as_ref().http_delete(url).await
+    }
+
+    async fn http_eventsource(
+        &self,
+        url: &Url,
+        headers: Option<HeaderMap>,
+        body: Bytes,
+    ) -> anyhow::Result<reqwest_eventsource::EventSource> {
+        self.as_ref().http_eventsource(url, headers, body).await
+    }
 }

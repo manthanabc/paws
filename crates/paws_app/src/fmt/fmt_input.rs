@@ -30,10 +30,6 @@ impl FormatContent for ToolCatalog {
                 };
                 Some(TitleFormat::debug("Read").sub_title(subtitle).into())
             }
-            ToolCatalog::ReadImage(input) => {
-                let display_path = display_path_for(&input.path);
-                Some(TitleFormat::debug("Image").sub_title(display_path).into())
-            }
             ToolCatalog::Write(input) => {
                 let path = PathBuf::from(&input.path);
                 let display_path = display_path_for(&input.path);
@@ -89,6 +85,14 @@ impl FormatContent for ToolCatalog {
                     .sub_title(&input.question)
                     .into(),
             ),
+            ToolCatalog::ReadImage(input) => {
+                let display_path = display_path_for(&input.path);
+                Some(
+                    TitleFormat::debug("Read Image")
+                        .sub_title(display_path)
+                        .into(),
+                )
+            }
             ToolCatalog::Plan(_) => None,
             ToolCatalog::Skill(input) => Some(
                 TitleFormat::debug("Skill")

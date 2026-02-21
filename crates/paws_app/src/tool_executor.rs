@@ -276,9 +276,6 @@ impl<
         let tool_input: ToolCatalog = ToolCatalog::try_from(input)?;
         let tool_kind = tool_input.kind();
         let env = self.services.get_environment();
-        if let Some(content) = tool_input.to_content(&env) {
-            context.send(content).await?;
-        }
 
         // Check permissions before executing the tool (if enabled)
         if env.enable_permissions && self.check_tool_permission(&tool_input, context).await? {

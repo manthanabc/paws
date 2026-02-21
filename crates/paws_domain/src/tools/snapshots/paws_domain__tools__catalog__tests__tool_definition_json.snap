@@ -4,7 +4,6 @@ expression: tools
 ---
 {
   "title": "FSRead",
-  "description": "Reads file contents from the specified absolute path. Ideal for analyzing\ncode, configuration files, documentation, or textual data. Returns the\ncontent as a string with line number prefixes by default. For files larger\nthan 2,000 lines, the tool automatically returns only the first 2,000 lines.\nYou should always rely on this default behavior and avoid specifying custom\nranges unless absolutely necessary. If needed, specify a range with the\nstart_line and end_line parameters, ensuring the total range does not exceed\n2,000 lines. Specifying a range exceeding this limit will result in an\nerror. Binary files are automatically detected and rejected.",
   "type": "object",
   "properties": {
     "end_line": {
@@ -39,7 +38,6 @@ expression: tools
 }
 {
   "title": "ReadImage",
-  "description": "Reads image files from the file system and returns them in base64-encoded\nformat for vision-capable models. Supports common image formats: JPEG, PNG,\nWebP, and GIF. The path must be absolute and point to an existing file. Use\nthis tool when you need to process, analyze, or display images with vision\nmodels. Do NOT use this for text files - use the `read` tool instead. Do NOT\nuse for other binary files like PDFs, videos, or archives. The tool will\nfail if the file doesn't exist or if the format is unsupported. Returns the\nimage content encoded in base64 format ready for vision model consumption.",
   "type": "object",
   "properties": {
     "path": {
@@ -53,7 +51,6 @@ expression: tools
 }
 {
   "title": "FSWrite",
-  "description": "Use it to create a new file at a specified path with the provided content.\n\nAlways provide absolute paths for file locations. The tool\nautomatically handles the creation of any missing intermediary directories\nin the specified path.\nIMPORTANT: DO NOT attempt to use this tool to move or rename files, use the\nshell tool instead.",
   "type": "object",
   "properties": {
     "content": {
@@ -76,7 +73,6 @@ expression: tools
 }
 {
   "title": "FSSearch",
-  "description": "Recursively searches directories for files by content (regex) and/or name\n(glob pattern). Provides context-rich results with line numbers for content\nmatches. Two modes: content search (when regex provided) or file finder\n(when regex omitted). Uses case-insensitive Rust regex syntax. Requires\nabsolute paths. Avoids binary files and excluded directories. Best for code\nexploration, API usage discovery, configuration settings, or finding\npatterns across projects. For large pages, returns the first 200\nlines and stores the complete content in a temporary file for\nsubsequent access.",
   "type": "object",
   "properties": {
     "file_pattern": {
@@ -120,7 +116,6 @@ expression: tools
 }
 {
   "title": "FSRemove",
-  "description": "Request to remove a file at the specified path. Use this when you need to\ndelete an existing file. The path must be absolute. This operation cannot\nbe undone, so use it carefully.",
   "type": "object",
   "properties": {
     "path": {
@@ -134,7 +129,6 @@ expression: tools
 }
 {
   "title": "FSPatch",
-  "description": "Modifies files with targeted line operations on matched patterns. Supports\nprepend, append, replace, replace_all, swap operations. Ideal for precise\nchanges to configs, code, or docs while preserving context. Not suitable for\ncomplex refactoring or modifying all pattern occurrences - use `write`\ninstead for complete rewrites and `undo` for undoing the last operation.\nFails if search pattern isn't found.\\n\\nUsage Guidelines:\\n-When editing\ntext from Read tool output, ensure you preserve new lines and the exact\nindentation (tabs/spaces) as it appears AFTER the line number prefix. The\nline number prefix format is: line number + ':'. Everything\nafter that is the actual file content to match. Never include any part\nof the line number prefix in the search or content",
   "type": "object",
   "properties": {
     "content": {
@@ -172,7 +166,6 @@ expression: tools
 }
 {
   "title": "FSUndo",
-  "description": "Reverts the most recent file operation (create/modify/delete) on a specific\nfile. Use this tool when you need to recover from incorrect file changes or\nif a revert is requested by the user.",
   "type": "object",
   "properties": {
     "path": {
@@ -186,7 +179,6 @@ expression: tools
 }
 {
   "title": "Shell",
-  "description": "Executes shell commands with safety measures using restricted bash (rbash).\nPrevents potentially harmful operations like absolute path execution and\ndirectory changes. Use for file system interaction, running utilities,\ninstalling packages, or executing build commands. For operations requiring\nunrestricted access, advise users to run paws CLI with '-u' flag. Returns\ncomplete output including stdout, stderr, and exit code for diagnostic\npurposes.",
   "type": "object",
   "properties": {
     "command": {
@@ -240,7 +232,6 @@ expression: tools
 }
 {
   "title": "Followup",
-  "description": "Use this tool when you encounter ambiguities, need clarification, or require\nmore details to proceed effectively. Use this tool judiciously to maintain a\nbalance between gathering necessary information and avoiding excessive\nback-and-forth.",
   "type": "object",
   "properties": {
     "multiple": {
@@ -296,7 +287,6 @@ expression: tools
 }
 {
   "title": "PlanCreate",
-  "description": "Creates a new plan file with the specified name, version, and content. Use\nthis tool to create structured project plans, task breakdowns, or\nimplementation strategies that can be tracked and referenced throughout\ndevelopment sessions.",
   "type": "object",
   "properties": {
     "content": {
@@ -320,7 +310,6 @@ expression: tools
 }
 {
   "title": "SkillFetch",
-  "description": "Fetches detailed information about a specific skill. Use this tool to load\nskill content and instructions when you need to understand how to perform a\nspecialized task. Skills provide domain-specific knowledge, workflows, and\nbest practices. Only invoke skills that are listed in the available skills\nsection. Do not invoke a skill that is already active.",
   "type": "object",
   "properties": {
     "name": {

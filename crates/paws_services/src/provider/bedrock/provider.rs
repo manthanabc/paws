@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use anyhow::{Context as _, Result};
 use aws_sdk_bedrockruntime::Client;
 use aws_sdk_bedrockruntime::config::Token;
-use paws_app::HttpClientService;
+use paws_app::domain::RetryConfig;
 use paws_domain::{
     AuthDetails, ChatCompletionMessage, Context, Model, ModelId, Provider, ResultStream,
     Transformer,
@@ -9,21 +11,20 @@ use paws_domain::{
 use reqwest::Url;
 use tokio::sync::OnceCell;
 
-use super::SetCache;
+use crate::provider::bedrock::set_cache::SetCache;
 use crate::{FromDomain, IntoDomain};
 
 /// Provider implementation for Amazon Bedrock using Bearer token authentication
 ///
 /// This provider uses the AWS SDK with Bearer token authentication instead of
 /// AWS SigV4 signing, allowing it to work with Bedrock Access Gateway.
-pub struct BedrockProvider<T> {
+pub struct BedrockProvider {
     provider: Provider<Url>,
     region: String,
     client: OnceCell<Client>,
-    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<H: HttpClientService> BedrockProvider<H> {
+impl BedrockProvider {
     /// Creates a new BedrockProvider instance
     ///
     /// Credentials are loaded from the provider's credential:
@@ -37,10 +38,10 @@ impl<H: HttpClientService> BedrockProvider<H> {
             .context("Bedrock requires credentials")?;
 
         // Validate API key (bearer token)
-        let bearer_token = match &credential.auth_details {
-            AuthDetails::ApiKey(key) if !key.is_empty() => key.to_string(),
+        match &credential.auth_details {
+            AuthDetails::ApiKey(key) if !key.is_empty() => {}
             _ => anyhow::bail!("Bearer token is required in API key field"),
-        };
+        }
 
         // Extract region from URL params
         let region_param: paws_domain::URLParam = "AWS_REGION".to_string().into();
@@ -50,24 +51,46 @@ impl<H: HttpClientService> BedrockProvider<H> {
             .map(|v| v.to_string())
             .unwrap_or_else(|| "us-east-1".to_string());
 
-        // Configure AWS SDK client with Bearer token authentication
-        let config = aws_sdk_bedrockruntime::Config::builder()
-            .region(aws_sdk_bedrockruntime::config::Region::new(region.clone()))
-            .bearer_token(Token::new(bearer_token, None))
-            .sleep_impl(aws_smithy_async::rt::sleep::TokioSleep::new())
-            .build();
+        Ok(Self { provider, region, client: OnceCell::new() })
+    }
 
-        let client = aws_sdk_bedrockruntime::Client::from_conf(config);
+    /// Initializes and returns the AWS Bedrock client
+    ///
+    /// The client is lazily initialized on first call and reused for subsequent
+    /// calls. This avoids creating the client during tests that only validate
+    /// configuration. Uses async locking to ensure thread-safe initialization.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bearer token cannot be retrieved from
+    /// credentials
+    async fn init(&self) -> Result<&Client> {
+        self.client
+            .get_or_try_init(|| async {
+                // Get the bearer token from provider credentials
+                let bearer_token = self
+                    .provider
+                    .credential
+                    .as_ref()
+                    .and_then(|c| match &c.auth_details {
+                        AuthDetails::ApiKey(key) if !key.is_empty() => {
+                            Some(key.as_ref().to_string())
+                        }
+                        _ => None,
+                    })
+                    .context("Bearer token is required in API key field")?;
 
-        let client_cell = OnceCell::new();
-        client_cell.set(client).ok();
+                // Configure AWS SDK client with Bearer token authentication
+                let config = aws_sdk_bedrockruntime::Config::builder()
+                    .region(aws_sdk_bedrockruntime::config::Region::new(
+                        self.region.clone(),
+                    ))
+                    .bearer_token(Token::new(bearer_token, None))
+                    .build();
 
-        Ok(Self {
-            provider,
-            region,
-            client: client_cell,
-            _phantom: std::marker::PhantomData,
-        })
+                Ok(aws_sdk_bedrockruntime::Client::from_conf(config))
+            })
+            .await
     }
 
     /// Check if the model supports prompt caching
@@ -179,9 +202,8 @@ impl<H: HttpClientService> BedrockProvider<H> {
 
         // Build and send the converse_stream request
         let output = self
-            .client
-            .get()
-            .expect("Client should be initialized in constructor")
+            .init()
+            .await?
             .converse_stream()
             .model_id(model_id)
             .set_system(bedrock_input.system.clone())
@@ -259,6 +281,15 @@ impl<H: HttpClientService> BedrockProvider<H> {
             _ => Ok(vec![]),
         }
     }
+}
+
+/// Creates a Bedrock client from a provider configuration
+#[allow(dead_code)]
+pub fn create_bedrock_client(
+    provider: &Provider<Url>,
+    _retry_config: Arc<RetryConfig>,
+) -> anyhow::Result<BedrockProvider> {
+    BedrockProvider::new(provider.clone())
 }
 
 /// Converts Bedrock stream events to ChatCompletionMessage
@@ -799,7 +830,7 @@ impl FromDomain<paws_domain::ToolCallArguments> for aws_smithy_types::Document {
     fn from_domain(args: paws_domain::ToolCallArguments) -> anyhow::Result<Self> {
         use anyhow::Context as _;
 
-        // Parse the arguments to get a serde_json::Value
+        // Parse arguments to get a serde_json::Value
         let json_value = args
             .parse()
             .with_context(|| "Failed to parse tool call arguments")?;
@@ -874,7 +905,7 @@ impl FromDomain<paws_domain::ToolChoice> for aws_sdk_bedrockruntime::types::Tool
                     .map_err(|e| anyhow::anyhow!("Failed to build tool choice: {}", e))?,
             ),
             paws_domain::ToolChoice::None => {
-                // For None, we'll return a default Auto choice, but the caller should handle
+                // For None, we'll return a default Auto choice, but caller should handle
                 // this by not setting tool_choice at all
                 ToolChoice::Auto(AutoToolChoice::builder().build())
             }
@@ -886,43 +917,10 @@ impl FromDomain<paws_domain::ToolChoice> for aws_sdk_bedrockruntime::types::Tool
 
 #[cfg(test)]
 mod tests {
+    use paws_domain::InputModality;
     use pretty_assertions::assert_eq;
 
     use super::*;
-
-    struct MockHttpClient;
-
-    #[async_trait::async_trait]
-    impl HttpClientService for MockHttpClient {
-        async fn get(
-            &self,
-            _url: &reqwest::Url,
-            _headers: Option<reqwest::header::HeaderMap>,
-        ) -> anyhow::Result<reqwest::Response> {
-            Err(anyhow::anyhow!("Mock HTTP client - no real requests"))
-        }
-
-        async fn post(
-            &self,
-            _url: &reqwest::Url,
-            _body: bytes::Bytes,
-        ) -> anyhow::Result<reqwest::Response> {
-            Err(anyhow::anyhow!("Mock HTTP client - no real requests"))
-        }
-
-        async fn delete(&self, _url: &reqwest::Url) -> anyhow::Result<reqwest::Response> {
-            Err(anyhow::anyhow!("Mock HTTP client - no real requests"))
-        }
-
-        async fn eventsource(
-            &self,
-            _url: &reqwest::Url,
-            _headers: Option<reqwest::header::HeaderMap>,
-            _body: bytes::Bytes,
-        ) -> anyhow::Result<reqwest_eventsource::EventSource> {
-            Err(anyhow::anyhow!("Mock HTTP client - no real requests"))
-        }
-    }
 
     fn provider_fixture(token: &str, region: Option<&str>) -> Provider<Url> {
         use paws_domain::{
@@ -954,19 +952,18 @@ mod tests {
         }
     }
 
-    fn bedrock_provider_fixture(region: &str) -> BedrockProvider<MockHttpClient> {
+    fn bedrock_provider_fixture(region: &str) -> BedrockProvider {
         BedrockProvider {
             provider: provider_fixture("test-token", Some(region)),
             client: OnceCell::new(),
             region: region.to_string(),
-            _phantom: std::marker::PhantomData,
         }
     }
 
     #[test]
     fn test_new_with_valid_credentials() {
         let fixture = provider_fixture("my-bearer-token", Some("eu-central-1"));
-        let actual = BedrockProvider::<MockHttpClient>::new(fixture);
+        let actual = BedrockProvider::new(fixture);
         assert!(actual.is_ok());
     }
 
@@ -974,7 +971,7 @@ mod tests {
     fn test_new_without_credentials() {
         let mut fixture = provider_fixture("token", None);
         fixture.credential = None;
-        let actual = BedrockProvider::<MockHttpClient>::new(fixture);
+        let actual = BedrockProvider::new(fixture);
         assert!(actual.is_err());
         assert_eq!(
             actual.err().unwrap().to_string(),
@@ -985,7 +982,7 @@ mod tests {
     #[test]
     fn test_new_with_empty_token() {
         let fixture = provider_fixture("", None);
-        let actual = BedrockProvider::<MockHttpClient>::new(fixture);
+        let actual = BedrockProvider::new(fixture);
         assert!(actual.is_err());
         assert_eq!(
             actual.err().unwrap().to_string(),
@@ -996,7 +993,7 @@ mod tests {
     #[test]
     fn test_new_defaults_to_us_east_1() {
         let fixture = provider_fixture("token", None);
-        let actual = BedrockProvider::<MockHttpClient>::new(fixture).unwrap();
+        let actual = BedrockProvider::new(fixture).unwrap();
         let expected = "us-east-1";
         assert_eq!(actual.region, expected);
     }
@@ -1004,27 +1001,26 @@ mod tests {
     #[test]
     fn test_new_uses_custom_region() {
         let fixture = provider_fixture("token", Some("ap-southeast-2"));
-        let actual = BedrockProvider::<MockHttpClient>::new(fixture).unwrap();
+        let actual = BedrockProvider::new(fixture).unwrap();
         let expected = "ap-southeast-2";
         assert_eq!(actual.region, expected);
     }
 
     #[test]
     fn test_supports_caching_claude() {
-        let actual =
-            BedrockProvider::<MockHttpClient>::supports_caching("anthropic.claude-3-sonnet");
+        let actual = BedrockProvider::supports_caching("anthropic.claude-3-sonnet");
         assert!(actual);
     }
 
     #[test]
     fn test_supports_caching_anthropic() {
-        let actual = BedrockProvider::<MockHttpClient>::supports_caching("anthropic.claude-v2");
+        let actual = BedrockProvider::supports_caching("anthropic.claude-v2");
         assert!(actual);
     }
 
     #[test]
     fn test_supports_caching_non_claude() {
-        let actual = BedrockProvider::<MockHttpClient>::supports_caching("amazon.nova-pro-v1:0");
+        let actual = BedrockProvider::supports_caching("amazon.nova-pro-v1:0");
         assert!(!actual);
     }
 
@@ -1217,6 +1213,7 @@ mod tests {
                 tools_supported: None,
                 supports_parallel_tool_calls: None,
                 supports_reasoning: None,
+                input_modalities: vec![InputModality::Text],
             },
             Model {
                 id: ModelId::from("claude-3-sonnet".to_string()),
@@ -1226,6 +1223,7 @@ mod tests {
                 tools_supported: None,
                 supports_parallel_tool_calls: None,
                 supports_reasoning: None,
+                input_modalities: vec![InputModality::Text],
             },
         ];
         fixture_provider.models = Some(ModelSource::Hardcoded(fixture_models.clone()));
@@ -1234,7 +1232,6 @@ mod tests {
             provider: fixture_provider,
             client: OnceCell::new(),
             region: "us-east-1".to_string(),
-            _phantom: std::marker::PhantomData::<MockHttpClient>,
         };
 
         let actual = bedrock.models().await.unwrap();
@@ -1249,7 +1246,6 @@ mod tests {
             provider: fixture,
             client: OnceCell::new(),
             region: "us-east-1".to_string(),
-            _phantom: std::marker::PhantomData::<MockHttpClient>,
         };
 
         let actual = bedrock.models().await.unwrap();

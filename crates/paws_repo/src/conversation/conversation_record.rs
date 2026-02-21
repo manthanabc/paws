@@ -857,6 +857,7 @@ impl From<MetricsRecord> for paws_domain::Metrics {
                     Some((path, operation))
                 })
                 .collect(),
+            files_accessed: Default::default(),
         }
     }
 }
