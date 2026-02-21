@@ -429,6 +429,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 }
             }
             // Centralized prompt call at the end of the loop
+            self.spinner.stop(None)?;
             command = self.prompt().await;
             self.markdown.reset();
         }
