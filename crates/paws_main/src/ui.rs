@@ -312,6 +312,19 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
     }
 
     async fn run_inner(&mut self) -> Result<()> {
+        // 'conversation resume' enters interactive mode like --resume does.
+        // Convert it to CLI flags before the subcommand dispatch so the interactive
+        // loop handles initialisation, context printing, and the REPL.
+        if let Some(TopLevelCommand::Conversation(ref cg)) = self.cli.subcommands.clone() {
+            if let ConversationCommand::Resume { id } = cg.command {
+                match id {
+                    Some(id) => self.cli.conversation_id = Some(id),
+                    None => self.cli.resume = true,
+                }
+                self.cli.subcommands = None;
+            }
+        }
+
         if let Some(cmd) = self.cli.subcommands.clone() {
             return self.handle_subcommands(cmd).await;
         }
