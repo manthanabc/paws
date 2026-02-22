@@ -14,7 +14,7 @@ use url::Url;
 use crate::http::HttpClient;
 use crate::provider::client::{Client, ClientBuilder};
 #[derive(Clone)]
-pub struct PawsProviderService<I> {
+pub struct PawsProviderService<I: HttpInfra> {
     retry_config: Arc<RetryConfig>,
     cached_clients: Arc<Mutex<HashMap<ProviderId, Client<HttpClient<I>>>>>,
     cached_models: Arc<Mutex<HashMap<ProviderId, Vec<Model>>>>,

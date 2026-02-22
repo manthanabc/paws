@@ -26,7 +26,7 @@ Research the codebase to understand:
 - Potential challenges and risks
 - Data flows from entry points to final usage
 
-Use `search`, `sem_search`, and `read` tools to examine the codebase. Use `sage` if deeper research is required for the use-case. Explicitly cite sources using `filepath:line` format in your plan.
+Use `search` and `read` tools to examine the codebase. Use `sage` if deeper research is required for the use-case. Explicitly cite sources using `filepath:line` format in your plan.
 
 ### 2. Create Strategic Plan
 

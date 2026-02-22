@@ -16,6 +16,7 @@ fn fixture_environment() -> Environment {
     let max_bytes: f64 = 250.0 * 1024.0; // 250 KB
     let fixture: Environment = Faker.fake();
     fixture
+        .cwd(PathBuf::from("/projects/test")) // Set deterministic cwd to avoid flaky path formatting
         .max_search_lines(25)
         .max_search_result_bytes(max_bytes.ceil() as usize)
         .fetch_truncation_limit(55)
@@ -187,7 +188,7 @@ fn test_fs_create_basic() {
         output: FsCreateOutput {
             path: "/home/user/new_file.txt".to_string(),
             before: None,
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -216,7 +217,7 @@ fn test_fs_create_overwrite() {
         output: FsCreateOutput {
             path: "/home/user/existing_file.txt".to_string(),
             before: Some("Old content".to_string()),
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -691,7 +692,7 @@ fn test_fs_create_with_warning() {
         output: FsCreateOutput {
             path: "/home/user/file_with_warning.txt".to_string(),
             before: None,
-
+            errors: vec![],
             content_hash: compute_hash(content),
         },
     };
@@ -805,6 +806,7 @@ fn test_fs_patch_basic() {
             content: "universe".to_string(),
         },
         output: PatchOutput {
+            errors: vec![],
             before: "Hello world\nThis is a test".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),
@@ -834,6 +836,7 @@ fn test_fs_patch_with_warning() {
             content: "\nnew line".to_string(),
         },
         output: PatchOutput {
+            errors: vec![],
             before: "line1\nline2".to_string(),
             after: after_content.to_string(),
             content_hash: compute_hash(after_content),

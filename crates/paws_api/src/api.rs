@@ -173,6 +173,14 @@ pub trait API: Sync + Send {
     /// Remove provider credentials (logout)
     async fn remove_provider(&self, provider_id: &ProviderId) -> Result<()>;
 
+    /// Migrates environment variable-based credentials to file-based
+    /// credentials. Returns Some(MigrationResult) if credentials were migrated,
+    /// None if file already exists or no credentials to migrate.
+    async fn migrate_env_credentials(&self) -> Result<Option<paws_domain::MigrationResult>>;
+
+    /// Hydrates the update channel state
+    fn hydrate_channel(&self) -> Result<()>;
+
     async fn generate_data(
         &self,
         data_parameters: DataGenerationParameters,

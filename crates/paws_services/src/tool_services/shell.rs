@@ -111,6 +111,10 @@ mod tests {
     }
 
     impl EnvironmentInfra for MockCommandInfra {
+        fn is_restricted(&self) -> bool {
+            false
+        }
+
         fn get_environment(&self) -> Environment {
             use fake::{Fake, Faker};
             Faker.fake()

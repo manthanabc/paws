@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use paws_app::AppConfigService;
-use paws_domain::{
-    AppConfig, AppConfigRepository, ModelId, Provider, ProviderId, ProviderRepository,
-};
+use paws_app::domain::Provider;
+use paws_domain::{AppConfig, AppConfigRepository, ModelId, ProviderId, ProviderRepository};
 use url::Url;
 
 /// Service for managing user preferences for default providers and models.
@@ -37,15 +36,10 @@ impl<F: ProviderRepository + AppConfigRepository + Send + Sync> AppConfigService
 {
     async fn get_default_provider(&self) -> anyhow::Result<Provider<Url>> {
         let app_config = self.infra.get_app_config().await?;
-        if let Some(provider_id) = app_config.provider
-            && let Ok(provider) = self.infra.get_provider(provider_id).await
-            && provider.is_configured()
-        {
-            return Ok(provider);
-        }
-
-        // No default provider configured - return error to force explicit configuration
-        Err(paws_domain::Error::NoDefaultProvider.into())
+        let provider_id = app_config
+            .provider
+            .ok_or_else(|| anyhow::anyhow!("No default provider set"))?;
+        self.infra.get_provider(provider_id).await
     }
 
     async fn set_default_provider(&self, provider_id: ProviderId) -> anyhow::Result<()> {
@@ -97,8 +91,8 @@ mod tests {
     use std::sync::Mutex;
 
     use paws_domain::{
-        AnyProvider, AppConfig, MigrationResult, Model, ModelSource, Provider, ProviderId,
-        ProviderResponse,
+        AnyProvider, ApiKey, AppConfig, AuthCredential, AuthDetails, InputModality,
+        MigrationResult, Model, ModelSource, ProviderId, ProviderResponse,
     };
     use pretty_assertions::assert_eq;
     use url::Url;
@@ -121,11 +115,9 @@ mod tests {
                         provider_type: Default::default(),
                         response: Some(ProviderResponse::OpenAI),
                         url: Url::parse("https://api.openai.com").unwrap(),
-                        credential: Some(paws_domain::AuthCredential {
+                        credential: Some(AuthCredential {
                             id: ProviderId::OPENAI,
-                            auth_details: paws_domain::AuthDetails::ApiKey(
-                                paws_domain::ApiKey::from("test-key".to_string()),
-                            ),
+                            auth_details: AuthDetails::ApiKey(ApiKey::from("test-key".to_string())),
                             url_params: HashMap::new(),
                         }),
                         auth_methods: vec![paws_domain::AuthMethod::ApiKey],
@@ -138,6 +130,7 @@ mod tests {
                             tools_supported: Some(true),
                             supports_parallel_tool_calls: Some(true),
                             supports_reasoning: Some(false),
+                            input_modalities: vec![InputModality::Text],
                         }])),
                     },
                     Provider {
@@ -147,11 +140,9 @@ mod tests {
                         url: Url::parse("https://api.anthropic.com").unwrap(),
                         auth_methods: vec![paws_domain::AuthMethod::ApiKey],
                         url_params: vec![],
-                        credential: Some(paws_domain::AuthCredential {
+                        credential: Some(AuthCredential {
                             id: ProviderId::ANTHROPIC,
-                            auth_details: paws_domain::AuthDetails::ApiKey(
-                                paws_domain::ApiKey::from("test-key".to_string()),
-                            ),
+                            auth_details: AuthDetails::ApiKey(ApiKey::from("test-key".to_string())),
                             url_params: HashMap::new(),
                         }),
                         models: Some(ModelSource::Hardcoded(vec![Model {
@@ -162,6 +153,7 @@ mod tests {
                             tools_supported: Some(true),
                             supports_parallel_tool_calls: Some(true),
                             supports_reasoning: Some(true),
+                            input_modalities: vec![InputModality::Text],
                         }])),
                     },
                 ],
@@ -199,17 +191,11 @@ mod tests {
                 .ok_or_else(|| anyhow::anyhow!("Provider not found"))
         }
 
-        async fn upsert_credential(
-            &self,
-            _credential: paws_domain::AuthCredential,
-        ) -> anyhow::Result<()> {
+        async fn upsert_credential(&self, _credential: AuthCredential) -> anyhow::Result<()> {
             Ok(())
         }
 
-        async fn get_credential(
-            &self,
-            _id: &ProviderId,
-        ) -> anyhow::Result<Option<paws_domain::AuthCredential>> {
+        async fn get_credential(&self, _id: &ProviderId) -> anyhow::Result<Option<AuthCredential>> {
             Ok(None)
         }
 
@@ -257,7 +243,7 @@ mod tests {
         // Set OpenAI as the default provider in config
         service.set_default_provider(ProviderId::OPENAI).await?;
 
-        // Should return error since configured provider is not available
+        // Should return error since provider is not available
         let result = service.get_default_provider().await;
 
         assert!(result.is_err());

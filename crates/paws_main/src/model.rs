@@ -377,7 +377,6 @@ impl PawsCommandManager {
             "/retry" => Ok(SlashCommand::Retry),
             "/resume" => Ok(SlashCommand::Resume),
             "/conversation" | "/conversations" => Ok(SlashCommand::Conversations),
-
             text => {
                 let parts = text.split_ascii_whitespace().collect::<Vec<&str>>();
 
@@ -508,12 +507,12 @@ pub enum SlashCommand {
     /// Retry without modifying model context
     #[strum(props(usage = "Retry the last command"))]
     Retry,
-    /// Resume the last conversation or a specific conversation
-    #[strum(props(usage = "Resume the last conversation or a specific conversation"))]
-    Resume,
     /// List all conversations for the active workspace
     #[strum(props(usage = "List all conversations for the active workspace"))]
     Conversations,
+    /// Resume the last conversation or a specific conversation
+    #[strum(props(usage = "Resume the last conversation or a specific conversation"))]
+    Resume,
 
     /// Delete a conversation permanently
     #[strum(props(usage = "Delete a conversation permanently"))]
@@ -523,8 +522,8 @@ pub enum SlashCommand {
     #[strum(props(usage = "Switch directly to a specific agent"))]
     AgentSwitch(String),
 
-    /// Internal resize event
-    #[strum(props(usage = "Internal resize event"))]
+    /// Terminal resize event (internal use)
+    #[strum(props(usage = "Handle terminal resize event"))]
     Resize,
 
     /// Transcript Mode
@@ -547,7 +546,6 @@ impl SlashCommand {
             SlashCommand::Muse => "muse",
             SlashCommand::Sage => "sage",
             SlashCommand::Help => "help",
-
             SlashCommand::Dump { .. } => "dump",
             SlashCommand::Model => "model",
             SlashCommand::Provider => "provider",
@@ -558,10 +556,10 @@ impl SlashCommand {
             SlashCommand::Login => "login",
             SlashCommand::Logout => "logout",
             SlashCommand::Retry => "retry",
-            SlashCommand::Resume => "resume",
             SlashCommand::Conversations => "conversation",
             SlashCommand::Delete => "delete",
             SlashCommand::AgentSwitch(agent_id) => agent_id,
+            SlashCommand::Resume => "resume",
             SlashCommand::Resize => "resize",
             SlashCommand::Transcript => "transcript",
         }
@@ -576,7 +574,7 @@ impl SlashCommand {
 #[cfg(test)]
 mod tests {
     use console::strip_ansi_codes;
-    use paws_api::{ModelId, ModelSource, ProviderId, ProviderResponse};
+    use paws_api::{InputModality, ModelId, ModelSource, ProviderId, ProviderResponse};
     use paws_domain::{AnyProvider, Provider};
     use pretty_assertions::assert_eq;
     use url::Url;
@@ -796,6 +794,20 @@ mod tests {
     }
 
     #[test]
+    fn test_list_command_in_default_commands() {
+        // Setup
+        let manager = PawsCommandManager::default();
+        let commands = manager.list();
+
+        // The list command should be included
+        let contains_list = commands.iter().any(|cmd| cmd.name == "conversation");
+        assert!(
+            contains_list,
+            "Conversations command should be in default commands"
+        );
+    }
+
+    #[test]
     fn test_sanitize_agent_id_basic() {
         // Test basic sanitization
         let fixture = "test-agent";
@@ -926,6 +938,7 @@ mod tests {
             tools_supported,
             supports_parallel_tool_calls: None,
             supports_reasoning: None,
+            input_modalities: vec![InputModality::Text],
         }
     }
 
@@ -1071,9 +1084,9 @@ mod tests {
     #[test]
     fn test_cli_provider_display_no_domain() {
         let fixture = AnyProvider::Url(Provider {
-            id: ProviderId::FORGE,
+            id: ProviderId::ANTHROPIC,
             provider_type: paws_domain::ProviderType::Llm,
-            response: Some(ProviderResponse::OpenAI),
+            response: Some(ProviderResponse::Anthropic),
             url: Url::parse("http://localhost:8080/chat/completions").unwrap(),
             auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
@@ -1084,7 +1097,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = "✓ Paws                [localhost]";
+        let expected = "✓ Anthropic           [localhost]";
         assert_eq!(actual, expected);
     }
 
@@ -1111,9 +1124,9 @@ mod tests {
     #[test]
     fn test_cli_provider_display_ip_address() {
         let fixture = AnyProvider::Url(Provider {
-            id: ProviderId::FORGE,
+            id: ProviderId::ANTHROPIC,
             provider_type: paws_domain::ProviderType::Llm,
-            response: Some(ProviderResponse::OpenAI),
+            response: Some(ProviderResponse::Anthropic),
             url: Url::parse("http://192.168.1.1:8080/chat/completions").unwrap(),
             auth_methods: vec![paws_domain::AuthMethod::ApiKey],
             url_params: vec![],
@@ -1124,7 +1137,7 @@ mod tests {
         });
         let formatted = format!("{}", CliProvider(fixture));
         let actual = strip_ansi_codes(&formatted);
-        let expected = format!("✓ Paws                {}", markers::EMPTY);
+        let expected = format!("✓ Anthropic           {}", markers::EMPTY);
         assert_eq!(actual, expected);
     }
 

@@ -45,6 +45,10 @@ impl<
         let path = Path::new(&path);
         assert_absolute_path(path)?;
 
+        // Validate file syntax using remote validation API (graceful failure)
+        // Paws: Validation not implemented yet, returning empty errors
+        let errors = vec![];
+
         if let Some(parent) = Path::new(&path).parent() {
             self.infra
                 .create_dirs(parent)
@@ -84,6 +88,8 @@ impl<
         Ok(FsCreateOutput {
             path: path.display().to_string(),
             before: old_content,
+            errors,
+
             content_hash,
         })
     }

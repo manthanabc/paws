@@ -108,9 +108,8 @@ impl SpinnerManager {
                             if !hidden {
                                 let elapsed = start_time.elapsed().as_secs();
                                 render_spinner_line(spinner_frames[idx], &status_text, elapsed);
-                            } else {
-                                let _ = io::stdout().flush();
                             }
+                            let _ = io::stdout().flush();
                         } else {
                             println!("\r{}", s);
                         }
@@ -172,6 +171,10 @@ impl SpinnerManager {
                                         Clear(ClearType::CurrentLine),
                                         cursor::Show
                                     ));
+                                    let _ = io::stdout().flush();
+                                    let _ = disable_raw_mode();
+                                    active = false;
+                                    hidden = false;
                                     // Notify UI
                                     let _ = ctrl_c_tx.send(());
                                 }
@@ -288,6 +291,12 @@ impl SpinnerManager {
             self.hidden = false;
         }
         Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.message = None;
+        self.running = false;
+        self.hidden = false;
     }
 }
 

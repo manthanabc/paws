@@ -314,4 +314,16 @@ impl<A: Services, F: CommandInfra + EnvironmentInfra + SkillRepository + AppConf
     async fn get_default_provider(&self) -> Result<Provider<Url>> {
         self.services.get_default_provider().await
     }
+
+    async fn migrate_env_credentials(&self) -> Result<Option<paws_domain::MigrationResult>> {
+        self.services
+            .provider_service()
+            .migrate_env_credentials()
+            .await
+    }
+
+    fn hydrate_channel(&self) -> Result<()> {
+        // No-op for now as the service logic seems to be missing
+        Ok(())
+    }
 }

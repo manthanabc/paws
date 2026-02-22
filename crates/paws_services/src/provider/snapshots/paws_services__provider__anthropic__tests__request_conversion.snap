@@ -18,7 +18,7 @@ expression: "serde_json::to_string_pretty(&request).unwrap()"
       "content": [
         {
           "type": "text",
-          "text": "here is the system call."
+          "text": "here is system call."
         },
         {
           "type": "tool_use",
