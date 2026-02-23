@@ -171,10 +171,26 @@ async fn test_tool_call_start_end_responses_for_non_agent_tools() {
         ChatResponse::ToolCallStart(call) => Some(call),
         _ => None,
     });
+    assert!(
+        tool_call_start.is_some(),
+        "ToolCallStart should be present"
+    );
+    let tool_call_start = tool_call_start.unwrap();
     assert_eq!(
-        tool_call_start,
-        Some(&tool_call),
-        "ToolCallStart should contain the tool call"
+        tool_call_start.name, tool_call.name,
+        "ToolCallStart should contain the correct tool name"
+    );
+    assert_eq!(
+        tool_call_start.arguments, tool_call.arguments,
+        "ToolCallStart should contain the correct arguments"
+    );
+    assert!(
+        tool_call_start.timestamp.is_some(),
+        "ToolCallStart should have a recorded timestamp"
+    );
+    assert!(
+        tool_call_start.cwd.is_some(),
+        "ToolCallStart should have a recorded cwd"
     );
 
     let tool_call_end = chat_responses.iter().find_map(|response| match response {

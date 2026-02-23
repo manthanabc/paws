@@ -3084,7 +3084,10 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                                             catalog.to_content(&self.api.environment())
                                     {
                                         match content {
-                                            ChatResponseContent::Title(title) => {
+                                            ChatResponseContent::Title(mut title) => {
+                                                if let Some(ts) = call.timestamp {
+                                                    title.timestamp = ts;
+                                                }
                                                 self.writeln_title(title)?;
                                             }
                                             ChatResponseContent::PlainText(text)

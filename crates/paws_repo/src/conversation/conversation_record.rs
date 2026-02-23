@@ -5,6 +5,7 @@
 //! storage layer independent from domain model changes.
 
 use anyhow::Context as _;
+use chrono::{DateTime, Utc};
 use paws_domain::{Context, ConversationId};
 use serde::{Deserialize, Serialize};
 
@@ -114,6 +115,10 @@ pub(super) struct ToolCallFullRecord {
     name: ToolNameRecord,
     call_id: Option<ToolCallIdRecord>,
     arguments: ToolCallArgumentsRecord,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    timestamp: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cwd: Option<String>,
 }
 
 impl From<&paws_domain::ToolCallFull> for ToolCallFullRecord {
@@ -122,6 +127,8 @@ impl From<&paws_domain::ToolCallFull> for ToolCallFullRecord {
             name: ToolNameRecord::from(&call.name),
             call_id: call.call_id.as_ref().map(ToolCallIdRecord::from),
             arguments: ToolCallArgumentsRecord::from(&call.arguments),
+            timestamp: call.timestamp,
+            cwd: call.cwd.clone(),
         }
     }
 }
@@ -132,6 +139,8 @@ impl From<ToolCallFullRecord> for paws_domain::ToolCallFull {
             name: record.name.into(),
             call_id: record.call_id.map(Into::into),
             arguments: record.arguments.into(),
+            timestamp: record.timestamp,
+            cwd: record.cwd,
         }
     }
 }

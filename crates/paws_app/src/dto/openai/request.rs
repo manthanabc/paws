@@ -680,6 +680,8 @@ mod tests {
             call_id: Some(ToolCallId::new("123")),
             name: ToolName::new("test_tool"),
             arguments: serde_json::json!({"key": "value"}).into(),
+            timestamp: None,
+            cwd: None,
         };
 
         let assistant_message = ContextMessage::Text(

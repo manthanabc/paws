@@ -312,6 +312,8 @@ impl TryFrom<Response> for ChatCompletionMessage {
                                         arguments: serde_json::from_str(
                                             &tool_call.function.arguments,
                                         )?,
+                                        timestamp: None,
+                                        cwd: None,
                                     });
                                 }
                             }
