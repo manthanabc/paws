@@ -23,7 +23,7 @@ clap = { version = "4.5.60", features = ["derive"] }
 colored = "3.1.1"
 console = "0.16.0"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
-convert_case = "0.10.0"
+convert_case = "0.11.0"
 derive_more = { version = "2.1.1", features = ["from", "display", "debug", "deref", "as_ref"] }
 derive_setters = "0.1.9"
 dirs = "6.0.0"
@@ -40,7 +40,7 @@ ignore = "0.4.23"
 is_ci = "1.2.0"
 indexmap = "2.13.0"
 insta = { version = "1.46.3", features = ["json", "yaml"] }
-infer = "0.16.0"
+infer = "0.19.0"
 lazy_static = "1.4.0"
 machineid-rs = "1.2.4"
 mockito = "1.7.2"
@@ -65,8 +65,8 @@ serde_json = "1.0.149"
 serde_yml = "0.0.12"
 sha2 = "0.10"
 strip-ansi-escapes = "0.2.1"
-strum = "0.27.1"
-strum_macros = "0.27.1"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 syn = { version = "2.0.117", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
 tempfile = "3.25.0"
