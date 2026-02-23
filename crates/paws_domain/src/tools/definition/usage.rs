@@ -39,7 +39,7 @@ impl Display for ToolUsagePrompt<'_> {
                 .map(|props| {
                     props
                         .iter()
-                        .filter_map(|(name, prop_schema)| {
+                        .map(|(name, prop_schema)| {
                             let desc = prop_schema
                                 .get("description")
                                 .and_then(|v| v.as_str())
@@ -48,14 +48,14 @@ impl Display for ToolUsagePrompt<'_> {
 
                             let type_of = prop_schema.get("type").cloned();
 
-                            Some((
+                            (
                                 name.clone(),
                                 Parameter {
                                     description: desc,
                                     type_of,
                                     is_required: required.contains(name),
                                 },
-                            ))
+                            )
                         })
                         .collect::<BTreeMap<_, _>>()
                 })
