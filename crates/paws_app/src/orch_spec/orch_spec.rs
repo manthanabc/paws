@@ -171,10 +171,7 @@ async fn test_tool_call_start_end_responses_for_non_agent_tools() {
         ChatResponse::ToolCallStart(call) => Some(call),
         _ => None,
     });
-    assert!(
-        tool_call_start.is_some(),
-        "ToolCallStart should be present"
-    );
+    assert!(tool_call_start.is_some(), "ToolCallStart should be present");
     let tool_call_start = tool_call_start.unwrap();
     assert_eq!(
         tool_call_start.name, tool_call.name,

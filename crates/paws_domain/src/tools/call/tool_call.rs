@@ -155,7 +155,13 @@ impl ToolCallFull {
                 ToolCallArguments::from_json(current_arguments.as_str())
             };
 
-            tool_calls.push(ToolCallFull { name: tool_name, call_id: current_call_id, arguments, timestamp: None, cwd: None });
+            tool_calls.push(ToolCallFull {
+                name: tool_name,
+                call_id: current_call_id,
+                arguments,
+                timestamp: None,
+                cwd: None,
+            });
         }
 
         Ok(tool_calls)
