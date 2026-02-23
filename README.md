@@ -63,6 +63,7 @@ Updates -
  - [X] Copilot (free to use gpt 5 mini, claude haiku 4.5, grok code fast 1) 
  - [X] Gemini (Everything in AI studio but in native format)
  - [X] Antigravity via [antigravity-claude-proxy](https://github.com/badrisnarayanan/antigravity-claude-proxy) (free to use gemini 3 pro (high), gemini flash latest, claude opus 4.5, claude sonnet 4.5, Gpt oss 120B)
+ - [X] iFlow (free to use: deepseek-v3.2, deepseek-v3, deepseek-r1, qwen3-235b, qwen3-235b-a22b-instruct, qwen3-235b-a22b-thinking-2507, qwen3-32b, qwen3-max, qwen3-max-preview, qwen3-coder-plus, qwen3-vl-plus, glm-4.6, kimi-k2, kimi-k2-0905, iflow-rome-30ba3b)
 
 Dropeed stuff-
 - [X] posthog tracking

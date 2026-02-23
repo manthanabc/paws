@@ -65,6 +65,7 @@ impl ProviderId {
     pub const IO_INTELLIGENCE: ProviderId = ProviderId(Cow::Borrowed("io_intelligence"));
     pub const BEDROCK: ProviderId = ProviderId(Cow::Borrowed("bedrock"));
     pub const GEMINI: ProviderId = ProviderId(Cow::Borrowed("gemini"));
+    pub const IFLOW: ProviderId = ProviderId(Cow::Borrowed("iflow"));
 
     /// Returns all built-in provider IDs
     ///
@@ -90,6 +91,7 @@ impl ProviderId {
             ProviderId::IO_INTELLIGENCE,
             ProviderId::BEDROCK,
             ProviderId::GEMINI,
+            ProviderId::IFLOW,
         ]
     }
 
@@ -111,6 +113,7 @@ impl ProviderId {
             "io_intelligence" => "IOIntelligence".to_string(),
             "gemini" => "Gemini".to_string(),
             "bedrock" => "Bedrock".to_string(),
+            "iflow" => "iFlow".to_string(),
             _ => {
                 // For other providers, use UpperCamelCase conversion
                 use convert_case::{Case, Casing};
@@ -152,6 +155,7 @@ impl std::str::FromStr for ProviderId {
             "io_intelligence" => ProviderId::IO_INTELLIGENCE,
             "gemini" => ProviderId::GEMINI,
             "bedrock" => ProviderId::BEDROCK,
+            "iflow" => ProviderId::IFLOW,
             // For custom providers, use Cow::Owned to avoid memory leaks
             custom => ProviderId(Cow::Owned(custom.to_string())),
         };
@@ -486,6 +490,7 @@ mod tests {
             "AnthropicCompatible"
         );
         assert_eq!(ProviderId::IO_INTELLIGENCE.to_string(), "IOIntelligence");
+        assert_eq!(ProviderId::IFLOW.to_string(), "iFlow");
     }
 
     #[test]
