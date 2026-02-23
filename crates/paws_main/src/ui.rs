@@ -368,8 +368,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         }
 
         // Display the banner in dimmed colors since we're in interactive mode
-        self.display_banner().await?;
-        self.init_state(true).await?;
+        
 
         self.trace_user();
         self.hydrate_caches();

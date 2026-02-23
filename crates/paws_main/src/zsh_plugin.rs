@@ -3,7 +3,7 @@ use rust_embed::RustEmbed;
 
 /// Embeds all shell plugin files for zsh integration
 #[derive(RustEmbed)]
-#[folder = "$CARGO_MANIFEST_DIR/../../shell-plugin"]
+#[folder = "../../shell-plugin"]
 #[include = "**/*.zsh"]
 #[exclude = "paws.plugin.zsh"]
 #[allow(dead_code)]

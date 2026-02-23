@@ -106,7 +106,6 @@ workspace = true
 
 [dependencies.rust-embed]
 version = "8.11"
-features = [ "interpolate-folder-path",]
 
 [dependencies.indexmap]
 workspace = true
