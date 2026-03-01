@@ -69,7 +69,7 @@ strum = "0.28.0"
 strum_macros = "0.28.0"
 syn = { version = "2.0.117", features = ["derive", "parsing"] }
 sysinfo = "0.36.1"
-tempfile = "3.25.0"
+tempfile = "3.26.0"
 termimad = "0.34.1"
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = [
