@@ -157,8 +157,8 @@ impl Console {
                         {
                             return Ok(SlashCommand::Transcript);
                         }
-                        KeyCode::Up => {
-                            if history_index > 0 {
+                        KeyCode::Up
+                            if history_index > 0 => {
                                 if history_index == history.len() {
                                     temp_buffer = buffer.clone();
                                 }
@@ -167,9 +167,8 @@ impl Console {
                                 buffer = history[history_index].clone();
                                 self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
-                        }
-                        KeyCode::Down => {
-                            if history_index < history.len() {
+                        KeyCode::Down
+                            if history_index < history.len() => {
                                 let old_buffer = buffer.clone();
                                 history_index += 1;
                                 if history_index == history.len() {
@@ -179,7 +178,6 @@ impl Console {
                                 }
                                 self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                             }
-                        }
                         KeyCode::Char('c')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
                         {
@@ -210,14 +208,13 @@ impl Console {
                             print!("{}", c);
                             io::stdout().flush()?;
                         }
-                        KeyCode::Backspace => {
-                            if !buffer.is_empty() {
+                        KeyCode::Backspace
+                            if !buffer.is_empty() => {
                                 buffer.pop();
                                 // Move back, print space, move back
                                 print!("\x08 \x08");
                                 io::stdout().flush()?;
                             }
-                        }
                         _ => {}
                     }
                 }
