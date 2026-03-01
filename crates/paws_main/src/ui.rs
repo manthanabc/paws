@@ -1944,9 +1944,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         ))?;
         // Try to copy code to clipboard automatically (not available on Android)
         #[cfg(not(target_os = "android"))]
-        let clipboard_copied = arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.set_text(user_code))
-            .is_ok();
+        let clipboard_copied = {
+            use copypasta::ClipboardProvider;
+            copypasta::ClipboardContext::new()
+                .and_then(|mut ctx| ctx.set_contents(user_code.to_owned()))
+                .is_ok()
+        };
 
         #[cfg(target_os = "android")]
         let clipboard_copied = false;
