@@ -742,17 +742,15 @@ impl TranscriptRenderer {
                 Some(Ok(event::Event::Mouse(mouse_event))) => {
                     let content_height = height.saturating_sub(1) as usize;
                     match mouse_event.kind {
-                        MouseEventKind::ScrollUp => {
-                            if scroll_offset > 0 {
+                        MouseEventKind::ScrollUp
+                            if scroll_offset > 0 => {
                                 scroll_offset = scroll_offset.saturating_sub(3);
                             }
-                        }
-                        MouseEventKind::ScrollDown => {
-                            if scroll_offset + content_height < lines.len() {
+                        MouseEventKind::ScrollDown
+                            if scroll_offset + content_height < lines.len() => {
                                 scroll_offset = (scroll_offset + 3)
                                     .min(lines.len().saturating_sub(content_height));
                             }
-                        }
                         _ => {}
                     }
 
