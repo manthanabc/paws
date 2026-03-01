@@ -10,6 +10,7 @@ edition = "2024"
 [dependencies]
 atty = "0.2"
 base64 = "0.22"
+copypasta = "0.10.2"
 crossterm = { version = "0.29", features = ["event-stream"] }
 futures.workspace = true
 paws_services.workspace = true
