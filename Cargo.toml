@@ -18,7 +18,7 @@ aws-smithy-types = "1.3"
 aws-smithy-async = { version = "1.2", features = ["rt-tokio"] }
 base64 = "0.22.1"
 bytes = "1.11.1"
-chrono = { version = "0.4.43", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive"] }
 colored = "3.1.1"
 console = "0.16.0"
