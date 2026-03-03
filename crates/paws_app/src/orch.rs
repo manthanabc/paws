@@ -73,6 +73,11 @@ impl<S: AgentService> Orchestrator<S> {
             .collect::<HashSet<_>>();
 
         for tool_call in tool_calls {
+            // Record the timestamp and cwd at the time this tool call starts
+            let mut tool_call = tool_call.clone();
+            tool_call.timestamp = Some(chrono::Utc::now());
+            tool_call.cwd = Some(self.environment.cwd.to_string_lossy().into_owned());
+
             // Send the start notification for system tools and not agent as a tool
             let is_system_tool = system_tools.contains(&tool_call.name);
             if is_system_tool {
@@ -103,7 +108,7 @@ impl<S: AgentService> Orchestrator<S> {
             }
             // Ensure all tool calls and results are recorded
             // Adding task completion records is critical for compaction to work correctly
-            tool_call_records.push((tool_call.clone(), tool_result));
+            tool_call_records.push((tool_call, tool_result));
         }
 
         Ok(tool_call_records)

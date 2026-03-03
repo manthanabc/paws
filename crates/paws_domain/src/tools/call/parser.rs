@@ -84,6 +84,8 @@ impl From<ToolCallParsed> for ToolCallFull {
             name: ToolName::new(value.name),
             call_id: None,
             arguments: ToolCallArguments::from_parameters(value.args),
+            timestamp: None,
+            cwd: None,
         }
     }
 }
@@ -170,6 +172,8 @@ mod tests {
                 name: ToolName::new(&self.name),
                 call_id: None,
                 arguments: ToolCallArguments::from_parameters(self.args.clone()),
+                timestamp: None,
+                cwd: None,
             }
         }
     }
@@ -220,6 +224,8 @@ mod tests {
             name: ToolName::new("read"),
             call_id: None,
             arguments: json!({"path":"/a/b/c.txt"}).into(),
+            timestamp: None,
+            cwd: None,
         }];
         assert_eq!(action, expected);
     }
@@ -375,6 +381,8 @@ mod tests {
             name: ToolName::new("search"),
             call_id: None,
             arguments: json!({"path":"/test/path","regex":"test"}).into(),
+            timestamp: None,
+            cwd: None,
         }];
         assert_eq!(action, expected);
     }
@@ -393,6 +401,8 @@ mod tests {
             name: ToolName::new("foo"),
             call_id: None,
             arguments: json!({"p1":"\nabc\n"}).into(),
+            timestamp: None,
+            cwd: None,
         }];
         assert_eq!(action, expected);
     }

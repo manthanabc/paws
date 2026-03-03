@@ -236,7 +236,10 @@ impl TranscriptRenderer {
                                     && let Some(content) = catalog.to_content(&self.environment)
                                 {
                                     match content {
-                                        ChatResponseContent::Title(title) => {
+                                        ChatResponseContent::Title(mut title) => {
+                                            if let Some(ts) = call.timestamp {
+                                                title.timestamp = ts;
+                                            }
                                             lines.push(title.display().to_string());
                                         }
                                         ChatResponseContent::PlainText(text)

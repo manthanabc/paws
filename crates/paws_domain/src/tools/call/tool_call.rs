@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use chrono::{DateTime, Utc};
 use derive_getters::Getters;
 use derive_more::derive::From;
 use derive_setters::Setters;
@@ -80,6 +81,12 @@ pub struct ToolCallFull {
     pub name: ToolName,
     pub call_id: Option<ToolCallId>,
     pub arguments: ToolCallArguments,
+    /// The timestamp when this tool call was initiated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<DateTime<Utc>>,
+    /// The current working directory at the time this tool call was initiated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
 }
 
 impl ToolCallFull {
@@ -88,6 +95,8 @@ impl ToolCallFull {
             name: tool_name.into(),
             call_id: None,
             arguments: ToolCallArguments::default(),
+            timestamp: None,
+            cwd: None,
         }
     }
 
@@ -120,6 +129,8 @@ impl ToolCallFull {
                             name: tool_name,
                             call_id: Some(existing_call_id.clone()),
                             arguments,
+                            timestamp: None,
+                            cwd: None,
                         });
                     }
                     current_arguments.clear();
@@ -144,7 +155,13 @@ impl ToolCallFull {
                 ToolCallArguments::from_json(current_arguments.as_str())
             };
 
-            tool_calls.push(ToolCallFull { name: tool_name, call_id: current_call_id, arguments });
+            tool_calls.push(ToolCallFull {
+                name: tool_name,
+                call_id: current_call_id,
+                arguments,
+                timestamp: None,
+                cwd: None,
+            });
         }
 
         Ok(tool_calls)
@@ -317,11 +334,15 @@ mod tests {
                 arguments: ToolCallArguments::from_json(
                     r#"{"path": "crates/paws_services/src/fixtures/mascot.md"}"#,
                 ),
+                timestamp: None,
+                cwd: None,
             },
             ToolCallFull {
                 name: ToolName::new("read"),
                 call_id: Some(ToolCallId("call_2".to_string())),
                 arguments: ToolCallArguments::from_json(r#"{"path": "docs/onboarding.md"}"#),
+                timestamp: None,
+                cwd: None,
             },
             ToolCallFull {
                 name: ToolName::new("read"),
@@ -329,6 +350,8 @@ mod tests {
                 arguments: ToolCallArguments::from_json(
                     r#"{"path": "crates/paws_services/src/service/service.md"}"#,
                 ),
+                timestamp: None,
+                cwd: None,
             },
         ];
 
@@ -449,6 +472,8 @@ mod tests {
             call_id: Some(ToolCallId("call_1".to_string())),
             name: ToolName::new("read"),
             arguments: ToolCallArguments::from_json(r#"{"path": "docs/onboarding.md"}"#),
+            timestamp: None,
+            cwd: None,
         }];
 
         assert_eq!(actual, expected);
@@ -475,6 +500,8 @@ mod tests {
             call_id: Some(ToolCallId("call_1".to_string())),
             name: ToolName::new("screenshot"),
             arguments: ToolCallArguments::default(),
+            timestamp: None,
+            cwd: None,
         }];
 
         assert_eq!(actual, expected);
@@ -526,6 +553,8 @@ mod tests {
             name: ToolName::new("read"),
             call_id: Some(ToolCallId("0".to_string())),
             arguments: ToolCallArguments::from_json(r#"{"path": "/test/file.md"}"#),
+            timestamp: None,
+            cwd: None,
         }];
 
         assert_eq!(actual, expected);

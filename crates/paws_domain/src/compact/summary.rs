@@ -824,6 +824,8 @@ mod tests {
                 name: ToolName::new("search"),
                 call_id: Some(ToolCallId::new("call_1")),
                 arguments: ToolCallArguments::from_json(r#"{"path": "/test", "regex": "pattern"}"#),
+                timestamp: None,
+                cwd: None,
             }],
         )]);
 

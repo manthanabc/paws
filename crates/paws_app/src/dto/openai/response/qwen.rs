@@ -165,6 +165,8 @@ impl TryFrom<QwenResponse> for ChatCompletionMessage {
                                             .clone()
                                             .ok_or(paws_domain::Error::ToolCallMissingName)?,
                                         arguments: tool_call.function.arguments.clone().into(),
+                                        timestamp: None,
+                                        cwd: None,
                                     });
                                 }
                             }

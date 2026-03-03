@@ -697,6 +697,8 @@ mod tests {
                         arguments: paws_domain::ToolCallArguments::from(
                             serde_json::json!({"param": "value"}),
                         ),
+                        timestamp: None,
+                        cwd: None,
                     }]),
                     model: Some(paws_domain::ModelId::from("gpt-4")),
                     reasoning_details: None,

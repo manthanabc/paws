@@ -784,7 +784,7 @@ impl From<ToolCatalog> for ToolCallFull {
             ToolCallArguments::default()
         };
 
-        ToolCallFull { name, call_id: None, arguments }
+        ToolCallFull { name, call_id: None, arguments, timestamp: None, cwd: None }
     }
 }
 
@@ -827,6 +827,8 @@ mod tests {
             arguments: ToolCallArguments::from_json(
                 r#"{"path": "/test/path.rs", "start_line": 10, "end_line": 20}"#,
             ),
+            timestamp: None,
+            cwd: None,
         };
 
         let actual = ToolCatalog::try_from(tool_call);
@@ -856,6 +858,8 @@ mod tests {
             arguments: ToolCallArguments::from_json(
                 r#"{"path": "/test/path.rs", "start_line": 10, "end_line": 20}"#,
             ),
+            timestamp: None,
+            cwd: None,
         };
 
         let actual = ToolCatalog::try_from(tool_call);
@@ -885,6 +889,8 @@ mod tests {
             arguments: ToolCallArguments::from_json(
                 r#"{"path": "/test/path.rs", "content": "test content"}"#,
             ),
+            timestamp: None,
+            cwd: None,
         };
 
         let actual = ToolCatalog::try_from(tool_call);
@@ -911,6 +917,8 @@ mod tests {
             name: ToolName::new("read"),
             call_id: None,
             arguments: ToolCallArguments::from_json(r#"{"path": "/test/path.rs"}"#),
+            timestamp: None,
+            cwd: None,
         };
 
         let actual = ToolCatalog::try_from(tool_call);
@@ -934,6 +942,8 @@ mod tests {
             arguments: ToolCallArguments::from_json(
                 r#"{"path": "/test/path.rs", "content": "test"}"#,
             ),
+            timestamp: None,
+            cwd: None,
         };
 
         let actual = ToolCatalog::try_from(tool_call);
