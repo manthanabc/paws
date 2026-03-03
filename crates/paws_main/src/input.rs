@@ -157,28 +157,24 @@ impl Console {
                         {
                             return Ok(SlashCommand::Transcript);
                         }
-                        KeyCode::Up => {
-                            if history_index > 0 {
-                                if history_index == history.len() {
-                                    temp_buffer = buffer.clone();
-                                }
-                                let old_buffer = buffer.clone();
-                                history_index -= 1;
-                                buffer = history[history_index].clone();
-                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
+                        KeyCode::Up if history_index > 0 => {
+                            if history_index == history.len() {
+                                temp_buffer = buffer.clone();
                             }
+                            let old_buffer = buffer.clone();
+                            history_index -= 1;
+                            buffer = history[history_index].clone();
+                            self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                         }
-                        KeyCode::Down => {
-                            if history_index < history.len() {
-                                let old_buffer = buffer.clone();
-                                history_index += 1;
-                                if history_index == history.len() {
-                                    buffer = temp_buffer.clone();
-                                } else {
-                                    buffer = history[history_index].clone();
-                                }
-                                self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
+                        KeyCode::Down if history_index < history.len() => {
+                            let old_buffer = buffer.clone();
+                            history_index += 1;
+                            if history_index == history.len() {
+                                buffer = temp_buffer.clone();
+                            } else {
+                                buffer = history[history_index].clone();
                             }
+                            self.redraw_buffer(&prompt, &buffer, &old_buffer)?;
                         }
                         KeyCode::Char('c')
                             if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
@@ -210,13 +206,11 @@ impl Console {
                             print!("{}", c);
                             io::stdout().flush()?;
                         }
-                        KeyCode::Backspace => {
-                            if !buffer.is_empty() {
-                                buffer.pop();
-                                // Move back, print space, move back
-                                print!("\x08 \x08");
-                                io::stdout().flush()?;
-                            }
+                        KeyCode::Backspace if !buffer.is_empty() => {
+                            buffer.pop();
+                            // Move back, print space, move back
+                            print!("\x08 \x08");
+                            io::stdout().flush()?;
                         }
                         _ => {}
                     }
