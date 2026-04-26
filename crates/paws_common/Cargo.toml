@@ -36,7 +36,7 @@ version = "0.10"
 version = "0.18"
 
 [dependencies.similar]
-version = "2.4"
+version = "3.1"
 
 [dependencies.lazy-regex]
 version = "3.6"
