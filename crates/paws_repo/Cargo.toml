@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-diesel_migrations = "2.2.0"
+diesel_migrations = "2.3.2"
 paws_services.workspace = true
 
 
@@ -67,7 +67,7 @@ version = "0.4"
 features = [ "serde",]
 
 [dependencies.diesel]
-version = "2.3.7"
+version = "2.3.9"
 features = [ "sqlite", "r2d2", "chrono",]
 
 [dependencies.derive_more]
