@@ -19,7 +19,7 @@ aws-smithy-async = { version = "1.2", features = ["rt-tokio"] }
 base64 = "0.22.1"
 bytes = "1.11.1"
 chrono = { version = "0.4.44", features = ["serde"] }
-clap = { version = "4.6.0", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 colored = "3.1.1"
 console = "0.16.3"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
@@ -33,7 +33,7 @@ gh-workflow = "0.8.1"
 glob = "0.3.3"
 grep-searcher = "0.1.14"
 grep-regex = "0.1.13"
-handlebars = { version = "6.4.0", features = ["rust-embed"] }
+handlebars = { version = "6.4.1", features = ["rust-embed"] }
 html2md = "0.2.15"
 http = "1.2.0"
 ignore = "0.4.23"
@@ -61,7 +61,7 @@ reqwest-eventsource = "0.6.0"
 rust-embed = "8.11.0"
 schemars = "1.2.1"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 serde_yml = "0.0.12"
 sha2 = "0.10"
 strip-ansi-escapes = "0.2.1"
@@ -86,7 +86,7 @@ tokio = { version = "1.50.0", features = [
 tokio-stream = "0.1.18"
 tonic = { version = "0.14.2", features = ["tls-webpki-roots"] }
 tracing = "0.1.44"
-tracing-appender = "0.2.3"
+tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 url = { version = "2.5.8", features = ["serde"] }
 backon = "1.5.2"
@@ -104,7 +104,7 @@ rmcp = { version = "0.10.0", features = [
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
 ] }
-open = "5.3.2"
+open = "5.3.5"
 nucleo = "0.5.0"
 gray_matter = "0.3.2"
 num-format = "0.4"
