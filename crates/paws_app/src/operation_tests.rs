@@ -993,7 +993,7 @@ fn test_net_fetch_truncated() {
     let long_content = format!(
         "{}{}",
         "A".repeat(env.fetch_truncation_limit),
-        &truncated_content
+        truncated_content
     );
     let fixture = ToolOperation::NetFetch {
         input: paws_domain::NetFetch {

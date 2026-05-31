@@ -73,13 +73,7 @@ fn apply_replacement(
     content: &str,
 ) -> Result<String, Error> {
     // Handle empty search string - only certain operations make sense here
-    if let Some(needle) = search.and_then(|needle| {
-        if needle.is_empty() {
-            None // Empty search is not valid for matching
-        } else {
-            Some(needle)
-        }
-    }) {
+    if let Some(needle) = search.filter(|needle| !needle.is_empty()) {
         // Find the exact match to operate on
         let patch: Range = Range::find_exact(&haystack, needle.as_str())
             .ok_or_else(|| Error::NoMatch(needle.to_string()))?;
