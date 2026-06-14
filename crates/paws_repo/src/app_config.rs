@@ -94,7 +94,7 @@ impl<F: EnvironmentInfra + FileReaderInfra + FileWriterInfra> AppConfigRepositor
                     }
                 } else {
                     // Update all existing provider models
-                    for (_, mut_model_id) in config.model.iter_mut() {
+                    for mut_model_id in config.model.values_mut() {
                         *mut_model_id = model_id.clone();
                     }
                 }
